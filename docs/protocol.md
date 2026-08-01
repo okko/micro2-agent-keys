@@ -117,20 +117,29 @@ Only these have been exercised here (**hardware**):
 
 ### Device to host notifications
 
-`v.oai.hid` is pushed when a key bound to an agent keycode is physically pressed. Its
-payload carries `key` and `act` (**image**).
+`v.oai.hid` is pushed when a key bound to an agent keycode is physically pressed
+(**hardware**). Captured verbatim, one press and its release:
 
-The `key` string is assembled on the device from the format strings `AG%02u`,
-`ACT%02u`, `ENC_CW`, `ENC_CC` and `ENC_CLK`, so on the wire it reads `"AG03"` — the
-`KV_OAI_` prefix used in `keymap.json` is **not** there.
+```json
+{"m":"v.oai.hid","p":{"k":"AG01","act":1}}
+{"m":"v.oai.hid","p":{"k":"AG01","act":0}}
+```
 
-A key *not* bound to an agent keycode emits ordinary HID instead, so this notification
-is also the only hint the host gets that the user is sitting on an agent layer.
+Note the envelope. Notifications use short `m` and `p` for method and params, not the
+`method` / `params` a request carries, and there is no `id`. Inside, `k` is the key and
+`act` is `1` for press, `0` for release.
+
+`k` is assembled on the device from the format strings `AG%02u`, `ACT%02u`, `ENC_CW`,
+`ENC_CC` and `ENC_CLK` (**image**), so it reads `"AG01"` — the `KV_OAI_` prefix used in
+`keymap.json` is **not** there.
+
+Keys *not* bound to an agent keycode send nothing here and emit ordinary HID instead,
+even on the same layer.
 
 Not wired up yet; it is the natural path to "click a key to focus that session".
 
 `v.oai.rad` is the joystick counterpart: a layer whose joystick `type` is `VENDOR`
-routes there instead of to `kb.radial` (**image**).
+routes there instead of to `kb.radial` (**image**, never exercised).
 
 ## Lighting
 
@@ -171,7 +180,8 @@ Sending a subset updates only those threads and leaves the others lit. Verified.
 ### Nothing detects an agent layer
 
 There is no agent-layer flag — not in the firmware, not on the wire. The binding is
-entirely by keycode (**image**):
+entirely by keycode, which was read out of the image and then confirmed on hardware
+with a deliberately mixed layer (**hardware**):
 
 - `v.oai.thstatus` with `id: N` stores thread `N` unconditionally. It is rendered on
   whichever key of the **active** layer is bound to `KV_OAI_AG<NN>` where `NN == N`.
@@ -185,6 +195,12 @@ which is why this project does not track layers either.
 The practical consequence: thread ids mean something only because `CODEX_LAYER` in
 [../src/keymap.js](../src/keymap.js) binds `AG00`..`AG05` to the first six keys. Bind
 different numbers and the same `id` lights a different key, or none.
+
+What the keycodes *do* change is lighting ownership. A layer holding them has its own
+`lights.backlight` ignored and is painted only by `v.oai.thstatus`, so keys with no
+thread bound stay dark and the agent keys stand out against them (**hardware**). That is
+a property of the keycodes, not of the thread state: the same layer is solid white
+without them and fully dark with them even when every thread is off.
 
 The stock agent keymap numbers its keycodes `AG00`..`AG05` on keys 0-5 and then
 `ACT06`..`ACT12` on keys 6-12. The continuous run reads like physical key position

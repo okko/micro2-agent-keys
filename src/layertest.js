@@ -1,8 +1,7 @@
 'use strict';
 
 const fs = require('fs');
-const { execFileSync } = require('child_process');
-const { Device } = require('./device');
+const { Device, assertNoVendorApp } = require('./device');
 const { withCodexLayer } = require('./keymap');
 const { setThreads, EFFECT } = require('./oai');
 
@@ -21,28 +20,6 @@ const HOLD_MS = Number(process.env.AGENTKEYS_HOLD_MS ?? 45000);
 
 const COLOURS = [0xff0000, 0xff6a00, 0xffd000, 0x00ff30, 0x0060ff, 0xb000ff];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const VENDOR_APP = '/Applications/input.app/';
-
-/**
- * The device lock only coordinates our own processes; the vendor app opens the
- * same interface and can write keymap.json at the same time, and concurrent
- * writes have left the device unresponsive. Matches on the executable path
- * rather than `pgrep -f`, which also matches any process merely mentioning the
- * path in its arguments.
- */
-function assertNoVendorApp() {
-  const out = execFileSync('ps', ['-A', '-o', 'pid=,comm='], { encoding: 'utf8' });
-  const pids = out
-    .split('\n')
-    .map((line) => line.trim().match(/^(\d+)\s+(.+)$/))
-    .filter((m) => m && m[2].startsWith(VENDOR_APP))
-    .map((m) => m[1]);
-
-  if (pids.length) {
-    throw new Error(`input.app is running (pids ${pids.join(', ')}). Quit it before writing to the device.`);
-  }
-}
 
 async function main() {
   assertNoVendorApp();

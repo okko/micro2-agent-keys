@@ -54,12 +54,18 @@ function isCodexLayout(text) {
   return text.includes(MARKER);
 }
 
+/** Default builder: replaces the whole layer with the stock agent layout. */
+function codexLayer(original, index) {
+  return { ...CODEX_LAYER, id: index, name: original.name, lights: original.lights };
+}
+
 /**
  * Installs the Codex layer, preserving the user's own keymap on first use so it
  * can be put back later. `layerNumber` is 1-based, matching the layer names in
- * the host app and `device.status.layer_index`.
+ * the host app and `device.status.layer_index`. `buildLayer` receives the
+ * pristine layer and returns whatever should replace it.
  */
-async function install(device, layerNumber = 1) {
+async function install(device, layerNumber = 1, buildLayer = codexLayer) {
   const index = layerNumber - 1;
   const live = await readKeymap(device);
 
@@ -76,12 +82,7 @@ async function install(device, layerNumber = 1) {
     throw new Error(`layer ${layerNumber} does not exist (keymap has ${layers.length})`);
   }
 
-  layers[index] = {
-    ...CODEX_LAYER,
-    id: index,
-    name: layers[index].name,
-    lights: layers[index].lights,
-  };
+  layers[index] = buildLayer(layers[index], index);
 
   const next = JSON.stringify(keymap);
   if (next === live) return { installed: false, reason: 'already installed' };
@@ -105,8 +106,8 @@ async function restore(device) {
  * back: on success, on throw, and on SIGINT/SIGTERM. An interrupted run that
  * leaves the Codex layer installed is what makes ad-hoc experiments dangerous.
  */
-async function withCodexLayer(device, layerNumber, fn) {
-  const installed = await install(device, layerNumber);
+async function withCodexLayer(device, layerNumber, fn, buildLayer) {
+  const installed = await install(device, layerNumber, buildLayer);
 
   let restoring = null;
   const restoreOnce = () => (restoring ??= restore(device));

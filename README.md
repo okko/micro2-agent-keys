@@ -39,6 +39,28 @@ status.
 
 Set `AGENTKEYS_LAYER` to choose which layer gets replaced (1-based, default `1`).
 
+### Agent keys can share a layer with your own keys
+
+Nothing marks a layer as an agent layer — the device acts on each keycode individually.
+So a layer can carry the six agent keys *and* your own keycodes side by side: the agent
+keys light up and report presses to the host, everything else types normally. Verified
+on hardware.
+
+The slot-to-key mapping follows the **number in the keycode**, not the position, so
+`KV_OAI_AG00`..`AG05` can sit anywhere in the layout, in any order. Slot 3 lights
+wherever `KV_OAI_AG03` is bound.
+
+By default the whole layer is replaced with the stock agent layout. To build a mixed
+layer instead, pass your own layer builder to `install()` or `withCodexLayer()`;
+`src/mixedlayertest.js` is a worked example.
+
+**The layer's own key lighting is ignored once it holds agent keycodes.** The whole
+layer is then painted by agent colours alone, so keys without a live agent stay dark
+and the agent keys stand out against them. This is the intended look, and the other
+keys still type normally — they are simply unlit. Verified by A/B on hardware
+(`src/backlighttest.js`): the same layer, written the same way, is solid white without
+the agent keycodes and fully dark with them, even with every agent colour switched off.
+
 Your original keymap is copied to `~/.local/state/agentkeys/keymap.backup.json` before
 the first write and put back on shutdown.
 

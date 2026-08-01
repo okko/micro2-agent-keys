@@ -3,6 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const HID = require('node-hid');
 
 const WL_VID = 0x303a;
@@ -83,6 +84,30 @@ function listDevices() {
   return HID.devices().filter(
     (d) => d.vendorId === WL_VID && d.usagePage === VENDOR_USAGE_PAGE && d.path
   );
+}
+
+const VENDOR_APP = '/Applications/input.app/';
+
+/**
+ * The device lock only coordinates our own processes; the vendor app opens the
+ * same interface and can write keymap.json at the same time, and concurrent
+ * writes have left the device unresponsive. Matches on the executable path
+ * rather than `pgrep -f`, which also matches any process merely mentioning the
+ * path in its arguments.
+ */
+function assertNoVendorApp() {
+  const out = execFileSync('ps', ['-A', '-o', 'pid=,comm='], { encoding: 'utf8' });
+  const pids = out
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(.+)$/))
+    .filter((m) => m && m[2].startsWith(VENDOR_APP))
+    .map((m) => m[1]);
+
+  if (pids.length) {
+    throw new DeviceError(
+      `input.app is running (pids ${pids.join(', ')}). Quit it before writing to the device.`
+    );
+  }
 }
 
 class DeviceError extends Error {}
@@ -222,4 +247,12 @@ class Device {
   }
 }
 
-module.exports = { Device, DeviceError, listDevices, WL_VID, CM2_PID, VENDOR_USAGE_PAGE };
+module.exports = {
+  Device,
+  DeviceError,
+  listDevices,
+  assertNoVendorApp,
+  WL_VID,
+  CM2_PID,
+  VENDOR_USAGE_PAGE,
+};

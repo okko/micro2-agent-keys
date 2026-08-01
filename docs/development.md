@@ -48,9 +48,10 @@ for free.
 | Variable | Used by | Meaning |
 |---|---|---|
 | `AGENTKEYS_PORT` | daemon, CLI | HTTP port, default `8787` |
-| `AGENTKEYS_LOG` | daemon, probe, layertest | redirect output to a file |
-| `AGENTKEYS_LAYER` | daemon, layertest | which layer to install onto, **1-based**, default `1` |
-| `AGENTKEYS_HOLD_MS` | layertest | observation window, default `45000` |
+| `AGENTKEYS_LOG` | daemon, probe, layertest, mixedlayertest, backlighttest | redirect output to a file |
+| `AGENTKEYS_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
+| `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
+| `AGENTKEYS_PHASE_MS` | backlighttest | per-phase observation window, default `25000` |
 
 ## Tools in `src/`
 
@@ -58,6 +59,8 @@ for free.
 |---|---|---|
 | `probe.js` | no | enumerate interfaces, read `sys.version` and `device.status` |
 | `layertest.js` | **yes** | install the agent layer, set six colours, hold, restore |
+| `mixedlayertest.js` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
+| `backlighttest.js` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
 | `daemon.js` | **yes** | the real thing |
 
 ### Running the layer test
