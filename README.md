@@ -75,7 +75,8 @@ also available as `CODEX_LAYER` in [src/keymap.js](src/keymap.js) for scripts.
 ```
 
 The four `keymap` rows are the physical key rows, 2/4/4/3. Drop this in as one layer of
-`profiles[0].layers` in the device's `keymap.json`. Writing that file triggers a live
+`profiles[0].layers` in the device's `profile.json`, then import the JSON to Input.app
+to write it to the device. Writing that file triggers a live
 reload and leaves the active layer alone, so nothing is force-activated.
 
 Managing that file is deliberately out of scope here. Expect the ChatGPT app to gain
@@ -109,8 +110,13 @@ the agent keycodes and fully dark with them, even with every agent colour switch
 ```sh
 npm install
 scripts/make-app.sh        # builds AgentKeys.app
-scripts/install-agent.sh   # runs it as a LaunchAgent
+scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
 ```
+
+`install-agent.sh` symlinks the `agentkeys` command into `~/.local/bin`, so that
+directory has to be on your `PATH`; the script says so if it is not. The CLI is only an
+HTTP client — it needs no permissions, and the checkout has to stay where it is because
+the symlink and the LaunchAgent both point at it.
 
 macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
 interfaces alongside the vendor one. The grant is attached to a code signature, so a

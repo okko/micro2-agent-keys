@@ -12,7 +12,7 @@ The grant is attached to a **code signature**, so a bare `node` invocation can n
 hold it. Access therefore has to come from a signed application bundle.
 
 `AgentKeys.app` exists solely to hold that grant: it is the real `node` binary plus an
-`Info.plist` (`cc.okko.agentkeys`, `LSBackgroundOnly=true`), ad-hoc signed by
+`Info.plist` (`eu.okko.agentkeys`, `LSBackgroundOnly=true`), ad-hoc signed by
 `scripts/make-app.sh`.
 
 TCC cannot be scripted. Approve once under

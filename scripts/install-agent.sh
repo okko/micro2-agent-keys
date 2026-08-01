@@ -5,12 +5,13 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/AgentKeys.app/Contents/MacOS/AgentKeys"
-LABEL="cc.okko.agentkeys"
+LABEL="eu.okko.agentkeys"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+BINDIR="$HOME/.local/bin"
 
 [ -x "$APP" ] || { echo "run scripts/make-app.sh first" >&2; exit 1; }
 
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys" "$BINDIR"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -34,5 +35,13 @@ PLIST
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
+ln -sfn "$ROOT/src/cli.js" "$BINDIR/agentkeys"
+
 echo "loaded $LABEL"
 echo "log: $HOME/.local/state/agentkeys/daemon.log"
+echo "cli: $BINDIR/agentkeys"
+
+case ":$PATH:" in
+  *":$BINDIR:"*) ;;
+  *) echo "warning: $BINDIR is not on your PATH; add it to run 'agentkeys'" >&2 ;;
+esac

@@ -24,7 +24,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>AgentKeys</string>
-  <key>CFBundleIdentifier</key><string>cc.okko.agentkeys</string>
+  <key>CFBundleIdentifier</key><string>eu.okko.agentkeys</string>
   <key>CFBundleName</key><string>AgentKeys</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
