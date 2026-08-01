@@ -7,7 +7,8 @@ scanner, SQLite poller, or multi-window URI-routing extension.
 
 Use this architecture instead:
 
-1. One VS Code user-level hook observes every submitted local Copilot CLI session.
+1. The AgentKeys daemon discovers local Copilot CLI sessions from their persisted event
+   streams; no configured agent hook is required.
 2. The first submitted prompt from an unbound session assigns it to the first free slot
    or the slot that has been `done` longest.
 3. The AgentKeys daemon owns the four bindings and watches each bound Copilot CLI
@@ -61,8 +62,8 @@ No command-line command is part of this daily workflow.
 
 ### 3.2 Continuing an existing bound session
 
-Continue chatting normally. `UserPromptSubmit` finds the binding by session ID and marks
-its slot running.
+Continue chatting normally. The next persisted `userPromptSubmitted`/`user.message`
+lifecycle event finds the binding by session ID and marks its slot running.
 
 If a session's former slot has since been reassigned, submitting a new prompt makes that
 session eligible for allocation again. This is intentional: resumed work should return
@@ -123,93 +124,69 @@ For the initial Agents-window workflow, the scheme is:
 agent-host-copilotcli
 ```
 
-The binding hook supplies the raw `session_id` and `cwd`. The hook command supplies the
-resource scheme as a fixed argument; the daemon chooses the slot.
+The raw session ID is the parent directory name. `session.start` and lifecycle records
+provide the working directory. V1 assigns the fixed resource scheme
+`agent-host-copilotcli` because it discovers only Agents-window sessions.
 
-## 5. VS Code user-level hooks
+## 5. Automatic session discovery
 
-Install one dedicated hook file outside Copilot CLI's default hook directory:
-
-```text
-~/.config/agentkeys/vscode-hooks.json
-```
-
-Register that absolute file in the VS Code user setting `chat.hookFilesLocations`.
-Do not install it under `~/.copilot/hooks`: Copilot CLI also discovers that directory,
-which would unintentionally bind terminal sessions.
-
-Representative hook file:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "type": "command",
-        "command": "/absolute/path/to/agentkeys vscode-hook --scheme agent-host-copilotcli"
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "type": "command",
-        "command": "/absolute/path/to/agentkeys vscode-hook --scheme agent-host-copilotcli"
-      }
-    ],
-    "Stop": [
-      {
-        "type": "command",
-        "command": "/absolute/path/to/agentkeys vscode-hook --scheme agent-host-copilotcli"
-      }
-    ]
-  }
-}
-```
-
-The fixed scheme restricts V1 to local Copilot CLI sessions created through the Agents
-window. The hook contains no slot number; the daemon allocates slots.
-
-Hooks run independently of the selected agent, so built-in and user-defined custom agents
-remain available.
-
-Hooks are a VS Code Preview feature. Installation must verify that the configured
-user-level hook runs in the Agents window. The feasibility spike must also test a
-workspace that defines hooks for the same events, because VS Code documents workspace
-hooks as taking precedence over user hooks. If that suppresses the AgentKeys hook, the
-installer and diagnostics must report the conflict rather than claiming the session is
-tracked.
-
-## 6. Hook command
-
-Add this CLI operation:
+Watch:
 
 ```text
-agentkeys vscode-hook --scheme <session-resource-scheme>
+~/.copilot/session-state/
 ```
 
-The operation:
+Each immediate child containing `events.jsonl` is a candidate Copilot CLI session. The
+daemon maintains a small registry containing the file identity, byte offset, session ID,
+producer/version from `session.start`, working directory, and whether the session has
+ever submitted a prompt.
 
-1. reads exactly one JSON object from standard input;
-2. validates `scheme`, `hook_event_name`, `session_id`, and optional `cwd`;
-3. sends the validated event to the already-running local daemon;
-4. emits valid hook JSON on standard output;
-5. exits nonzero when notification fails or an eligible prompt cannot be allocated.
+Read `workspace.yaml` before admitting a candidate. V1 accepts only:
 
-It must not start a second daemon or access the keyboard directly.
+```yaml
+client_name: vscode-agent-host
+```
 
-Supported hook inputs:
+VS Code's Agent Host Copilot provider sets this client name. A standalone terminal
+Copilot CLI session must not consume an AgentKeys slot. Because legacy extension-host
+integration may use similar metadata, `doctor vscode` must also verify that the installed
+VS Code configuration uses Agent Host sessions before enabling the fixed
+`agent-host-copilotcli` resource scheme.
 
-| Hook | Daemon action |
+Do not allocate a slot when a directory or `session.start` first appears. Allocate only
+after one of these records:
+
+```text
+hook.start with data.hookType == "userPromptSubmitted"
+user.message
+```
+
+The first record provides prompt-gating as early as possible. `user.message` is a
+provider-level fallback. The daemon must never read or persist their prompt/content
+fields.
+
+This discovery works independently of the selected built-in or custom agent and avoids
+the Preview hook configuration API entirely.
+
+## 6. Event normalization
+
+Normalize persisted records into these internal events:
+
+| Persisted record | Internal event |
 |---|---|
-| `SessionStart` | Record session identity; atomically allocate if currently unbound |
-| `UserPromptSubmit` | Allocate if unbound; clear run error latch; set `running` |
-| `Stop` | If bound, set `done` unless the current run has a latched error |
+| `session.start` | `session-discovered` |
+| `session.resume` | `session-resumed` |
+| `hook.start:userPromptSubmitted` or `user.message` | `prompt-submitted` |
+| `assistant.turn_start` or `tool.execution_start` | `work-running` |
+| `permission.requested` | `input-required` |
+| `permission.completed` | `input-resolved` |
+| `tool.execution_start` with `toolName == "ask_user"` | `input-required` |
+| matching `tool.execution_complete` | `input-resolved` |
+| `session.error` or `turn.error` | `run-error` |
+| `hook.end:sessionEnd` | `run-stopped` |
 
-`SessionStart` and `UserPromptSubmit` can occur close together for the first prompt.
-Allocation therefore must be idempotent by session ID and serialized inside the daemon.
-Two hook requests must never allocate two slots to one session.
-
-The hook command forwards the complete input only after applying a size limit. The daemon
-stores only fields required for routing and state. Prompt text must not be persisted.
+Deduplicate `prompt-submitted` records from the same persisted run. Allocation must be
+idempotent by session ID and serialized inside the daemon.
 
 ## 7. Daemon-owned binding model
 
@@ -248,7 +225,7 @@ Requirements:
 - Persist state atomically in the user's application-support directory.
 - Maintain a reverse lookup from session ID to its currently bound slot.
 - Serialize allocation, rebinding, and watcher replacement.
-- An unbound session becomes eligible only on `SessionStart` or `UserPromptSubmit`.
+- An unbound session becomes eligible only on normalized `prompt-submitted`.
 - Prefer an unbound slot, then the oldest `done` slot by `doneAt`, with slot number as
   the tie-breaker.
 - When reusing a `done` slot, remove the old session from the reverse lookup and close
@@ -272,27 +249,27 @@ VS Code's Copilot CLI integration and the Copilot SDK use
 `~/.copilot/session-state/<id>/events.jsonl` as the session event stream. Current VS Code
 itself resolves this file for both `agent-host-copilotcli:` and `copilotcli:` sessions.
 
-The daemon watches only the four bound files.
+The daemon watches the session-state root for discovery plus the currently bound files.
+It may retain offsets for unbound sessions but must cap and prune historical metadata.
 
 ### 8.1 State transitions
 
 | Event or hook | Slot state |
 |---|---|
-| `UserPromptSubmit` hook | `running` |
+| `prompt-submitted` | `running` |
 | `assistant.turn_start` | `running` |
 | `tool.execution_start` | `running` |
 | `permission.requested` | `input` |
-| `user_input.requested` | `input` |
-| `elicitation.requested` | `input` |
+| outstanding `ask_user` tool execution | `input` |
 | matching `*.completed` event | `running` |
 | `session.error` | latch error; set `error` |
 | `turn.error` | latch error; set `error` |
-| `Stop` hook with no latched error | `done` |
-| `Stop` hook with a latched error | remain `error` |
+| `hook.end` for `sessionEnd`, no latched error | `done` |
+| `hook.end` for `sessionEnd`, latched error | remain `error` |
 
 `permission.requested` and `permission.completed` make approval waits observable without
-changing VS Code's approval policy. Explicit agent questions similarly use
-`user_input.requested` and `user_input.completed`.
+changing VS Code's approval policy. In the Agents-window provider, explicit questions
+are observable as an outstanding `ask_user` tool execution.
 
 ### 8.2 Stream reader
 
@@ -315,8 +292,8 @@ On daemon startup, reconstruct each bound slot:
 
 1. Replay from the persisted offset if the file is continuous.
 2. If continuity cannot be proven, replay the file from the beginning.
-3. Count outstanding permission, user-input, elicitation, tool, and assistant-turn
-   requests by their IDs.
+3. Count outstanding permissions, `ask_user` tools, other tools, and assistant turns by
+   their IDs.
 4. Set `input` if an input request remains outstanding.
 5. Set `error` if the latest run contains `session.error` or `turn.error`.
 6. Set `running` if a tool or assistant turn remains outstanding.
@@ -413,23 +390,8 @@ POST /reset
 Add:
 
 ```text
-POST /integrations/vscode/hook
 POST /integrations/vscode/slots/:index/open
 GET  /integrations/vscode/slots
-```
-
-The hook endpoint accepts only loopback requests and a bounded JSON body.
-
-Example normalized hook request:
-
-```json
-{
-  "resourceScheme": "agent-host-copilotcli",
-  "hookEventName": "UserPromptSubmit",
-  "sessionId": "01234567-89ab-cdef-0123-456789abcdef",
-  "cwd": "/Users/okko/git/project-a",
-  "timestamp": "2026-08-01T12:34:56.000Z"
-}
 ```
 
 The open endpoint returns an error for an unbound slot or failed VS Code launch. Success
@@ -451,16 +413,11 @@ Errors remain visible until a new prompt clears the error latch or the slot is r
 
 Provide one setup command or installer action that:
 
-1. writes the dedicated VS Code hook file;
-2. registers it in the user-level `chat.hookFilesLocations` setting;
-3. verifies `agentkeys` is resolvable in the hook execution environment;
-4. confirms the daemon is reachable on loopback;
-5. verifies the supported VS Code version;
-6. checks for workspace-hook precedence conflicts.
-
-The generated hook file should invoke an absolute AgentKeys executable path when possible.
-Relying on an interactive shell's `PATH` is not robust because VS Code hook processes do
-not necessarily inherit it.
+1. verifies the local Copilot session-state directory is readable;
+2. confirms the daemon is reachable on loopback;
+3. verifies the supported VS Code and Copilot producer versions;
+4. verifies that a recent Agents-window session contains required lifecycle records;
+5. leaves VS Code settings, custom agents, and hook configuration unchanged.
 
 ## 14. Diagnostics
 
@@ -470,17 +427,15 @@ Add:
 agentkeys doctor vscode
 agentkeys vscode slots
 agentkeys vscode open <slot>
-agentkeys vscode install-hooks
-agentkeys vscode uninstall-hooks
 ```
 
 `doctor vscode` checks:
 
 - VS Code version and URL protocol registration;
 - daemon availability;
-- hook file and `chat.hookFilesLocations`;
-- workspace-hook precedence conflicts;
-- hook executable path;
+- Copilot home and session-state directory;
+- observed producer and event versions;
+- required lifecycle event availability;
 - each binding's event file;
 - persisted watcher offset;
 - resource scheme;
@@ -507,7 +462,7 @@ event payload content by default.
 
 | Failure | Required behavior |
 |---|---|
-| Hook cannot reach daemon | Hook exits nonzero and displays a visible warning |
+| Session-state root is unavailable | Disable integration and report explicit diagnostic |
 | Bound event file is absent | Retry briefly, then set slot `error` with diagnostic |
 | Event line is malformed | Log offset; keep prior state; continue at next line |
 | Slot is unbound | Do not launch VS Code; return explicit error |
@@ -517,7 +472,7 @@ event payload content by default.
 | Slot is rebound | Close old watcher before activating new binding |
 | Daemon restarts mid-run | Replay events and reconstruct state |
 | All slots are active or errored | Leave new session unbound; warn and retry on next prompt |
-| Workspace hooks suppress user hooks | Report unsupported workspace configuration |
+| Required lifecycle records are absent | Do not bind that provider/version; report incompatibility |
 
 ## 17. Feasibility spike
 
@@ -526,17 +481,14 @@ Do not build the full integration until all acceptance checks pass.
 
 ### 17.1 Binding check
 
-- Install a temporary recorder through user-level `chat.hookFilesLocations`.
 - Submit a prompt in a new local Agents-window Copilot CLI session.
-- Confirm hook input `session_id` equals the directory name under
-  `~/.copilot/session-state`.
-- Confirm hook `cwd` is the intended project root.
-- Confirm the hook runs with a built-in agent and a separate existing custom agent.
+- Confirm the new session ID equals the directory name under `~/.copilot/session-state`.
+- Confirm `session.start` and lifecycle data identify the intended project root.
+- Confirm persisted prompt and stop lifecycle records exist without configured hooks.
+- Confirm the records are independent of the selected built-in or custom agent.
 - Confirm opening or focusing a chat without submitting does not allocate it.
 - Confirm the first four submitted sessions use free slots and the fifth reuses the
   oldest `done` slot.
-- Add a workspace hook for the same event and determine whether it suppresses the
-  AgentKeys user hook.
 
 ### 17.2 Event check
 
@@ -550,22 +502,61 @@ Capture:
 Confirm `events.jsonl` contains enough paired events to produce all four non-idle LED
 states without timing guesses.
 
-### 17.3 Exact-open check
+### 17.3 Spike results on VS Code 1.131.0
 
-- Construct both `agent-host-copilotcli:/<id>` and `copilotcli:/<id>` candidates.
-- Use the VS Code file/workspace URL with `session=`.
-- Confirm the supported resource opens the exact transcript.
-- Confirm an already-open project window is focused rather than duplicated.
-- Confirm two simultaneously open project windows route to their own sessions.
-- Confirm a path containing spaces and non-ASCII characters is encoded correctly.
+Verified on 2026-08-01:
 
-### 17.4 Restart check
+- Agents-window session IDs exactly matched their
+  `~/.copilot/session-state/<id>/events.jsonl` directories.
+- `workspace.yaml` identified VS Code-owned sessions with
+  `client_name: vscode-agent-host`.
+- `session.start` and lifecycle inputs contained the Agents session's isolated worktree
+  path as `cwd`.
+- No user hook was configured, yet each session persisted
+  `userPromptSubmitted`, `sessionStart`, `agentStop`, and `sessionEnd` lifecycle records.
+- A second prompt in the same session persisted a new `userPromptSubmitted` record,
+  proving prompt-gated reactivation.
+- An explicit question persisted `tool.execution_start` with
+  `toolName: "ask_user"` while waiting and a matching `tool.execution_complete` after
+  the answer.
+- Existing VS Code-owned sessions contained paired `permission.requested` and
+  `permission.completed` records.
+- `hook.end:sessionEnd` followed the completed response and can drive `done`.
+- The exact-session URL opened the correct transcript in its project window.
+- Repeating the URL kept the VS Code window count unchanged.
+- Two simultaneously open project windows routed two different session IDs to the
+  correct transcript and project window.
+- URL construction percent-encoded spaces and non-ASCII path characters correctly.
+- Replaying the event stream at three simulated restart offsets reconstructed
+  `input`, then `running`, then `done` without wall-clock guesses.
+- An absolute `chat.hookFilesLocations` path was rejected, and a supported tilde path
+  still did not forward the recorder into the Agents-window Agent Host. The final design
+  therefore does not depend on configured hooks.
+
+The exact-session handoff opens or transfers the transcript into the corresponding
+project window rather than selecting it inside the dedicated Agents window. This is
+accepted V1 behavior and must be described in user documentation.
+
+### 17.4 Remaining exact-open check
+
+- Perform a live open from a real project path containing spaces or non-ASCII characters.
+
+### 17.5 Restart check
 
 - Stop the daemon during `running`.
 - Cause a permission request while it is stopped.
 - Restart it.
 - Confirm replay reconstructs `input`.
 - Answer the request and confirm the state returns to `running`, then `done`.
+
+The replay portion is verified. Killing the production daemon during a live request
+remains an implementation-stage end-to-end test.
+
+### 17.6 Remaining error check
+
+No `session.error` or `turn.error` occurred in the available live sessions. Force a
+provider/session failure during implementation and confirm that the error latch survives
+the following `sessionEnd` record.
 
 If any exact-open check fails, stop. The fallback is not the old extension design; the
 next step is a small, version-specific prototype around VS Code's Sessions service.
@@ -576,6 +567,7 @@ V1 is complete only when:
 
 - submitting a prompt in a previously unbound session allocates it without terminal use;
 - built-in and unrelated custom agents work without modification;
+- no VS Code or Copilot hook configuration is installed;
 - free slots are filled before the oldest `done` slot is reused;
 - active and errored slots are never silently stolen;
 - resuming an unbound old session makes it eligible again only after prompt submission;
@@ -602,12 +594,11 @@ V1 is complete only when:
 
 Most of this design rests on documented or product-owned interfaces:
 
-- user-level agent hooks and their documented `session_id`;
 - Copilot CLI's persisted session event stream;
 - AgentKeys' loopback daemon and canonical states.
 
-One boundary remains version-sensitive: VS Code's exact-session URL handoff and session
-resource scheme. Keep that code isolated in one adapter with fixtures and an explicit
-supported-version table. That is a substantially smaller and safer compatibility surface
-than scraping every workspace's private storage and coordinating multiple extension
-hosts.
+Two boundaries remain version-sensitive: the lifecycle record names inside Copilot's
+event stream, and VS Code's exact-session URL handoff/resource scheme. Keep them in
+isolated adapters with fixtures and an explicit supported-version table. This is still a
+substantially smaller and safer compatibility surface than scraping every workspace's
+private storage, configuring Preview hooks, and coordinating multiple extension hosts.
