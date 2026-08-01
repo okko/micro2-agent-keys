@@ -130,6 +130,9 @@ agentkeys set 2 input
 agentkeys reset
 agentkeys status
 agentkeys states          # list names and aliases
+agentkeys vscode slots
+agentkeys vscode open 0
+agentkeys doctor vscode
 ```
 
 Aliases exist so hooks can use their own vocabulary: `thinking`, `busy` and `working`
@@ -144,6 +147,9 @@ page cannot drive your keyboard.
 GET  /state                 -> { connected, slots: [...] }
 POST /slots/:index          <- { "state": "running", "label": "optional" }
 POST /reset
+GET  /integrations/vscode/slots
+GET  /integrations/vscode/doctor
+POST /integrations/vscode/slots/:index/open
 ```
 
 ```sh
@@ -161,15 +167,77 @@ agentkeys set $SLOT running "$(basename "$PWD")"
 if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT error; fi
 ```
 
+## How the VS Code integration works
+
+1. **Discover VS Code sessions**
+
+   The daemon watches:
+
+   ```text
+   ~/.copilot/session-state/
+   ```
+
+   It accepts sessions whose `workspace.yaml` contains:
+
+   ```yaml
+   client_name: vscode-agent-host
+   ```
+
+   This prevents ordinary terminal Copilot sessions from taking slots.
+
+2. **Wait for actual work**
+
+   Creating or browsing a session does nothing.
+
+   When its event file records `userPromptSubmitted` or `user.message`, the daemon knows
+   the user submitted a prompt.
+
+3. **Allocate a slot**
+
+   For an unbound session:
+
+   - use the lowest unbound slot;
+   - otherwise reuse the oldest `done` slot;
+   - never steal `running`, `input`, or `error`.
+
+4. **Update the LED**
+
+   - prompt or active work -> `running`
+   - permission request or outstanding `ask_user` -> `input`
+   - session or turn error -> `error`
+   - completed `sessionEnd` lifecycle -> `done`
+
+5. **Recover after restart**
+
+   The daemon replays each bound event file:
+
+   - unresolved question or permission -> `input`
+   - unfinished turn or tool -> `running`
+   - recorded error -> `error`
+   - completed run -> `done`
+
+6. **Open the session**
+
+   Pressing a physical key constructs an exact-session VS Code URL containing:
+
+   - the project path;
+   - `agent-host-copilotcli:/<session-id>`.
+
+   VS Code focuses the relevant project window and opens the exact transcript there.
+   Exact opening is currently enabled only for the verified VS Code `1.131.x` compatibility
+   boundary; `agentkeys doctor vscode` reports unsupported versions instead of opening a
+   generic or potentially incorrect chat.
+
 ## Notes
 
 - `AGENTKEYS_PORT` overrides the port for both daemon and CLI.
 - `AGENTKEYS_LOG` redirects daemon output to a file, needed when launched via
   LaunchServices, which discards stdout.
+- `COPILOT_HOME` overrides the Copilot data directory used by the VS Code integration.
+- `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
 - `AGENTKEYS_LAYER` picks which layer the agent keys replace (1-based, default `1`).
 - The daemon reconnects on its own if the keyboard is unplugged.
-- The device also emits `v.oai.hid` notifications when you physically press an agent
-  key. Not wired up yet; it is the obvious path to clicking a key to focus a session.
+- Pressing `AG00` through `AG03` opens the corresponding bound VS Code session.
 
 ## Docs
 

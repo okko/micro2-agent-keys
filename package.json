@@ -9,7 +9,8 @@
   },
   "scripts": {
     "daemon": "node src/daemon.js",
-    "probe": "node src/probe.js"
+    "probe": "node src/probe.js",
+    "test": "node --test"
   },
   "dependencies": {
     "node-hid": "^3.4.0"

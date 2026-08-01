@@ -4,6 +4,7 @@ const http = require('http');
 const { Device, listDevices } = require('./device');
 const { setThreads, setZones, EFFECT } = require('./oai');
 const { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } = require('./states');
+const { VSCodeIntegration, INTEGRATION_SLOT_COUNT } = require('./vscode');
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const HOST = '127.0.0.1';
@@ -49,6 +50,17 @@ async function push(changed) {
   }
 }
 
+const vscode = new VSCodeIntegration({
+  log,
+  onSlot: async (binding) => {
+    const slot = slots[binding.slot];
+    slot.state = binding.state;
+    slot.label = binding.label;
+    slot.updatedAt = binding.stateChangedAt;
+    await push(slot);
+  },
+});
+
 async function dropDevice() {
   const current = device;
   device = null;
@@ -76,6 +88,13 @@ async function connect() {
   }
 
   device = await Device.open();
+  device.onNotify = (message) => {
+    const key = message?.m === 'v.oai.hid' ? message.p?.k : null;
+    const pressed = message?.p?.act === 1;
+    const match = typeof key === 'string' ? key.match(/^AG0([0-3])$/) : null;
+    if (!pressed || !match) return;
+    vscode.open(Number(match[1])).catch((err) => log(`key ${key} open failed: ${err.message}`));
+  };
   log('device connected');
 
   await setZones(device, {
@@ -125,6 +144,27 @@ async function handle(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/state') {
     return send(res, 200, { connected: Boolean(device), slots });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/integrations/vscode/slots') {
+    return send(res, 200, { slots: vscode.publicSlots() });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/integrations/vscode/doctor') {
+    return send(res, 200, vscode.doctor());
+  }
+
+  const vscodeOpen = url.pathname.match(/^\/integrations\/vscode\/slots\/(\d+)\/open$/);
+  if (req.method === 'POST' && vscodeOpen) {
+    const index = Number(vscodeOpen[1]);
+    if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
+      return send(res, 400, { error: `VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}` });
+    }
+    try {
+      return send(res, 200, { ok: true, ...(await vscode.open(index)) });
+    } catch (err) {
+      return send(res, 409, { error: err.message });
+    }
   }
 
   if (req.method === 'POST' && url.pathname === '/reset') {
@@ -181,6 +221,7 @@ async function shutdown(signal) {
   log(`${signal}, shutting down`);
 
   clearTimeout(reconnectTimer);
+  vscode.stop();
   server.close();
 
   if (device) {
@@ -196,7 +237,10 @@ async function shutdown(signal) {
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => shutdown(signal));
 
 server.listen(PORT, HOST, () => log(`listening on http://${HOST}:${PORT}`));
-connect().catch((err) => {
-  log('connect failed:', err.message);
-  scheduleReconnect();
-});
+vscode.start().catch((err) => log(`VS Code integration disabled: ${err.message}`));
+if (process.env.AGENTKEYS_NO_DEVICE !== '1') {
+  connect().catch((err) => {
+    log('connect failed:', err.message);
+    scheduleReconnect();
+  });
+}

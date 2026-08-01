@@ -12,6 +12,9 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys status                       show all slots
   agentkeys reset                        set every slot to idle
   agentkeys states                       list valid state names
+  agentkeys vscode slots                 show automatic VS Code bindings
+  agentkeys vscode open <slot>           open an exact VS Code session
+  agentkeys doctor vscode                check VS Code integration availability
 
 states: ${Object.keys(STATES).join(', ')}
 `;
@@ -36,6 +39,13 @@ function printStatus(data) {
   console.log(data.connected ? 'keyboard: connected' : 'keyboard: disconnected');
   for (const slot of data.slots) {
     console.log(`  ${slot.index}  ${slot.state.padEnd(8)} ${slot.label ?? ''}`);
+  }
+}
+
+function printVSCodeSlots(data) {
+  for (const slot of data.slots) {
+    const session = slot.sessionId ? slot.sessionId.slice(0, 8) : '-';
+    console.log(`  ${slot.slot}  ${slot.state.padEnd(8)} ${session.padEnd(8)} ${slot.label ?? ''}`);
   }
 }
 
@@ -73,6 +83,40 @@ async function main(argv) {
           .filter(([, target]) => target === name)
           .map(([alias]) => alias);
         console.log(`  ${name.padEnd(8)} ${aliases.length ? `(${aliases.join(', ')})` : ''}`);
+      }
+      return;
+
+    case 'vscode': {
+      const [subcommand, rawSlot] = rest;
+      if (subcommand === 'slots') {
+        printVSCodeSlots(await request('GET', '/integrations/vscode/slots'));
+        return;
+      }
+      if (subcommand === 'open') {
+        const slot = Number(rawSlot);
+        if (!Number.isInteger(slot) || slot < 0 || slot > 3) throw new Error('VS Code slot must be 0..3');
+        await request('POST', `/integrations/vscode/slots/${slot}/open`);
+        return;
+      }
+      throw new Error('expected: agentkeys vscode slots | agentkeys vscode open <slot>');
+    }
+
+    case 'doctor':
+      if (rest[0] !== 'vscode') throw new Error('expected: agentkeys doctor vscode');
+      {
+        const data = await request('GET', '/integrations/vscode/doctor');
+        console.log('daemon: reachable');
+        console.log(`VS Code integration: ${data.ready ? 'ready' : 'not ready'}`);
+        console.log(`session state: ${data.rootReadable ? 'readable' : 'unavailable'} (${data.sessionStateRoot})`);
+        console.log(`resource scheme: ${data.resourceScheme}`);
+        console.log(`tracked sessions: ${data.trackedSessions} (${data.compatibleSessions} compatible)`);
+        console.log(`verified lifecycles: ${data.verifiedLifecycleSessions}`);
+        console.log(
+          `exact open: ${data.exactOpenAvailable ? 'available' : 'unavailable'} (VS Code ${data.vscodeVersion ?? 'not found'})`
+        );
+        console.log(`vscode: protocol: ${data.protocolRegistered ? 'registered' : 'not registered'}`);
+        printVSCodeSlots({ slots: data.bindings });
+        if (!data.ready) process.exitCode = 1;
       }
       return;
 
