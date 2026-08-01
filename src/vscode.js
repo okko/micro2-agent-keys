@@ -19,6 +19,7 @@ const SUPPORTED_PRODUCER = 'copilot-agent';
 const SUPPORTED_EVENT_VERSION = 1;
 const SUPPORTED_VSCODE_VERSION = /^1\.131\./;
 const VSCODE_APP = '/Applications/Visual Studio Code.app';
+const RESET_HOOK_EVENTS = new Set(['SessionStart', 'SessionEnd']);
 
 function parseYamlScalar(source, key) {
   const match = source.match(new RegExp(`^${key}:\\s*(.*?)\\s*$`, 'm'));
@@ -719,6 +720,12 @@ class VSCodeIntegration {
   }
 
   async applyHook(event) {
+    if (RESET_HOOK_EVENTS.has(event?.hookEventName)) {
+      await this.resetBindings('hook-lifecycle', typeof event.timestamp === 'string' ? event.timestamp : undefined);
+      this.save();
+      return true;
+    }
+
     if (
       !SESSION_ID.test(event?.sessionId ?? '') ||
       event?.toolName !== 'vscode_askQuestions' ||
@@ -739,6 +746,27 @@ class VSCodeIntegration {
 
   publicSlots() {
     return this.slots.map((slot, index) => (slot ? { ...slot } : { slot: index, state: 'idle' }));
+  }
+
+  async resetBindings(reason = 'hook-lifecycle', timestamp = new Date().toISOString()) {
+    let cleared = 0;
+    for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
+      const slot = this.slots[index];
+      if (!slot) continue;
+
+      const session = this.sessions.get(slot.sessionId);
+      if (session) {
+        session.boundSlot = null;
+        session.run = emptyRun();
+      }
+
+      this.slots[index] = null;
+      cleared++;
+      await this.onSlot({ slot: index, state: 'idle', label: null, stateChangedAt: timestamp, reason });
+    }
+
+    if (cleared) this.log(`Cleared ${cleared} VS Code slot bindings (${reason})`);
+    return cleared;
   }
 
   async open(index) {

@@ -201,8 +201,36 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
   assert.equal(integration.slots[0].state, 'done');
 
   await integration.open(0);
-  assert.equal(integration.slots[0].state, 'idle');
+  assert.equal(integration.publicSlots()[0].state, 'idle');
   assert.equal(new URL(launched[0]).searchParams.get('session'), nativeSessionResource(IDS[0]));
+});
+
+test('lifecycle hooks clear bound slots to idle', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message', {}, '2026-08-01T10:00:00.000Z'));
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  assert.equal(
+    await integration.applyHook({ hookEventName: 'SessionStart', timestamp: '2026-08-01T10:00:01.000Z' }),
+    true
+  );
+  assert.equal(integration.publicSlots()[0].state, 'idle');
+  assert.equal(observed.at(-1).state, 'idle');
 });
 
 test('prompt-gates allocation, fills free slots, then reuses oldest done slot', async (t) => {

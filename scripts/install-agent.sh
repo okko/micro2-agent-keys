@@ -79,6 +79,20 @@ cat > "$HOOKFILE" <<'HOOKS'
         "command": "~/.local/bin/agentkeys-vscode-hook",
         "timeout": 2
       }
+    ],
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "~/.local/bin/agentkeys-vscode-hook",
+        "timeout": 2
+      }
+    ],
+    "SessionEnd": [
+      {
+        "type": "command",
+        "command": "~/.local/bin/agentkeys-vscode-hook",
+        "timeout": 2
+      }
     ]
   }
 }

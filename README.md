@@ -120,8 +120,10 @@ the symlink and the LaunchAgent both point at it.
 
 The installer also writes `~/.copilot/hooks/agentkeys.json`. VS Code's preview agent
 hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
-native Chat transcript's buffered writes. The `chat.useHooks` setting must be enabled;
-it defaults to enabled in the verified VS Code version.
+native Chat transcript's buffered writes. It also registers lifecycle hooks to clear the
+VS Code integration slots (AG00..AG03) on session start/end, so stale yellow input
+state does not survive between local chat sessions. The `chat.useHooks` setting must be
+enabled; it defaults to enabled in the verified VS Code version.
 
 macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
 interfaces alongside the vendor one. The grant is attached to a code signature, so a
