@@ -10,7 +10,7 @@ Use this architecture instead:
 1. The AgentKeys daemon discovers local Copilot CLI sessions from their persisted event
    streams; no configured agent hook is required.
 2. The first submitted prompt from an unbound session assigns it to the first free slot
-   or the slot that has been `done` longest.
+  or the oldest inactive slot (`done` or acknowledged `idle`).
 3. The AgentKeys daemon owns the four bindings and watches each bound Copilot CLI
    session's live `events.jsonl`.
 4. A physical key press asks VS Code itself to open the exact bound session using its
@@ -75,7 +75,8 @@ Allocation is atomic and uses this order:
 
 1. Keep the session's existing slot, if it is still bound.
 2. Use the lowest-numbered unbound slot.
-3. Reuse the slot with the oldest `doneAt` timestamp.
+3. Reuse the oldest inactive slot: `done`, or `idle` after acknowledgement. Preserve
+  `doneAt` when acknowledging so the original completion time determines this order.
 4. If every slot is `running`, `input`, or `error`, leave the session unbound and report
    a visible warning. Retry allocation when that session next submits a prompt.
 
@@ -89,9 +90,11 @@ Pressing `KV_OAI_AG00` through `KV_OAI_AG03`:
 1. looks up the slot in the daemon;
 2. asks VS Code to open that exact session in its project window;
 3. focuses the resulting Chat UI;
-4. acknowledges a `done` indication after a successful open.
+4. acknowledges a `done` indication after a successful open by changing it to `idle`,
+   without removing the session binding.
 
-The user does not select a VS Code window manually.
+The user does not select a VS Code window manually. An acknowledged white key can open
+the same session repeatedly until a newly submitted session reuses its slot.
 
 ## 4. Supported session identity
 
@@ -226,10 +229,10 @@ Requirements:
 - Maintain a reverse lookup from session ID to its currently bound slot.
 - Serialize allocation, rebinding, and watcher replacement.
 - An unbound session becomes eligible only on normalized `prompt-submitted`.
-- Prefer an unbound slot, then the oldest `done` slot by `doneAt`, with slot number as
-  the tie-breaker.
-- When reusing a `done` slot, remove the old session from the reverse lookup and close
-  its watcher before installing the new binding.
+- Prefer an unbound slot, then the oldest `done` or acknowledged `idle` slot by
+  `doneAt`, with slot number as the tie-breaker.
+- When reusing an inactive slot, remove the old session from the reverse lookup and
+  close its watcher before installing the new binding.
 - Retain lightweight historical `firstSeenAt` and `lastSeenAt` metadata so diagnostics
   can distinguish a new session from resumed unbound work. Historical presence must not
   prevent prompt-gated reallocation.
@@ -402,12 +405,14 @@ session unless a later acknowledgement mechanism is added.
 
 Opening a session acknowledges only a completed result:
 
-- `done` becomes `idle` after the URL is launched successfully;
+- `done` becomes `idle` after the URL is launched successfully, but its session remains
+  bound and can be opened repeatedly from the white key;
 - `input`, `running`, and `error` remain unchanged;
 - a subsequent session event always wins.
 
 This keeps an approval/question indication visible until the user actually responds.
 Errors remain visible until a new prompt clears the error latch or the slot is rebound.
+An acknowledged binding is removed only when a new session reuses that inactive slot.
 
 ## 13. Installation
 
@@ -488,7 +493,7 @@ Do not build the full integration until all acceptance checks pass.
 - Confirm the records are independent of the selected built-in or custom agent.
 - Confirm opening or focusing a chat without submitting does not allocate it.
 - Confirm the first four submitted sessions use free slots and the fifth reuses the
-  oldest `done` slot.
+  oldest `done` or acknowledged `idle` slot.
 
 ### 17.2 Event check
 
@@ -568,13 +573,15 @@ V1 is complete only when:
 - submitting a prompt in a previously unbound session allocates it without terminal use;
 - built-in and unrelated custom agents work without modification;
 - no VS Code or Copilot hook configuration is installed;
-- free slots are filled before the oldest `done` slot is reused;
+- free slots are filled before the oldest `done` or acknowledged `idle` slot is reused;
 - active and errored slots are never silently stolen;
 - resuming an unbound old session makes it eligible again only after prompt submission;
 - four slots can point to four projects open in different VS Code windows;
 - `running`, `input`, `done`, and `error` are driven by hooks/events, not cache polling;
 - permission and explicit-question waits light `input`;
 - pressing a key opens the exact transcript and focuses the correct project window;
+- opening `done` turns the key white without forgetting the session, and repeated
+  presses reopen it until the slot is reused;
 - daemon restart reconstructs state;
 - malformed state and unavailable VS Code features fail visibly;
 - no native SQLite module, Karabiner configuration, or general VS Code extension is

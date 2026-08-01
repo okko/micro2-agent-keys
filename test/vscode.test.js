@@ -202,6 +202,7 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
 
   await integration.open(0);
   assert.equal(integration.publicSlots()[0].state, 'idle');
+  assert.equal(integration.sessions.get(IDS[0]).boundSlot, 0);
   assert.equal(new URL(launched[0]).searchParams.get('session'), nativeSessionResource(IDS[0]));
 });
 
@@ -265,7 +266,7 @@ test('lifecycle hooks leave bound slots intact', async (t) => {
   assert.equal(observed.at(-1).state, 'running');
 });
 
-test('prompt-gates allocation, fills free slots, then reuses oldest done slot', async (t) => {
+test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const projects = IDS.map((id, index) => {
@@ -275,7 +276,11 @@ test('prompt-gates allocation, fills free slots, then reuses oldest done slot', 
   });
   append(projects[0], event('user.message'));
 
-  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    launch: async () => {},
+  });
   await integration.start();
   t.after(() => integration.stop());
   assert.ok(integration.publicSlots().every((slot) => slot.state === 'idle'));
@@ -289,6 +294,9 @@ test('prompt-gates allocation, fills free slots, then reuses oldest done slot', 
     await integration.scan();
   }
   assert.deepEqual(integration.slots.map((slot) => slot.sessionId), IDS.slice(0, 4));
+  await integration.open(0);
+  assert.equal(integration.slots[0].state, 'idle');
+  assert.equal(integration.slots[0].sessionId, IDS[0]);
 
   append(projects[4], event('user.message', {}, '2026-08-01T10:01:00.000Z'));
   await integration.scan();
@@ -347,7 +355,7 @@ test('keeps an incomplete JSONL record for the next scan', async (t) => {
   assert.equal(integration.slots[0].sessionId, IDS[0]);
 });
 
-test('opening acknowledges done and missing projects fail visibly', async (t) => {
+test('opening acknowledges a completed session without forgetting it', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'Prøject space');
@@ -365,14 +373,19 @@ test('opening acknowledges done and missing projects fail visibly', async (t) =>
   await integration.scan();
 
   await integration.open(0);
-  assert.equal(integration.slots[0], null);
-  assert.equal(integration.sessions.get(IDS[0]).boundSlot, null);
+  assert.equal(integration.slots[0].sessionId, IDS[0]);
+  assert.equal(integration.sessions.get(IDS[0]).boundSlot, 0);
   assert.equal(integration.publicSlots()[0].state, 'idle');
   assert.match(launched[0], /Pr%C3%B8ject%20space/);
 
-  fs.rmSync(cwd, { recursive: true });
-  await assert.rejects(integration.open(0), /VS Code slot 0 is unbound/);
+  await integration.open(0);
+  assert.equal(launched.length, 2);
+  assert.equal(integration.slots[0].sessionId, IDS[0]);
   assert.equal(integration.publicSlots()[0].state, 'idle');
+
+  fs.rmSync(cwd, { recursive: true });
+  await assert.rejects(integration.open(0), /project path does not exist/);
+  assert.equal(integration.publicSlots()[0].state, 'error');
 });
 
 test('recovers when the session-state root appears after startup', async (t) => {

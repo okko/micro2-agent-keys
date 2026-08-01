@@ -10,7 +10,7 @@ already accepts.
 
 | State   | Colour       | Meaning                        |
 | ------- | ------------ | ------------------------------ |
-| `idle`  | dim white    | no session in this slot        |
+| `idle`  | dim white    | free, or completed session acknowledged |
 | `running` | blue, breathing | agent is thinking / executing |
 | `done`  | green        | finished, output unread        |
 | `input` | amber, breathing | paused, waiting on you     |
@@ -216,7 +216,7 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
    For an unbound session:
 
    - use the lowest unbound slot;
-   - otherwise reuse the oldest `done` slot;
+  - otherwise reuse the oldest `done` or acknowledged `idle` slot;
    - never steal `running`, `input`, or `error`.
 
 4. **Update the LED**
@@ -248,6 +248,9 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
     - VS Code's encoded `vscode-chat-session://local/...` resource for native Chat.
 
    VS Code focuses the relevant project window and opens the exact transcript there.
+  Opening a green `done` session acknowledges it by turning its key white, but keeps
+  the session bound: pressing the white key reopens the same transcript repeatedly.
+  The binding remains until a newly submitted session needs and reuses that slot.
    Exact opening is currently enabled only for the verified VS Code `1.131.x` compatibility
    boundary; `agentkeys doctor vscode` reports unsupported versions instead of opening a
    generic or potentially incorrect chat.
