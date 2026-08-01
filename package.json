@@ -1,0 +1,20 @@
+{
+  "name": "micro2-agentkeys",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Show the status of up to 6 concurrent agent sessions on the per-key lights of a Work Louder Creator Micro 2",
+  "type": "commonjs",
+  "bin": {
+    "agentkeys": "src/cli.js"
+  },
+  "scripts": {
+    "daemon": "node src/daemon.js",
+    "probe": "node src/probe.js"
+  },
+  "dependencies": {
+    "node-hid": "^3.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
