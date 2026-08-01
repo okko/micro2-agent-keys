@@ -3,16 +3,12 @@
 const http = require('http');
 const { Device, listDevices } = require('./device');
 const { setThreads, setZones, EFFECT } = require('./oai');
-const keymap = require('./keymap');
 const { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } = require('./states');
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const HOST = '127.0.0.1';
 const MAX_BODY = 4096;
 const RECONNECT_MS = 3000;
-
-// 1-based, matching the layer button's own numbering and device.status.layer_index.
-const LAYER = Number(process.env.AGENTKEYS_LAYER ?? 1);
 
 // LaunchServices discards stdout, so the app-bundle launch needs a real file.
 if (process.env.AGENTKEYS_LOG) {
@@ -82,9 +78,6 @@ async function connect() {
   device = await Device.open();
   log('device connected');
 
-  const result = await keymap.install(device, LAYER);
-  log(`layer ${LAYER}:`, result.installed ? `installed (backup ${result.backup})` : result.reason);
-
   await setZones(device, {
     keys: { color: 0x000000, effect: EFFECT.off, brightness: 0 },
     ambient: { color: 0x101010, effect: EFFECT.solid, brightness: 0.3 },
@@ -131,7 +124,7 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
 
   if (req.method === 'GET' && url.pathname === '/state') {
-    return send(res, 200, { connected: Boolean(device), layer: LAYER, slots });
+    return send(res, 200, { connected: Boolean(device), slots });
   }
 
   if (req.method === 'POST' && url.pathname === '/reset') {
@@ -185,18 +178,16 @@ let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  log(`${signal}, restoring keyboard`);
+  log(`${signal}, shutting down`);
 
   clearTimeout(reconnectTimer);
   server.close();
 
   if (device) {
     try {
-      const result = await keymap.restore(device);
-      log('keymap restore:', JSON.stringify(result));
       await device.close();
     } catch (err) {
-      log('restore failed:', err.message);
+      log('close failed:', err.message);
     }
   }
   process.exit(0);

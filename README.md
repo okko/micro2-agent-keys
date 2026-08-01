@@ -30,14 +30,60 @@ special entitlement.
 Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array of
 per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
 
-The device exposes no RPC for switching layers, so the daemon rewrites `keymap.json`
-with one layer bound to the agent-key codes. Writing that file triggers a live reload
-but leaves the active layer alone, so the agent layer is not force-activated — you
-switch to it yourself. That costs nothing, because the device retains per-key lighting
-state whether or not the layer is showing: whatever you switch to reflects current
-status.
+The daemon never touches your keymap. You bind the agent keycodes to a layer once, the
+way you want them, and from then on the daemon only sends colours. That works because
+lighting is layer-independent: the device holds per-key state whether or not the layer
+is showing, so whenever you switch to it, it already reflects current status.
 
-Set `AGENTKEYS_LAYER` to choose which layer gets replaced (1-based, default `1`).
+## The agent layer
+
+Agent keys are ordinary keymap bindings. Six keycodes, one per agent slot:
+
+| Keycode | Purpose |
+| --- | --- |
+| `KV_OAI_AG00`..`AG05` | the six agent slots — slot `N` is `KV_OAI_AG<NN>` |
+| `KV_OAI_ACT06`..`ACT12` | action keys; they report presses over `v.oai.hid` too |
+| `KV_OAI_ENC_CW` / `_CC` / `_CLK` | encoder clockwise, counter-clockwise, click |
+
+The firmware's keycode table runs to `AG19` and `ACT20`, so more than six slots may be
+addressable. Only `AG00`..`AG05` have been tried here.
+
+### Default layout
+
+This is the stock agent layer, verified byte-for-byte against the one embedded in the
+published firmware image. Use it as a starting point and change what you like — it is
+also available as `CODEX_LAYER` in [src/keymap.js](src/keymap.js) for scripts.
+
+```json
+{
+  "id": 0,
+  "name": "Agent layer",
+  "color": 16711680,
+  "layout": {
+    "encoders": [["KV_OAI_ENC_CC", "KV_OAI_ENC_CW", "KV_OAI_ENC_CLK"]],
+    "buttons": [],
+    "keymap": [
+      ["KV_OAI_AG00", "KV_OAI_AG01"],
+      ["KV_OAI_AG02", "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05"],
+      ["KV_OAI_ACT06", "KV_OAI_ACT07", "KV_OAI_ACT08", "KV_OAI_ACT09"],
+      ["KV_OAI_ACT10", "KV_OAI_ACT11", "KV_OAI_ACT12"]
+    ],
+    "joystick": { "type": "VENDOR", "sectors": [] }
+  },
+  "os": 0
+}
+```
+
+The four `keymap` rows are the physical key rows, 2/4/4/3. Drop this in as one layer of
+`profiles[0].layers` in the device's `keymap.json`. Writing that file triggers a live
+reload and leaves the active layer alone, so nothing is force-activated.
+
+Managing that file is deliberately out of scope here. Expect the ChatGPT app to gain
+the ability to set up and manage the agent-key layer for you in an upcoming version,
+at which point hand-editing JSON becomes optional — a forward-looking statement about
+software that is not released yet, and nothing in this project depends on it. In the
+meantime `install()` in [src/keymap.js](src/keymap.js) can write a layer as a one-off;
+read [docs/hardware-safety.md](docs/hardware-safety.md) first.
 
 ### Agent keys can share a layer with your own keys
 
@@ -50,19 +96,12 @@ The slot-to-key mapping follows the **number in the keycode**, not the position,
 `KV_OAI_AG00`..`AG05` can sit anywhere in the layout, in any order. Slot 3 lights
 wherever `KV_OAI_AG03` is bound.
 
-By default the whole layer is replaced with the stock agent layout. To build a mixed
-layer instead, pass your own layer builder to `install()` or `withCodexLayer()`;
-`src/mixedlayertest.js` is a worked example.
-
 **The layer's own key lighting is ignored once it holds agent keycodes.** The whole
 layer is then painted by agent colours alone, so keys without a live agent stay dark
 and the agent keys stand out against them. This is the intended look, and the other
 keys still type normally — they are simply unlit. Verified by A/B on hardware
 (`src/backlighttest.js`): the same layer, written the same way, is solid white without
 the agent keycodes and fully dark with them, even with every agent colour switched off.
-
-Your original keymap is copied to `~/.local/state/agentkeys/keymap.backup.json` before
-the first write and put back on shutdown.
 
 
 ## Setup
