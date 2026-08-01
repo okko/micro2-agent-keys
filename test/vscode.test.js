@@ -205,7 +205,39 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
   assert.equal(new URL(launched[0]).searchParams.get('session'), nativeSessionResource(IDS[0]));
 });
 
-test('lifecycle hooks clear bound slots to idle', async (t) => {
+test('prefers Agent Host telemetry when VS Code mirrors the same session natively', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot.state),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message', {}, '2026-08-01T10:00:01.000Z'),
+    event('assistant.turn_start', { turnId: 'turn-1' }, '2026-08-01T10:00:02.000Z')
+  );
+  await integration.scan();
+  assert.equal(integration.sessions.get(IDS[0]).source, 'copilot-cli');
+  assert.equal(integration.slots[0].state, 'running');
+  assert.deepEqual(observed, ['running', 'running']);
+
+  observed.length = 0;
+  await integration.scan();
+  assert.deepEqual(observed, []);
+  assert.equal(integration.slots[0].state, 'running');
+});
+
+test('lifecycle hooks leave bound slots intact', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'project');
@@ -227,10 +259,10 @@ test('lifecycle hooks clear bound slots to idle', async (t) => {
 
   assert.equal(
     await integration.applyHook({ hookEventName: 'SessionStart', timestamp: '2026-08-01T10:00:01.000Z' }),
-    true
+    false
   );
-  assert.equal(integration.publicSlots()[0].state, 'idle');
-  assert.equal(observed.at(-1).state, 'idle');
+  assert.equal(integration.publicSlots()[0].state, 'running');
+  assert.equal(observed.at(-1).state, 'running');
 });
 
 test('prompt-gates allocation, fills free slots, then reuses oldest done slot', async (t) => {

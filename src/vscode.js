@@ -488,8 +488,13 @@ class VSCodeIntegration {
       try {
         ids = fs.readdirSync(this.root);
       } catch {}
-      const candidates = ids.map((id) => this.admit(id)).filter(Boolean);
-      candidates.push(...this.nativeCandidates());
+      const candidatesById = new Map(
+        this.nativeCandidates().map((candidate) => [candidate.id, candidate])
+      );
+      for (const candidate of ids.map((id) => this.admit(id)).filter(Boolean)) {
+        candidatesById.set(candidate.id, candidate);
+      }
+      const candidates = [...candidatesById.values()];
       if (!candidates.length && !fs.existsSync(this.root) && !fs.existsSync(this.nativeRoot)) {
         throw new Error('Copilot session-state and VS Code workspace storage directories unavailable');
       }
