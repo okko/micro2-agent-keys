@@ -195,12 +195,14 @@ test('opening acknowledges done and missing projects fail visibly', async (t) =>
   await integration.scan();
 
   await integration.open(0);
-  assert.equal(integration.slots[0].state, 'idle');
+  assert.equal(integration.slots[0], null);
+  assert.equal(integration.sessions.get(IDS[0]).boundSlot, null);
+  assert.equal(integration.publicSlots()[0].state, 'idle');
   assert.match(launched[0], /Pr%C3%B8ject%20space/);
 
   fs.rmSync(cwd, { recursive: true });
-  await assert.rejects(integration.open(0), /project path does not exist/);
-  assert.equal(integration.slots[0].state, 'error');
+  await assert.rejects(integration.open(0), /VS Code slot 0 is unbound/);
+  assert.equal(integration.publicSlots()[0].state, 'idle');
 });
 
 test('recovers when the session-state root appears after startup', async (t) => {

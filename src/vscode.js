@@ -544,12 +544,14 @@ class VSCodeIntegration {
     await this.launch(url);
     const current = this.slots[index];
     if (current?.sessionId === sessionId && current.state === 'done') {
-      current.state = 'idle';
-      current.stateChangedAt = new Date().toISOString();
-      await this.onSlot({ ...current });
+      const releasedAt = new Date().toISOString();
+      const sessionRecord = this.sessions.get(sessionId);
+      if (sessionRecord) sessionRecord.boundSlot = null;
+      this.slots[index] = null;
+      await this.onSlot({ slot: index, state: 'idle', label: null, stateChangedAt: releasedAt });
       this.save();
     }
-    return { slot: { ...this.slots[index] }, url };
+    return { slot: this.publicSlots()[index], url };
   }
 
   doctor() {
