@@ -6,7 +6,7 @@ This page records what was observed on one unit while developing this project. I
 not vendor documentation and makes no claim about how the device is designed or how
 other units behave. Writing to the device is done at your own risk.
 
-## What happened on 2026-07-31
+## What happened
 
 During development the keyboard stopped responding, and getting it back required
 **physically opening the case**. The circumstances are worth recording, because nothing
