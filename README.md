@@ -125,6 +125,9 @@ VS Code integration slots (AG00..AG03) on session start/end, so stale yellow inp
 state does not survive between local chat sessions. The `chat.useHooks` setting must be
 enabled; it defaults to enabled in the verified VS Code version.
 
+For the evidence and rationale behind this hybrid file-plus-hook model, see
+[`docs/findings.md`](docs/findings.md), section "VS Code chat telemetry findings".
+
 macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
 interfaces alongside the vendor one. The grant is attached to a code signature, so a
 bare `node` invocation cannot hold it — hence the tiny `AgentKeys.app`, which is just
