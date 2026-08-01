@@ -10,6 +10,7 @@
   "scripts": {
     "daemon": "node src/daemon.js",
     "probe": "node src/probe.js",
+    "setup": "npm install && scripts/make-app.sh && scripts/install-agent.sh",
     "test": "node --test"
   },
   "dependencies": {
