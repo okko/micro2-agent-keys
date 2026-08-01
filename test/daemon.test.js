@@ -42,11 +42,13 @@ async function stop(child) {
 test('daemon restart replays a permission wait and subsequent completion', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-'));
   const copilotHome = path.join(directory, 'copilot');
+  const nativeRoot = path.join(directory, 'workspaceStorage');
   const sessionDirectory = path.join(copilotHome, 'session-state', SESSION_ID);
   const cwd = path.join(directory, 'project');
   const statePath = path.join(directory, 'state.json');
   const eventsPath = path.join(sessionDirectory, 'events.jsonl');
   fs.mkdirSync(sessionDirectory, { recursive: true });
+  fs.mkdirSync(nativeRoot);
   fs.mkdirSync(cwd);
   fs.writeFileSync(
     path.join(sessionDirectory, 'workspace.yaml'),
@@ -85,6 +87,7 @@ test('daemon restart replays a permission wait and subsequent completion', async
         AGENTKEYS_NO_DEVICE: '1',
         AGENTKEYS_PORT: String(port),
         AGENTKEYS_VSCODE_STATE: statePath,
+        AGENTKEYS_VSCODE_WORKSPACE_STORAGE: nativeRoot,
         COPILOT_HOME: copilotHome,
       },
       stdio: ['ignore', 'pipe', 'pipe'],

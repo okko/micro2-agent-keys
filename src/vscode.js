@@ -3,11 +3,15 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { fileURLToPath } = require('url');
 const { execFile, execFileSync } = require('child_process');
 
 const INTEGRATION_SLOT_COUNT = 4;
 const CLIENT_NAME = 'vscode-agent-host';
 const RESOURCE_SCHEME = 'agent-host-copilotcli';
+const NATIVE_RESOURCE_SCHEME = 'vscode-chat-session';
+const SOURCE_COPILOT_CLI = 'copilot-cli';
+const SOURCE_NATIVE = 'native';
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SCAN_INTERVAL_MS = 1000;
 const SCHEMA_VERSION = 1;
@@ -48,6 +52,7 @@ function emptyRun() {
     error: null,
     turns: new Set(),
     tools: new Map(),
+    questionHooksObserved: false,
     permissions: new Set(),
     completed: false,
   };
@@ -64,7 +69,7 @@ function emptyCompatibility() {
   };
 }
 
-function updateCompatibility(compatibility, event) {
+function updateCompatibility(compatibility, event, source = SOURCE_COPILOT_CLI) {
   if (event?.type === 'session.start') {
     compatibility.producer = event.data?.producer ?? null;
     compatibility.eventVersion = event.data?.version ?? null;
@@ -79,24 +84,65 @@ function updateCompatibility(compatibility, event) {
   ) {
     compatibility.sawPrompt = true;
   }
-  if (event?.type === 'hook.end' && event.data?.hookType === 'sessionEnd') {
+  if (
+    (event?.type === 'hook.end' && event.data?.hookType === 'sessionEnd') ||
+    (source === SOURCE_NATIVE && event?.type === 'request.completed')
+  ) {
     compatibility.sawSessionEnd = true;
   }
 }
 
-function inspectCompatibility(eventsPath) {
+function isNativeCompletionPatch(patch) {
+  const key = patch?.k;
+  if (
+    patch?.kind === 1 &&
+    Array.isArray(key) &&
+    key[0] === 'requests' &&
+    Number.isInteger(key[1]) &&
+    (key[2] === 'result' || (key[2] === 'modelState' && patch.v?.completedAt))
+  ) return true;
+  const requests =
+    patch?.kind === 0 && Array.isArray(patch.v?.requests)
+      ? patch.v.requests
+      : patch?.kind === 2 && key?.length === 1 && key[0] === 'requests' && Array.isArray(patch.v)
+        ? patch.v
+        : null;
+  const latest = requests?.at(-1);
+  return Boolean(latest && (latest.result || latest.modelState?.completedAt));
+}
+
+function nativeCompletionTimestamp(patch) {
+  const key = patch?.k;
+  if (patch?.kind === 1 && key?.[2] === 'modelState') return patch.v?.completedAt ?? null;
+  const requests = patch?.kind === 0 ? patch.v?.requests : key?.length === 1 ? patch.v : null;
+  return requests?.at?.(-1)?.modelState?.completedAt ?? null;
+}
+
+function inspectCompatibility(eventsPath, source, journalPath = null) {
   const compatibility = emptyCompatibility();
-  const source = fs.readFileSync(eventsPath, 'utf8');
-  for (const line of source.split('\n')) {
+  const contents = fs.readFileSync(eventsPath, 'utf8');
+  for (const line of contents.split('\n')) {
     if (!line.trim()) continue;
     try {
-      updateCompatibility(compatibility, JSON.parse(line));
+      updateCompatibility(compatibility, JSON.parse(line), source);
     } catch {}
+  }
+  if (source === SOURCE_NATIVE && journalPath) {
+    const journal = fs.readFileSync(journalPath, 'utf8');
+    for (const line of journal.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        if (isNativeCompletionPatch(JSON.parse(line))) {
+          updateCompatibility(compatibility, { type: 'request.completed' }, source);
+          break;
+        }
+      } catch {}
+    }
   }
   return compatibility;
 }
 
-function reduceEvent(run, event) {
+function reduceEvent(run, event, source = SOURCE_COPILOT_CLI) {
   const data = event?.data;
   const hookType = data?.hookType;
   const prompt =
@@ -117,16 +163,34 @@ function reduceEvent(run, event) {
     if (id) run.turns.delete(id);
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
-    if (id) run.tools.set(id, data?.toolName ?? '');
+    const question = data?.toolName === 'vscode_askQuestions';
+    if (data?.fromHook && question) run.questionHooksObserved = true;
+    if (
+      id &&
+      !(source === SOURCE_NATIVE && question && run.questionHooksObserved && !data?.fromHook)
+    ) run.tools.set(id, data?.toolName ?? '');
     run.completed = false;
   } else if (event?.type === 'tool.execution_complete') {
-    if (data?.toolCallId) run.tools.delete(data.toolCallId);
+    if (data?.fromHook && data?.toolName === 'vscode_askQuestions') {
+      run.questionHooksObserved = true;
+      for (const [id, name] of run.tools) {
+        if (name === 'vscode_askQuestions') run.tools.delete(id);
+      }
+    }
+    if (data?.toolCallId) {
+      run.tools.delete(data.toolCallId);
+    }
   } else if (event?.type === 'permission.requested') {
     if (data?.requestId) run.permissions.add(data.requestId);
   } else if (event?.type === 'permission.completed') {
     if (data?.requestId) run.permissions.delete(data.requestId);
   } else if (event?.type === 'session.error' || event?.type === 'turn.error') {
     run.error = event.type;
+  } else if (source === SOURCE_NATIVE && event?.type === 'request.completed') {
+    run.completed = true;
+    run.turns.clear();
+    run.tools.clear();
+    run.permissions.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
     run.completed = true;
     run.turns.clear();
@@ -138,17 +202,25 @@ function reduceEvent(run, event) {
 
   let state = 'running';
   if (run.error) state = 'error';
-  else if (run.permissions.size || [...run.tools.values()].includes('ask_user')) state = 'input';
+  else if (
+    run.permissions.size ||
+    [...run.tools.values()].some((name) => name === 'ask_user' || name === 'vscode_askQuestions')
+  ) state = 'input';
   else if (run.completed) state = 'done';
   return { run, prompt: false, state };
 }
 
-function buildSessionUrl(cwd, sessionId) {
+function nativeSessionResource(sessionId) {
+  if (!SESSION_ID.test(sessionId)) throw new Error('invalid VS Code session id');
+  return `${NATIVE_RESOURCE_SCHEME}://local/${Buffer.from(sessionId).toString('base64url')}`;
+}
+
+function buildSessionUrl(cwd, sessionId, resource = `${RESOURCE_SCHEME}:/${sessionId}`) {
   if (!path.isAbsolute(cwd)) throw new Error('project path is not absolute');
   if (!SESSION_ID.test(sessionId)) throw new Error('invalid VS Code session id');
   const url = new URL('vscode://file');
   url.pathname = cwd;
-  url.searchParams.set('session', `${RESOURCE_SCHEME}:/${sessionId}`);
+  url.searchParams.set('session', resource);
   return url.toString();
 }
 
@@ -192,6 +264,10 @@ class VSCodeIntegration {
   constructor(options = {}) {
     this.root =
       options.root ?? path.join(process.env.COPILOT_HOME ?? path.join(os.homedir(), '.copilot'), 'session-state');
+    this.nativeRoot =
+      options.nativeRoot ??
+      process.env.AGENTKEYS_VSCODE_WORKSPACE_STORAGE ??
+      path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'workspaceStorage');
     this.statePath =
       options.statePath ??
       process.env.AGENTKEYS_VSCODE_STATE ??
@@ -223,9 +299,14 @@ class VSCodeIntegration {
       this.sessions.set(raw.id, {
         id: raw.id,
         cwd: raw.cwd ?? null,
-        eventsPath: this.eventsPath(raw.id),
+        eventsPath: raw.source === SOURCE_NATIVE ? raw.eventsPath : this.eventsPath(raw.id),
+        journalPath: raw.journalPath ?? null,
+        source: raw.source ?? SOURCE_COPILOT_CLI,
+        resource: raw.resource ?? `${RESOURCE_SCHEME}:/${raw.id}`,
         offset: typeof raw.identity === 'string' ? raw.offset : 0,
         identity: typeof raw.identity === 'string' ? raw.identity : null,
+        journalOffset: 0,
+        journalIdentity: null,
         run: emptyRun(),
         compatibility: { ...emptyCompatibility(), ...raw.compatibility },
         boundSlot: null,
@@ -239,9 +320,14 @@ class VSCodeIntegration {
       const session = this.sessions.get(raw.sessionId) ?? {
         id: raw.sessionId,
         cwd: raw.cwd,
-        eventsPath: this.eventsPath(raw.sessionId),
+        eventsPath: raw.eventsPath ?? this.eventsPath(raw.sessionId),
+        journalPath: raw.journalPath ?? null,
+        source: raw.source ?? SOURCE_COPILOT_CLI,
+        resource: raw.resource ?? `${RESOURCE_SCHEME}:/${raw.sessionId}`,
         offset: 0,
         identity: null,
+        journalOffset: 0,
+        journalIdentity: null,
         run: emptyRun(),
         compatibility: emptyCompatibility(),
         boundSlot: null,
@@ -280,6 +366,10 @@ class VSCodeIntegration {
       sessions: [...this.sessions.values()].map((session) => ({
         id: session.id,
         cwd: session.cwd,
+        eventsPath: session.eventsPath,
+        journalPath: session.journalPath,
+        source: session.source,
+        resource: session.resource,
         offset: session.offset,
         identity: session.identity,
         compatibility: session.compatibility,
@@ -332,23 +422,81 @@ class VSCodeIntegration {
     if (metadata.clientName !== CLIENT_NAME || metadata.id !== id || !path.isAbsolute(metadata.cwd ?? '')) {
       return null;
     }
-    return { cwd: metadata.cwd, eventsPath };
+    return {
+      id,
+      cwd: metadata.cwd,
+      eventsPath,
+      source: SOURCE_COPILOT_CLI,
+      resource: `${RESOURCE_SCHEME}:/${id}`,
+    };
+  }
+
+  nativeCandidates() {
+    const candidates = [];
+    let workspaceIds;
+    try {
+      workspaceIds = fs.readdirSync(this.nativeRoot);
+    } catch {
+      return candidates;
+    }
+    for (const workspaceId of workspaceIds) {
+      const directory = path.join(this.nativeRoot, workspaceId);
+      let cwd;
+      try {
+        const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'workspace.json'), 'utf8'));
+        const workspaceUri = metadata.folder ?? metadata.workspace;
+        if (new URL(workspaceUri).protocol !== 'file:') continue;
+        cwd = fileURLToPath(workspaceUri);
+      } catch {
+        continue;
+      }
+      const transcripts = path.join(directory, 'GitHub.copilot-chat', 'transcripts');
+      let files;
+      try {
+        files = fs.readdirSync(transcripts);
+      } catch {
+        continue;
+      }
+      for (const file of files) {
+        const id = path.basename(file, '.jsonl');
+        if (file !== `${id}.jsonl` || !SESSION_ID.test(id)) continue;
+        const eventsPath = path.join(transcripts, file);
+        const chatPath = path.join(directory, 'chatSessions', file);
+        try {
+          fs.accessSync(eventsPath, fs.constants.R_OK);
+          fs.accessSync(chatPath, fs.constants.R_OK);
+        } catch {
+          continue;
+        }
+        candidates.push({
+          id,
+          cwd,
+          eventsPath,
+          journalPath: chatPath,
+          source: SOURCE_NATIVE,
+          resource: nativeSessionResource(id),
+        });
+      }
+    }
+    return candidates;
   }
 
   async scan(initial = false) {
     if (this.scanning) return;
     this.scanning = true;
     try {
-      let ids;
+      let ids = [];
       try {
         ids = fs.readdirSync(this.root);
-      } catch (err) {
-        throw new Error(`Copilot session-state directory unavailable: ${err.message}`);
+      } catch {}
+      const candidates = ids.map((id) => this.admit(id)).filter(Boolean);
+      candidates.push(...this.nativeCandidates());
+      if (!candidates.length && !fs.existsSync(this.root) && !fs.existsSync(this.nativeRoot)) {
+        throw new Error('Copilot session-state and VS Code workspace storage directories unavailable');
       }
       const admittedIds = new Set();
-      for (const id of ids) {
-        const admitted = this.admit(id);
-        if (!admitted) continue;
+      for (const admitted of candidates) {
+        const { id } = admitted;
         admittedIds.add(id);
         let session = this.sessions.get(id);
         if (!session) {
@@ -357,10 +505,17 @@ class VSCodeIntegration {
             id,
             cwd: admitted.cwd,
             eventsPath: admitted.eventsPath,
+            journalPath: admitted.journalPath ?? null,
+            source: admitted.source,
+            resource: admitted.resource,
             offset: initial ? stat.size : 0,
             identity: `${stat.dev}:${stat.ino}`,
+            journalOffset: admitted.journalPath ? fs.statSync(admitted.journalPath).size : 0,
+            journalIdentity: admitted.journalPath
+              ? `${fs.statSync(admitted.journalPath).dev}:${fs.statSync(admitted.journalPath).ino}`
+              : null,
             run: emptyRun(),
-            compatibility: inspectCompatibility(admitted.eventsPath),
+            compatibility: inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath),
             boundSlot: null,
             missingScans: 0,
             lastEventAt: null,
@@ -370,12 +525,16 @@ class VSCodeIntegration {
         } else {
           session.cwd = admitted.cwd;
           session.eventsPath = admitted.eventsPath;
+          session.journalPath = admitted.journalPath ?? null;
+          session.source = admitted.source;
+          session.resource = admitted.resource;
           if (!session.compatibility.producer) {
-            session.compatibility = inspectCompatibility(admitted.eventsPath);
+            session.compatibility = inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath);
           }
         }
         session.missingScans = 0;
         await this.readAppended(session);
+        if (session.journalPath) await this.readJournalAppended(session);
       }
       for (const slot of this.slots) {
         if (!slot || admittedIds.has(slot.sessionId)) continue;
@@ -438,6 +597,47 @@ class VSCodeIntegration {
     if (session.boundSlot !== null) this.slots[session.boundSlot].eventOffset = session.offset;
   }
 
+  async readJournalAppended(session) {
+    const stat = fs.statSync(session.journalPath);
+    const identity = `${stat.dev}:${stat.ino}`;
+    if (session.journalIdentity && session.journalIdentity !== identity) session.journalOffset = 0;
+    session.journalIdentity = identity;
+    if (stat.size < session.journalOffset) session.journalOffset = 0;
+    if (stat.size === session.journalOffset) return;
+    const length = stat.size - session.journalOffset;
+    const fd = fs.openSync(session.journalPath, 'r');
+    const buffer = Buffer.alloc(length);
+    try {
+      fs.readSync(fd, buffer, 0, length, session.journalOffset);
+    } finally {
+      fs.closeSync(fd);
+    }
+    const lines = buffer.toString('utf8').split('\n');
+    lines.pop();
+    let offset = session.journalOffset;
+    for (const line of lines) {
+      const bytes = Buffer.byteLength(line) + 1;
+      if (line.trim()) {
+        try {
+          const patch = JSON.parse(line);
+          if (isNativeCompletionPatch(patch)) {
+            await this.applyEvent(session, {
+              type: 'request.completed',
+              timestamp: nativeCompletionTimestamp(patch)
+                ? new Date(nativeCompletionTimestamp(patch)).toISOString()
+                : new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          if (err instanceof SyntaxError) this.log(`Malformed VS Code journal at ${session.id.slice(0, 8)}:${offset}`);
+          else throw err;
+        }
+      }
+      offset += bytes;
+    }
+    session.journalOffset = offset;
+  }
+
   allocate(session, timestamp) {
     if (session.boundSlot !== null) return session.boundSlot;
     let index = this.slots.findIndex((slot) => slot === null);
@@ -465,6 +665,10 @@ class VSCodeIntegration {
       slot: index,
       sessionId: session.id,
       cwd: session.cwd,
+      eventsPath: session.eventsPath,
+      journalPath: session.journalPath,
+      source: session.source,
+      resource: session.resource,
       label: path.basename(session.cwd),
       boundAt: now,
       state: 'running',
@@ -487,8 +691,8 @@ class VSCodeIntegration {
   }
 
   async applyEvent(session, event) {
-    updateCompatibility(session.compatibility, event);
-    const transition = reduceEvent(session.run, event);
+    updateCompatibility(session.compatibility, event, session.source);
+    const transition = reduceEvent(session.run, event, session.source);
     session.run = transition.run;
     session.lastEventAt = event.timestamp ?? new Date().toISOString();
     if (transition.prompt && session.boundSlot === null) {
@@ -512,6 +716,25 @@ class VSCodeIntegration {
       slot.runError = null;
     }
     await this.onSlot({ ...slot });
+  }
+
+  async applyHook(event) {
+    if (
+      !SESSION_ID.test(event?.sessionId ?? '') ||
+      event?.toolName !== 'vscode_askQuestions' ||
+      !['PreToolUse', 'PostToolUse'].includes(event?.hookEventName) ||
+      typeof event?.toolUseId !== 'string' ||
+      !event.toolUseId
+    ) return false;
+    const session = this.sessions.get(event.sessionId);
+    if (!session || session.source !== SOURCE_NATIVE || session.boundSlot === null) return false;
+    await this.applyEvent(session, {
+      type: event.hookEventName === 'PreToolUse' ? 'tool.execution_start' : 'tool.execution_complete',
+      data: { toolCallId: event.toolUseId, toolName: event.toolName, fromHook: true },
+      timestamp: typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString(),
+    });
+    this.save();
+    return true;
   }
 
   publicSlots() {
@@ -540,7 +763,7 @@ class VSCodeIntegration {
       this.save();
       throw new Error(`project path does not exist: ${slot.cwd}`);
     }
-    const url = buildSessionUrl(slot.cwd, slot.sessionId);
+    const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource);
     await this.launch(url);
     const current = this.slots[index];
     if (current?.sessionId === sessionId && current.state === 'done') {
@@ -558,6 +781,11 @@ class VSCodeIntegration {
       fs.accessSync(this.root, fs.constants.R_OK);
       rootReadable = true;
     } catch {}
+    let nativeRootReadable = false;
+    try {
+      fs.accessSync(this.nativeRoot, fs.constants.R_OK);
+      nativeRootReadable = true;
+    } catch {}
     const compatibleSessions = [...this.sessions.values()].filter(
       (session) => session.compatibility.supported
     ).length;
@@ -569,9 +797,11 @@ class VSCodeIntegration {
     ).length;
     const exactOpen = exactOpenCompatibility();
     return {
-      ready: this.started && rootReadable && verifiedLifecycleSessions > 0 && exactOpen.available,
+      ready: this.started && (rootReadable || nativeRootReadable) && verifiedLifecycleSessions > 0 && exactOpen.available,
       sessionStateRoot: this.root,
       rootReadable,
+      nativeSessionRoot: this.nativeRoot,
+      nativeRootReadable,
       resourceScheme: RESOURCE_SCHEME,
       trackedSessions: this.sessions.size,
       compatibleSessions,
@@ -583,7 +813,9 @@ class VSCodeIntegration {
         slot: slot.slot,
         state: slot.state,
         sessionId: slot.sessionId ?? null,
-        eventsReadable: slot.sessionId ? fs.existsSync(this.eventsPath(slot.sessionId)) : null,
+        eventsReadable: slot.sessionId
+          ? fs.existsSync(slot.eventsPath ?? this.sessions.get(slot.sessionId)?.eventsPath ?? '')
+          : null,
         projectExists: slot.cwd ? fs.existsSync(slot.cwd) : null,
         eventOffset: slot.eventOffset ?? null,
         lastEventAt: slot.lastEventAt ?? null,
@@ -596,6 +828,7 @@ module.exports = {
   VSCodeIntegration,
   INTEGRATION_SLOT_COUNT,
   RESOURCE_SCHEME,
+  NATIVE_RESOURCE_SCHEME,
   workspaceMetadata,
   reduceEvent,
   emptyRun,
@@ -603,5 +836,6 @@ module.exports = {
   updateCompatibility,
   exactOpenCompatibility,
   buildSessionUrl,
+  nativeSessionResource,
   launchUrl,
 };

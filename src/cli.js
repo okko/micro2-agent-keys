@@ -107,8 +107,9 @@ async function main(argv) {
         const data = await request('GET', '/integrations/vscode/doctor');
         console.log('daemon: reachable');
         console.log(`VS Code integration: ${data.ready ? 'ready' : 'not ready'}`);
-        console.log(`session state: ${data.rootReadable ? 'readable' : 'unavailable'} (${data.sessionStateRoot})`);
-        console.log(`resource scheme: ${data.resourceScheme}`);
+        console.log(`Agent Host sessions: ${data.rootReadable ? 'readable' : 'unavailable'} (${data.sessionStateRoot})`);
+        console.log(`native Chat sessions: ${data.nativeRootReadable ? 'readable' : 'unavailable'} (${data.nativeSessionRoot})`);
+        console.log(`Agent Host resource scheme: ${data.resourceScheme}`);
         console.log(`tracked sessions: ${data.trackedSessions} (${data.compatibleSessions} compatible)`);
         console.log(`verified lifecycles: ${data.verifiedLifecycleSessions}`);
         console.log(

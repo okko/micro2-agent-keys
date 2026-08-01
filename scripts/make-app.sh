@@ -41,5 +41,5 @@ NEW_HASH="$(codesign -dvvv "$APP" 2>&1 | sed -n 's/^CDHash=//p')"
 echo "built $APP"
 
 if [ -n "$OLD_HASH" ] && [ "$OLD_HASH" != "$NEW_HASH" ]; then
-  echo "warning: code hash changed, re-grant Input Monitoring in System Settings" >&2
+  echo "warning: code hash changed, re-grant Input Monitoring for AgentKeys in System Settings → Privacy & Security → Input Monitoring" >&2
 fi

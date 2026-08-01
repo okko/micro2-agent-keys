@@ -118,6 +118,11 @@ directory has to be on your `PATH`; the script says so if it is not. The CLI is 
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
 the symlink and the LaunchAgent both point at it.
 
+The installer also writes `~/.copilot/hooks/agentkeys.json`. VS Code's preview agent
+hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
+native Chat transcript's buffered writes. The `chat.useHooks` setting must be enabled;
+it defaults to enabled in the verified VS Code version.
+
 macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
 interfaces alongside the vendor one. The grant is attached to a code signature, so a
 bare `node` invocation cannot hold it — hence the tiny `AgentKeys.app`, which is just
@@ -155,6 +160,7 @@ POST /slots/:index          <- { "state": "running", "label": "optional" }
 POST /reset
 GET  /integrations/vscode/slots
 GET  /integrations/vscode/doctor
+POST /integrations/vscode/hooks
 POST /integrations/vscode/slots/:index/open
 ```
 
@@ -177,19 +183,21 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 
 1. **Discover VS Code sessions**
 
-   The daemon watches:
+    The daemon watches both Agent Host and native Copilot Chat sessions:
 
    ```text
    ~/.copilot/session-state/
+    ~/Library/Application Support/Code/User/workspaceStorage/*/GitHub.copilot-chat/transcripts/
    ```
 
-   It accepts sessions whose `workspace.yaml` contains:
+    Agent Host sessions must have this `workspace.yaml` value:
 
    ```yaml
    client_name: vscode-agent-host
    ```
 
-   This prevents ordinary terminal Copilot sessions from taking slots.
+    This prevents ordinary terminal Copilot sessions from taking slots. Native transcripts
+    must have a matching persisted entry under the workspace's `chatSessions/` directory.
 
 2. **Wait for actual work**
 
@@ -209,9 +217,13 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 4. **Update the LED**
 
    - prompt or active work -> `running`
-   - permission request or outstanding `ask_user` -> `input`
+    - permission request or outstanding `ask_user`/`vscode_askQuestions` -> `input`
    - session or turn error -> `error`
-   - completed `sessionEnd` lifecycle -> `done`
+    - Agent Host `sessionEnd` or native Chat request `result` -> `done`
+
+    Native Chat's `vscode_askQuestions` transition comes from the installed
+    `PreToolUse`/`PostToolUse` hooks. Persisted transcript events remain the restart
+    fallback; the journal remains the completion source.
 
 5. **Recover after restart**
 
@@ -227,7 +239,8 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
    Pressing a physical key constructs an exact-session VS Code URL containing:
 
    - the project path;
-   - `agent-host-copilotcli:/<session-id>`.
+    - `agent-host-copilotcli:/<session-id>` for Agent Host; or
+    - VS Code's encoded `vscode-chat-session://local/...` resource for native Chat.
 
    VS Code focuses the relevant project window and opens the exact transcript there.
    Exact opening is currently enabled only for the verified VS Code `1.131.x` compatibility
@@ -240,6 +253,7 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `AGENTKEYS_LOG` redirects daemon output to a file, needed when launched via
   LaunchServices, which discards stdout.
 - `COPILOT_HOME` overrides the Copilot data directory used by the VS Code integration.
+- `AGENTKEYS_VSCODE_WORKSPACE_STORAGE` overrides the native VS Code workspace-storage directory.
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
 - `AGENTKEYS_LAYER` picks which layer the agent keys replace (1-based, default `1`).
 - The daemon reconnects on its own if the keyboard is unplugged.

@@ -9,6 +9,7 @@ const {
   VSCodeIntegration,
   buildSessionUrl,
   emptyRun,
+  nativeSessionResource,
   reduceEvent,
   workspaceMetadata,
 } = require('../src/vscode');
@@ -24,10 +25,13 @@ const IDS = [
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-vscode-'));
   const root = path.join(directory, 'sessions');
+  const nativeRoot = path.join(directory, 'workspaceStorage');
   fs.mkdirSync(root);
+  fs.mkdirSync(nativeRoot);
   return {
     directory,
     root,
+    nativeRoot,
     statePath: path.join(directory, 'state', 'vscode.json'),
   };
 }
@@ -63,6 +67,45 @@ function createSession(root, id, cwd) {
   return path.join(directory, 'events.jsonl');
 }
 
+function createNativeSession(nativeRoot, id, cwd) {
+  const directory = path.join(nativeRoot, 'workspace-id');
+  const transcripts = path.join(directory, 'GitHub.copilot-chat', 'transcripts');
+  const chatSessions = path.join(directory, 'chatSessions');
+  fs.mkdirSync(transcripts, { recursive: true });
+  fs.mkdirSync(chatSessions);
+  fs.writeFileSync(path.join(directory, 'workspace.json'), JSON.stringify({ folder: new URL(`file://${cwd}`).toString() }));
+  const journalPath = path.join(chatSessions, `${id}.jsonl`);
+  fs.writeFileSync(
+    journalPath,
+    [
+      JSON.stringify({
+        kind: 0,
+        v: {
+          sessionId: id,
+          requests: [{ result: { timings: {} }, modelState: { completedAt: 1785616800000 } }],
+        },
+      }),
+      '',
+    ].join('\n')
+  );
+  const eventsPath = path.join(transcripts, `${id}.jsonl`);
+  fs.writeFileSync(
+    eventsPath,
+    [
+      JSON.stringify({
+        type: 'session.start',
+        data: { sessionId: id, producer: 'copilot-agent', version: 1, copilotVersion: '0.59.0' },
+        timestamp: '2026-08-01T09:59:57.000Z',
+      }),
+      JSON.stringify(event('user.message', {}, '2026-08-01T09:59:58.000Z')),
+      JSON.stringify(event('assistant.turn_start', { turnId: 'old-turn' }, '2026-08-01T09:59:59.000Z')),
+      JSON.stringify(event('assistant.turn_end', { turnId: 'old-turn' }, '2026-08-01T10:00:00.000Z')),
+      '',
+    ].join('\n')
+  );
+  return { eventsPath, journalPath };
+}
+
 function append(file, ...events) {
   fs.appendFileSync(file, events.map((event) => JSON.stringify(event)).join('\n') + '\n');
 }
@@ -93,6 +136,73 @@ test('builds an encoded exact-session URL', () => {
   const url = buildSessionUrl('/tmp/Prøject space', IDS[0]);
   assert.match(url, /^vscode:\/\/file\/tmp\/Pr%C3%B8ject%20space\?/);
   assert.equal(new URL(url).searchParams.get('session'), `agent-host-copilotcli:/${IDS[0]}`);
+});
+
+test('tracks and opens a native VS Code Chat session', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const launched = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    launch: async (url) => launched.push(url),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message', {}, '2026-08-01T10:00:01.000Z'),
+    event('assistant.turn_start', { turnId: 'native-turn' }, '2026-08-01T10:00:02.000Z')
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(integration.slots[0].source, 'native');
+
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PreToolUse',
+      sessionId: IDS[0],
+      toolName: 'vscode_askQuestions',
+      toolUseId: 'hook-question',
+      timestamp: '2026-08-01T10:00:03.000Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PostToolUse',
+      sessionId: IDS[0],
+      toolName: 'vscode_askQuestions',
+      toolUseId: 'hook-question',
+      timestamp: '2026-08-01T10:00:04.000Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(
+    eventsPath,
+    event(
+      'tool.execution_start',
+      { toolCallId: 'transcript-question', toolName: 'vscode_askQuestions' },
+      '2026-08-01T10:00:03.000Z'
+    )
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(journalPath, { kind: 1, k: ['requests', 1, 'result'], v: { timings: {} } });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
+
+  await integration.open(0);
+  assert.equal(integration.slots[0].state, 'idle');
+  assert.equal(new URL(launched[0]).searchParams.get('session'), nativeSessionResource(IDS[0]));
 });
 
 test('prompt-gates allocation, fills free slots, then reuses oldest done slot', async (t) => {

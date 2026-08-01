@@ -154,6 +154,16 @@ async function handle(req, res) {
     return send(res, 200, vscode.doctor());
   }
 
+  if (req.method === 'POST' && url.pathname === '/integrations/vscode/hooks') {
+    let body;
+    try {
+      body = JSON.parse((await readBody(req)) || '{}');
+    } catch {
+      return send(res, 400, { error: 'invalid JSON' });
+    }
+    return send(res, 202, { ok: true, handled: await vscode.applyHook(body) });
+  }
+
   const vscodeOpen = url.pathname.match(/^\/integrations\/vscode\/slots\/(\d+)\/open$/);
   if (req.method === 'POST' && vscodeOpen) {
     const index = Number(vscodeOpen[1]);
