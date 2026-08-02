@@ -27,7 +27,7 @@ the grant and requires re-approval. The script warns about this.
 because the terminal becomes the responsible process:
 
 ```sh
-./AgentKeys.app/Contents/MacOS/AgentKeys src/probe.js   # fails, (0xE00002E2) not permitted
+./AgentKeys.app/Contents/MacOS/AgentKeys src/research/probe.js   # fails, (0xE00002E2) not permitted
 ```
 
 Go through LaunchServices or launchd so the grant is attributed to the bundle:
@@ -35,13 +35,13 @@ Go through LaunchServices or launchd so the grant is attributed to the bundle:
 ```sh
 open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/probe.log" \
-  --args "$PWD/src/probe.js"
+  --args "$PWD/src/research/probe.js"
 ```
 
 **LaunchServices discards stdout.** Anything launched this way must write its own log
 file. Note that `AGENTKEYS_LOG` is not global — it is implemented inside `src/daemon.js`,
-`src/probe.js` and `src/layertest.js` individually. A new ad-hoc script gets no logging
-for free.
+`src/research/probe.js` and `src/research/layertest.js` individually. A new ad-hoc script
+gets no logging for free.
 
 ## Environment variables
 
@@ -53,7 +53,7 @@ for free.
 | `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
 | `AGENTKEYS_PHASE_MS` | backlighttest | per-phase observation window, default `25000` |
 
-## Tools in `src/`
+## Tools in `src/research/`
 
 | File | Writes to device? | Purpose |
 |---|---|---|
@@ -61,7 +61,9 @@ for free.
 | `layertest.js` | **yes** | install the agent layer, set six colours, hold, restore |
 | `mixedlayertest.js` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
 | `backlighttest.js` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
-| `daemon.js` | **yes** | the real thing |
+| `keymap.js` | **yes** | shared temporary keymap installation and restoration support |
+
+The application daemon remains at `src/daemon.js`.
 
 ### Running the layer test
 
@@ -72,7 +74,7 @@ open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/layertest.log" \
   --env AGENTKEYS_LAYER=3 \
   --env AGENTKEYS_HOLD_MS=60000 \
-  --args "$PWD/src/layertest.js"
+  --args "$PWD/src/research/layertest.js"
 ```
 
 Then wait and `cat layertest.log`. It refuses to start if the vendor app is running,

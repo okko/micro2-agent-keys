@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const HID = require('node-hid');
-const { Device, listDevices, WL_VID } = require('./device');
+const { Device, listDevices, WL_VID } = require('../device');
 
 // When launched via LaunchServices stdout is discarded, so mirror it to a file.
 const LOG = process.env.AGENTKEYS_LOG;

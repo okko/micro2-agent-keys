@@ -193,7 +193,7 @@ it is what an empty match looks like. Neither side needs to know which layer is 
 which is why this project does not track layers either.
 
 The practical consequence: thread ids mean something only because `CODEX_LAYER` in
-[../src/keymap.js](../src/keymap.js) binds `AG00`..`AG05` to the first six keys. Bind
+[../src/research/keymap.js](../src/research/keymap.js) binds `AG00`..`AG05` to the first six keys. Bind
 different numbers and the same `id` lights a different key, or none.
 
 What the keycodes *do* change is lighting ownership. A layer holding them has its own
@@ -258,7 +258,7 @@ rewriting `keymap.json`.
   `keymap.json`.
 - The rc.15 image carries **two** default keymaps as plaintext JSON (**image**): the
   ordinary one, and an agent one whose single layer deep-equals `CODEX_LAYER` in
-  [../src/keymap.js](../src/keymap.js). Neither carries a `lights` object.
+  [../src/research/keymap.js](../src/research/keymap.js). Neither carries a `lights` object.
 
 When the keymap is malformed, the debug channel reports it — messages naming
 `keymap.json` and mentioning a missing profile, layer list or active profile id are the

@@ -1,9 +1,9 @@
 'use strict';
 
 const fs = require('fs');
-const { Device, assertNoVendorApp } = require('./device');
+const { Device, assertNoVendorApp } = require('../device');
 const { withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('./oai');
+const { setThreads, EFFECT } = require('../oai');
 
 // When launched via LaunchServices stdout is discarded, so mirror it to a file.
 const LOG = process.env.AGENTKEYS_LOG;

@@ -7,9 +7,9 @@
 // The agent keycodes are deliberately out of order and not contiguous.
 
 const fs = require('fs');
-const { Device, assertNoVendorApp } = require('./device');
+const { Device, assertNoVendorApp } = require('../device');
 const { withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('./oai');
+const { setThreads, EFFECT } = require('../oai');
 
 const LOG = process.env.AGENTKEYS_LOG;
 const lines = [];

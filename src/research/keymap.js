@@ -1,6 +1,6 @@
 'use strict';
 
-// Experiment support only. The daemon never writes keymap.json - you bind the agent
+// Research support only. The daemon never writes keymap.json - you bind the agent
 // keycodes yourself, once. Everything here exists so test scripts can install a layer
 // temporarily and be sure of putting the original back.
 

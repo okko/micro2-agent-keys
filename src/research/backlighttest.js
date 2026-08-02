@@ -10,9 +10,9 @@
 // Same layer, same lights, same thirteen positions throughout.
 
 const fs = require('fs');
-const { Device, assertNoVendorApp } = require('./device');
+const { Device, assertNoVendorApp } = require('../device');
 const { install, withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('./oai');
+const { setThreads, EFFECT } = require('../oai');
 
 const LOG = process.env.AGENTKEYS_LOG;
 // Appends rather than rewrites so the run can be watched with `tail -f`.

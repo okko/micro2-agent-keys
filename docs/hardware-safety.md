@@ -71,7 +71,7 @@ about it.
 
 ## Guaranteed keymap restore
 
-`withCodexLayer(device, layerNumber, fn)` in `src/keymap.js` is the only sanctioned way
+`withCodexLayer(device, layerNumber, fn)` in `src/research/keymap.js` is the only sanctioned way
 to install the agent layer. It restores the user's keymap:
 
 - on success,
