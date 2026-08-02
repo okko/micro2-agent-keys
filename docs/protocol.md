@@ -164,7 +164,7 @@ Immediate, not persisted. Zone shape uses **long** key names:
 
 | Field | Meaning |
 |---|---|
-| `id` | thread index, `0..5` |
+| `id` | thread index, `0..19` in firmware; the stock layer uses `0..5` |
 | `c` | colour, 24-bit int |
 | `b` | brightness, 0..1 float |
 | `e` | effect, **numeric** |
@@ -241,6 +241,14 @@ know whether an encoding worked is to look at the keyboard.
 | `KI_FP` | function/profile key |
 | `KI_BLDW` / `KI_BLUP` | backlight down / up |
 | `KI_CBT1`..`KI_CBT8` | Bluetooth channels |
+
+The upper bound is not inferred from strings alone. In the v0.6.1 image, the keycode
+decoder compares agent indices against 19, and the `v.oai.thstatus` handler does the
+same before indexing a 20-entry state table. `AG20` is therefore outside the supported
+range. Since Creator Micro 2 has 13 physical switches, a layer can expose at most 13
+distinct agent keys simultaneously, chosen from `AG00`..`AG19`. In addition to the
+stock `AG00`..`AG05` bindings, `AG18` and `AG19` have been verified on hardware for
+independent lighting and `v.oai.hid` press/release notifications.
 
 There is **no layer-switch RPC**. Layers can only be changed physically, or by
 rewriting `keymap.json`.

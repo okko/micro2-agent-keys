@@ -37,7 +37,7 @@ is showing, so whenever you switch to it, it already reflects current status.
 
 ## The agent layer
 
-Agent keys are ordinary keymap bindings. Six keycodes, one per agent slot:
+Agent keys are ordinary keymap bindings. The stock layer uses six, one per agent slot:
 
 | Keycode | Purpose |
 | --- | --- |
@@ -45,8 +45,11 @@ Agent keys are ordinary keymap bindings. Six keycodes, one per agent slot:
 | `KV_OAI_ACT06`..`ACT12` | action keys; they report presses over `v.oai.hid` too |
 | `KV_OAI_ENC_CW` / `_CC` / `_CLK` | encoder clockwise, counter-clockwise, click |
 
-The firmware's keycode table runs to `AG19` and `ACT20`, so more than six slots may be
-addressable. Only `AG00`..`AG05` have been tried here.
+The firmware supports 20 agent slots, `AG00`..`AG19`: both the keycode parser and
+`v.oai.thstatus` use 19 as their inclusive upper bound. The keyboard has 13 physical
+switches, so at most 13 distinct agent slots can be bound at once. The stock layer uses
+only `AG00`..`AG05`. `AG18` and `AG19` have also been verified on hardware for both
+independent lighting and press/release notifications.
 
 ### Default layout
 

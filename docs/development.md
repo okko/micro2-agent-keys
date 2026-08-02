@@ -51,7 +51,7 @@ gets no logging for free.
 | `AGENTKEYS_LOG` | daemon, probe, layertest, mixedlayertest, backlighttest | redirect output to a file |
 | `AGENTKEYS_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
 | `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
-| `AGENTKEYS_PHASE_MS` | backlighttest | per-phase observation window, default `25000` |
+| `AGENTKEYS_PHASE_MS` | backlighttest, ag1819test | per-phase observation window |
 
 ## Tools in `src/research/`
 
@@ -61,6 +61,7 @@ gets no logging for free.
 | `layertest.js` | **yes** | install the agent layer, set six colours, hold, restore |
 | `mixedlayertest.js` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
 | `backlighttest.js` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
+| `ag1819test.js` | **yes** | one-time AG18/AG19 test on row 2; resets the keymap to the saved default afterward |
 | `keymap.js` | **yes** | shared temporary keymap installation and restoration support |
 
 The application daemon remains at `src/daemon.js`.
@@ -79,6 +80,36 @@ open -n -a "$PWD/AgentKeys.app" \
 
 Then wait and `cat layertest.log`. It refuses to start if the vendor app is running,
 takes the device lock, and restores the keymap on every exit path.
+
+### Running the AG18/AG19 test
+
+> **Warning:** this one-time test does not preserve the keymap that is currently on the
+> keyboard. When it finishes, it resets the keyboard to the saved default keymap. Export
+> or otherwise record any custom keymap before running it.
+
+Close the Work Louder Input app and switch to the layer to test. If your terminal has HID
+permission, run:
+
+```sh
+node src/research/ag1819test.js
+```
+
+Otherwise, use the permitted app wrapper:
+
+```sh
+rm -f ag1819test.log
+open -n -a "$PWD/AgentKeys.app" \
+  --env AGENTKEYS_LOG="$PWD/ag1819test.log" \
+  --env AGENTKEYS_PHASE_MS=30000 \
+  --args "$PWD/src/research/ag1819test.js"
+tail -f ag1819test.log
+```
+
+By default it temporarily replaces the active layer. Set `AGENTKEYS_LAYER` to target a
+different 1-based layer. Follow the prompts to confirm the two leftmost switches on the
+second row light individually, then press and release both. Through the app wrapper,
+each visual and input phase lasts `AGENTKEYS_PHASE_MS`. After the test, the keyboard is
+reset to the saved default keymap, not to the keymap that was active before the test.
 
 ## Detecting the vendor app correctly
 
