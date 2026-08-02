@@ -273,8 +273,7 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 ## Docs
 
 - [docs/hardware-safety.md](docs/hardware-safety.md) — **read before writing to the
-  device.** How a two-process run once left it unresponsive, and the guardrails that
-  now prevent that.
+  device.** How a two-process run once left it unresponsive, and the guardrails that now prevent that.
 - [docs/protocol.md](docs/protocol.md) — HID framing, JSON-RPC, lighting, keycodes.
 - [docs/development.md](docs/development.md) — macOS Input Monitoring, launching, tools.
 - [docs/findings.md](docs/findings.md) — observed results, corrected assumptions, open

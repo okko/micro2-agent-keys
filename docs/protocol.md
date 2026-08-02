@@ -13,8 +13,8 @@ Two kinds of evidence, marked throughout:
 This repository contains original code only. Apart from the open-source npm packages it
 declares as dependencies, it bundles no third-party firmware, SDK or application code
 and requires none to build or run. Nothing from the firmware image is reproduced here
-beyond the interface names needed to describe the protocol. See the notice at the end
-of [README.md](../README.md).
+beyond interface names needed to describe the protocol and the fair use of the default
+keymap layout configuration. See the notice at the end of [README.md](../README.md).
 
 ## Device identity
 

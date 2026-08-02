@@ -69,7 +69,7 @@ lock file cleaned up even when open() throws
 **Limitation: this only coordinates our own processes.** The vendor app does not know
 about it.
 
-## Guaranteed keymap restore
+## Keymap restore
 
 `withCodexLayer(device, layerNumber, fn)` in `src/research/keymap.js` is the only sanctioned way
 to install the agent layer. It restores the user's keymap:

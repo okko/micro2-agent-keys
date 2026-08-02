@@ -133,7 +133,7 @@ new check, ps -o comm=    -> 0 match(es)   <- correct
 
 ## Testing without hardware
 
-The restore guarantee is testable with a stub device that implements `call()` for
+The restore is testable with a stub device that implements `call()` for
 `fs.read` / `fs.write`. That covers the dangerous path — including the failure path —
 without touching the keyboard. Assert that the final written text equals the pristine
 backup after `fn` throws.
