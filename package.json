@@ -2,7 +2,7 @@
   "name": "micro2-agentkeys",
   "version": "0.1.0",
   "private": true,
-  "description": "Show the status of up to 20 concurrent agent sessions on the per-key lights of a Work Louder Creator Micro 2",
+  "description": "Show agent session status on a Work Louder Creator Micro 2 via CLI, HTTP API, and VS Code. Up to 20 agent slots, instead of the usual 6.",
   "type": "module",
   "bin": {
     "agentkeys": "dist/cli.js"
