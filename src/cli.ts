@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-'use strict';
-
-const { STATES, ALIASES, SLOT_COUNT, normalizeState } = require('./states');
+import { STATES, ALIASES, SLOT_COUNT, normalizeState } from './states.js';
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -19,8 +17,45 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
 states: ${Object.keys(STATES).join(', ')}
 `;
 
-async function request(method, path, body) {
-  let res;
+interface ApiSlot {
+  index?: number;
+  slot?: number;
+  state: string;
+  label?: string | null;
+  sessionId?: string | null;
+}
+
+interface StatusResponse {
+  connected: boolean;
+  slots: ApiSlot[];
+}
+
+interface VSCodeSlotsResponse {
+  slots: ApiSlot[];
+}
+
+interface DoctorResponse {
+  ready: boolean;
+  rootReadable: boolean;
+  sessionStateRoot: string;
+  nativeRootReadable: boolean;
+  nativeSessionRoot: string;
+  resourceScheme: string;
+  trackedSessions: number;
+  compatibleSessions: number;
+  verifiedLifecycleSessions: number;
+  exactOpenAvailable: boolean;
+  vscodeVersion?: string | null;
+  protocolRegistered: boolean;
+  bindings: ApiSlot[];
+}
+
+interface ErrorResponse {
+  error?: string;
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let res: Response;
   try {
     res = await fetch(BASE + path, {
       method,
@@ -30,26 +65,26 @@ async function request(method, path, body) {
   } catch {
     throw new Error(`daemon not reachable on ${BASE} - is it running?`);
   }
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as T & ErrorResponse;
   if (!res.ok) throw new Error(data.error ?? `request failed (${res.status})`);
   return data;
 }
 
-function printStatus(data) {
+function printStatus(data: StatusResponse): void {
   console.log(data.connected ? 'keyboard: connected' : 'keyboard: disconnected');
   for (const slot of data.slots) {
     console.log(`  ${slot.index}  ${slot.state.padEnd(8)} ${slot.label ?? ''}`);
   }
 }
 
-function printVSCodeSlots(data) {
+function printVSCodeSlots(data: VSCodeSlotsResponse): void {
   for (const slot of data.slots) {
     const session = slot.sessionId ? slot.sessionId.slice(0, 8) : '-';
     console.log(`  ${slot.slot}  ${slot.state.padEnd(8)} ${session.padEnd(8)} ${slot.label ?? ''}`);
   }
 }
 
-async function main(argv) {
+async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
 
   switch (command) {
@@ -70,7 +105,7 @@ async function main(argv) {
     }
 
     case 'status':
-      printStatus(await request('GET', '/state'));
+      printStatus(await request<StatusResponse>('GET', '/state'));
       return;
 
     case 'reset':
@@ -89,7 +124,7 @@ async function main(argv) {
     case 'vscode': {
       const [subcommand, rawSlot] = rest;
       if (subcommand === 'slots') {
-        printVSCodeSlots(await request('GET', '/integrations/vscode/slots'));
+        printVSCodeSlots(await request<VSCodeSlotsResponse>('GET', '/integrations/vscode/slots'));
         return;
       }
       if (subcommand === 'open') {
@@ -104,7 +139,7 @@ async function main(argv) {
     case 'doctor':
       if (rest[0] !== 'vscode') throw new Error('expected: agentkeys doctor vscode');
       {
-        const data = await request('GET', '/integrations/vscode/doctor');
+        const data = await request<DoctorResponse>('GET', '/integrations/vscode/doctor');
         console.log('daemon: reachable');
         console.log(`VS Code integration: ${data.ready ? 'ready' : 'not ready'}`);
         console.log(`Agent Host sessions: ${data.rootReadable ? 'readable' : 'unavailable'} (${data.sessionStateRoot})`);
@@ -127,7 +162,7 @@ async function main(argv) {
   }
 }
 
-main(process.argv.slice(2)).catch((err) => {
-  console.error(err.message);
+main(process.argv.slice(2)).catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

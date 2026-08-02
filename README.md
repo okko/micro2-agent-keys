@@ -55,7 +55,7 @@ independent lighting and press/release notifications.
 
 This is the stock agent layer, verified byte-for-byte against the one embedded in the
 published firmware image. Use it as a starting point and change what you like — it is
-also available as `CODEX_LAYER` in [src/research/keymap.js](src/research/keymap.js) for scripts.
+also available as `CODEX_LAYER` in [src/research/keymap.ts](src/research/keymap.ts) for scripts.
 
 ```json
 {
@@ -86,7 +86,7 @@ Managing that file is deliberately out of scope here. Expect the ChatGPT app to 
 the ability to set up and manage the agent-key layer for you in an upcoming version,
 at which point hand-editing JSON becomes optional — a forward-looking statement about
 software that is not released yet, and nothing in this project depends on it. In the
-meantime `install()` in [src/research/keymap.js](src/research/keymap.js) can write a layer as a one-off;
+meantime `install()` in [src/research/keymap.ts](src/research/keymap.ts) can write a layer as a one-off;
 read [docs/hardware-safety.md](docs/hardware-safety.md) first.
 
 ### Agent keys can share a layer with your own keys
@@ -104,7 +104,7 @@ wherever `KV_OAI_AG03` is bound.
 layer is then painted by agent colours alone, so keys without a live agent stay dark
 and the agent keys stand out against them. This is the intended look, and the other
 keys still type normally — they are simply unlit. Verified by A/B on hardware
-(`src/research/backlighttest.js`): the same layer, written the same way, is solid white without
+(`src/research/backlighttest.ts`): the same layer, written the same way, is solid white without
 the agent keycodes and fully dark with them, even with every agent colour switched off.
 
 
@@ -112,6 +112,7 @@ the agent keycodes and fully dark with them, even with every agent colour switch
 
 ```sh
 npm install
+npm run build
 scripts/make-app.sh        # builds AgentKeys.app
 scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
 ```

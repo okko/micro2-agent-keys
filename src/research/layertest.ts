@@ -1,15 +1,13 @@
-'use strict';
+import * as fs from 'node:fs';
+import { Device, assertNoVendorApp } from '../device.js';
+import { withCodexLayer } from './keymap.js';
+import { setThreads, EFFECT } from '../oai.js';
 
-const fs = require('fs');
-const { Device, assertNoVendorApp } = require('../device');
-const { withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('../oai');
-
-// When launched via LaunchServices stdout is discarded, so mirror it to a file.
 const LOG = process.env.AGENTKEYS_LOG;
-const lines = [];
-function log(...args) {
-  const line = `${new Date().toTimeString().slice(0, 8)} ${args.join(' ')}`;
+const lines: string[] = [];
+
+function log(...args: unknown[]): void {
+  const line = `${new Date().toTimeString().slice(0, 8)} ${args.map(String).join(' ')}`;
   lines.push(line);
   if (LOG) fs.writeFileSync(LOG, lines.join('\n') + '\n');
   else console.log(line);
@@ -17,11 +15,10 @@ function log(...args) {
 
 const LAYER = Number(process.env.AGENTKEYS_LAYER ?? 2);
 const HOLD_MS = Number(process.env.AGENTKEYS_HOLD_MS ?? 45000);
-
 const COLOURS = [0xff0000, 0xff6a00, 0xffd000, 0x00ff30, 0x0060ff, 0xb000ff];
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function main() {
+async function main(): Promise<void> {
   assertNoVendorApp();
 
   const device = await Device.open();
@@ -51,7 +48,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  log(`FAILED: ${err.message}`);
+main().catch((err: unknown) => {
+  log(`FAILED: ${err instanceof Error ? err.message : String(err)}`);
   process.exitCode = 1;
 });

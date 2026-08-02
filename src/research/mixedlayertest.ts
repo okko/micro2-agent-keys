@@ -1,20 +1,16 @@
-'use strict';
+import * as fs from 'node:fs';
+import { Device, assertNoVendorApp } from '../device.js';
+import { withCodexLayer, type KeymapLayer } from './keymap.js';
+import { setThreads, EFFECT } from '../oai.js';
 
 // Does a layer have to be all-agent? Installs a layer with six agent keycodes
-// scattered among ordinary ones, so two claims can be checked at once:
-//   1. non-agent keys on that layer still behave as ordinary keys;
-//   2. thread N lights wherever KV_OAI_AG<N> is bound, regardless of position.
-// The agent keycodes are deliberately out of order and not contiguous.
-
-const fs = require('fs');
-const { Device, assertNoVendorApp } = require('../device');
-const { withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('../oai');
+// scattered among ordinary ones, so agent and ordinary key behavior can be checked.
 
 const LOG = process.env.AGENTKEYS_LOG;
-const lines = [];
-function log(...args) {
-  const line = `${new Date().toTimeString().slice(0, 8)} ${args.join(' ')}`;
+const lines: string[] = [];
+
+function log(...args: unknown[]): void {
+  const line = `${new Date().toTimeString().slice(0, 8)} ${args.map(String).join(' ')}`;
   lines.push(line);
   if (LOG) fs.writeFileSync(LOG, lines.join('\n') + '\n');
   else console.log(line);
@@ -22,7 +18,6 @@ function log(...args) {
 
 const LAYER = Number(process.env.AGENTKEYS_LAYER ?? 3);
 const HOLD_MS = Number(process.env.AGENTKEYS_HOLD_MS ?? 120000);
-
 const COLOURS = [0xff0000, 0xff6a00, 0xffd000, 0x00ff30, 0x0060ff, 0xb000ff];
 const COLOUR_NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
 
@@ -33,9 +28,9 @@ const MIXED_KEYMAP = [
   ['KV_OAI_AG04', 'KC_G', 'KV_OAI_AG02'],
 ];
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function mixedLayer(original, index) {
+function mixedLayer(original: KeymapLayer, index: number): KeymapLayer {
   return {
     ...original,
     id: index,
@@ -48,27 +43,26 @@ function mixedLayer(original, index) {
   };
 }
 
-function logExpectations() {
+function logExpectations(): void {
   log('expected, by row and column:');
-  MIXED_KEYMAP.forEach((row, r) => {
-    row.forEach((code, c) => {
+  MIXED_KEYMAP.forEach((row, rowIndex) => {
+    row.forEach((code, columnIndex) => {
       const agent = code.match(/^KV_OAI_AG(\d\d)$/);
       const expectation = agent
         ? `lights ${COLOUR_NAMES[Number(agent[1])]}, types nothing, should emit v.oai.hid`
         : `types '${code.slice(-1).toLowerCase()}', no notification`;
-      log(`  [${r}][${c}] ${code.padEnd(13)} ${expectation}`);
+      log(`  [${rowIndex}][${columnIndex}] ${code.padEnd(13)} ${expectation}`);
     });
   });
   log('  encoder: volume up / down / play-pause');
 }
 
-async function main() {
+async function main(): Promise<void> {
   assertNoVendorApp();
 
   const device = await Device.open();
   log('device opened, lock held');
-
-  device.onNotify = (msg) => log(`NOTIFY ${JSON.stringify(msg)}`);
+  device.onNotify = (message) => log(`NOTIFY ${JSON.stringify(message)}`);
 
   try {
     log(`status before: ${JSON.stringify(await device.call('device.status'))}`);
@@ -100,7 +94,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  log(`FAILED: ${err.message}`);
+main().catch((err: unknown) => {
+  log(`FAILED: ${err instanceof Error ? err.message : String(err)}`);
   process.exitCode = 1;
 });

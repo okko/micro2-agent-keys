@@ -13,6 +13,7 @@ HOOKFILE="$HOOKDIR/agentkeys.json"
 HOOKRUNNER="$BINDIR/agentkeys-vscode-hook"
 
 [ -x "$APP" ] || { echo "run scripts/make-app.sh first" >&2; exit 1; }
+(cd "$ROOT" && npm run build --silent)
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys" "$BINDIR" "$HOOKDIR"
 
@@ -25,7 +26,7 @@ cat > "$PLIST" <<PLIST
   <key>ProgramArguments</key>
   <array>
     <string>$APP</string>
-    <string>$ROOT/src/daemon.js</string>
+    <string>$ROOT/dist/daemon.js</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -55,11 +56,11 @@ fi
 
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
-ln -sfn "$ROOT/src/cli.js" "$BINDIR/agentkeys"
+ln -sfn "$ROOT/dist/cli.js" "$BINDIR/agentkeys"
 
 cat > "$HOOKRUNNER" <<RUNNER
 #!/bin/sh
-exec "$APP" "$ROOT/src/vscode-hook.js"
+exec "$APP" "$ROOT/dist/vscode-hook.js"
 RUNNER
 chmod 755 "$HOOKRUNNER"
 

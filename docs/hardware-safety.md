@@ -50,7 +50,7 @@ suggested the device had stopped enumerating. That was a red herring. Use
 
 ## The device lock
 
-`src/device.js` maintains a PID lockfile at `~/.local/state/agentkeys/device.lock`.
+`src/device.ts` maintains a PID lockfile at `~/.local/state/agentkeys/device.lock`.
 
 - Acquired in `Device.open()` before the HID open.
 - Released in `close()`, and on process `exit`.
@@ -71,7 +71,7 @@ about it.
 
 ## Keymap restore
 
-`withCodexLayer(device, layerNumber, fn)` in `src/research/keymap.js` is the only sanctioned way
+`withCodexLayer(device, layerNumber, fn)` in `src/research/keymap.ts` is the only sanctioned way
 to install the agent layer. It restores the user's keymap:
 
 - on success,

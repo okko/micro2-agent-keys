@@ -1,13 +1,11 @@
-'use strict';
+import * as fs from 'node:fs';
+import * as readline from 'node:readline/promises';
+import { Device, assertNoVendorApp } from '../device.js';
+import { deviceLayerIndex, withCodexLayer, type KeymapLayer } from './keymap.js';
+import { setThreads, EFFECT, type ThreadInput } from '../oai.js';
 
 // Verifies that the two highest agent IDs have both lighting and input support.
 // AG18 and AG19 are installed on the two leftmost switches of the second row.
-
-const fs = require('fs');
-const readline = require('readline/promises');
-const { Device, assertNoVendorApp } = require('../device');
-const { withCodexLayer } = require('./keymap');
-const { setThreads, EFFECT } = require('../oai');
 
 const LOG = process.env.AGENTKEYS_LOG;
 const PHASE_MS = Number(process.env.AGENTKEYS_PHASE_MS ?? 30000);
@@ -22,15 +20,20 @@ const TEST_KEYMAP = [
 const AG18_COLOR = 0xff0000;
 const AG19_COLOR = 0x0060ff;
 
-function log(message) {
+interface KeyEvent {
+  key: 'AG18' | 'AG19';
+  action: 0 | 1;
+}
+
+function log(message: string): void {
   const line = `${new Date().toTimeString().slice(0, 8)} ${message}`;
   if (LOG) fs.appendFileSync(LOG, `${line}\n`);
   else console.log(line);
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function testLayer(original, index) {
+function testLayer(original: KeymapLayer, index: number): KeymapLayer {
   return {
     ...original,
     id: index,
@@ -43,15 +46,15 @@ function testLayer(original, index) {
   };
 }
 
-function off(id) {
+function off(id: number): ThreadInput {
   return { id, color: 0, effect: EFFECT.off, brightness: 0 };
 }
 
-function solid(id, color) {
+function solid(id: number, color: number): ThreadInput {
   return { id, color, effect: EFFECT.solid, brightness: 1 };
 }
 
-async function confirm(terminal, question) {
+async function confirm(terminal: readline.Interface | null, question: string): Promise<boolean> {
   if (!terminal) {
     log(`${question} Observe for ${PHASE_MS} ms.`);
     await sleep(PHASE_MS);
@@ -61,12 +64,12 @@ async function confirm(terminal, question) {
   return answer === 'y' || answer === 'yes';
 }
 
-function eventSummary(events, key) {
+function eventSummary(events: KeyEvent[], key: KeyEvent['key']): string {
   const actions = events.filter((event) => event.key === key).map((event) => event.action);
   return `${key}: ${actions.length ? actions.join(', ') : 'none'}`;
 }
 
-async function main() {
+async function main(): Promise<void> {
   assertNoVendorApp();
 
   if (!Number.isFinite(PHASE_MS) || PHASE_MS <= 0) {
@@ -77,11 +80,11 @@ async function main() {
     ? readline.createInterface({ input: process.stdin, output: process.stdout })
     : null;
   const device = await Device.open();
-  const events = [];
+  const events: KeyEvent[] = [];
 
   device.onNotify = (message) => {
-    const key = message?.m === 'v.oai.hid' ? message.p?.k : null;
-    const action = message?.p?.act;
+    const key = message.m === 'v.oai.hid' ? message.p?.k : null;
+    const action = message.p?.act;
     if ((key === 'AG18' || key === 'AG19') && (action === 0 || action === 1)) {
       events.push({ key, action });
       log(`EVENT ${key} ${action === 1 ? 'press' : 'release'}`);
@@ -92,12 +95,10 @@ async function main() {
 
   try {
     const status = await device.call('device.status');
-    const layer = process.env.AGENTKEYS_LAYER
-      ? Number(process.env.AGENTKEYS_LAYER)
-      : status.layer_index;
+    const layer = process.env.AGENTKEYS_LAYER ? Number(process.env.AGENTKEYS_LAYER) : deviceLayerIndex(status);
 
-    if (!Number.isInteger(layer) || layer < 1) {
-      throw new Error(`invalid layer: ${process.env.AGENTKEYS_LAYER}`);
+    if (!Number.isInteger(layer) || layer === null || layer < 1) {
+      throw new Error(`invalid layer: ${process.env.AGENTKEYS_LAYER ?? JSON.stringify(status)}`);
     }
 
     log(`Installing the test on layer ${layer}.`);
@@ -131,7 +132,7 @@ async function main() {
           await sleep(PHASE_MS);
         }
 
-        const missing = ['AG18', 'AG19'].filter(
+        const missing = (['AG18', 'AG19'] as const).filter(
           (key) =>
             !events.some((event) => event.key === key && event.action === 1) ||
             !events.some((event) => event.key === key && event.action === 0)
@@ -160,7 +161,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  log(`FAILED: ${error.message}`);
+main().catch((error: unknown) => {
+  log(`FAILED: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });

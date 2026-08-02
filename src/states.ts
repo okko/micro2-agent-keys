@@ -1,10 +1,14 @@
-'use strict';
+import { EFFECT } from './oai.js';
 
-const { EFFECT } = require('./oai');
+export const SLOT_COUNT = 6;
 
-const SLOT_COUNT = 6;
+export interface StateSpec {
+  color: number;
+  effect: number;
+  speed?: number;
+}
 
-const STATES = {
+export const STATES: Record<string, StateSpec> = {
   idle: { color: 0x101010, effect: EFFECT.solid },
   running: { color: 0x0060ff, effect: EFFECT.breath, speed: 0.55 },
   done: { color: 0x00ff30, effect: EFFECT.solid },
@@ -12,10 +16,10 @@ const STATES = {
   error: { color: 0xff0000, effect: EFFECT.solid },
 };
 
-const DEFAULT_STATE = 'idle';
+export const DEFAULT_STATE = 'idle';
 
 /** Aliases so hooks and scripts can use whatever word fits their vocabulary. */
-const ALIASES = {
+export const ALIASES: Record<string, string> = {
   off: 'idle',
   free: 'idle',
   thinking: 'running',
@@ -33,10 +37,8 @@ const ALIASES = {
   fail: 'error',
 };
 
-function normalizeState(name) {
+export function normalizeState(name: unknown): string | null {
   const key = String(name ?? '').trim().toLowerCase();
   const resolved = ALIASES[key] ?? key;
   return resolved in STATES ? resolved : null;
 }
-
-module.exports = { STATES, ALIASES, SLOT_COUNT, DEFAULT_STATE, normalizeState };

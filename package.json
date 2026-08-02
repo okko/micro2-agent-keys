@@ -2,21 +2,30 @@
   "name": "micro2-agentkeys",
   "version": "0.1.0",
   "private": true,
-  "description": "Show the status of up to 6 concurrent agent sessions on the per-key lights of a Work Louder Creator Micro 2",
-  "type": "commonjs",
+  "description": "Show the status of up to 20 concurrent agent sessions on the per-key lights of a Work Louder Creator Micro 2",
+  "type": "module",
   "bin": {
-    "agentkeys": "src/cli.js"
+    "agentkeys": "dist/cli.js"
   },
   "scripts": {
-    "daemon": "node src/daemon.js",
-    "probe": "node src/research/probe.js",
+    "build": "tsc",
+    "postbuild": "chmod 755 dist/cli.js",
+    "check": "tsc --noEmit",
+    "predaemon": "npm run build",
+    "daemon": "node dist/daemon.js",
+    "preprobe": "npm run build",
+    "probe": "node dist/research/probe.js",
     "setup": "npm install && scripts/make-app.sh && scripts/install-agent.sh",
-    "test": "node --test"
+    "test": "npm run build --silent && node --test"
   },
   "dependencies": {
     "node-hid": "^3.4.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
   }
 }

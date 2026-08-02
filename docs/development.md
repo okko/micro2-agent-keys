@@ -27,7 +27,7 @@ the grant and requires re-approval. The script warns about this.
 because the terminal becomes the responsible process:
 
 ```sh
-./AgentKeys.app/Contents/MacOS/AgentKeys src/research/probe.js   # fails, (0xE00002E2) not permitted
+./AgentKeys.app/Contents/MacOS/AgentKeys dist/research/probe.js   # fails, (0xE00002E2) not permitted
 ```
 
 Go through LaunchServices or launchd so the grant is attributed to the bundle:
@@ -35,12 +35,12 @@ Go through LaunchServices or launchd so the grant is attributed to the bundle:
 ```sh
 open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/probe.log" \
-  --args "$PWD/src/research/probe.js"
+  --args "$PWD/dist/research/probe.js"
 ```
 
 **LaunchServices discards stdout.** Anything launched this way must write its own log
-file. Note that `AGENTKEYS_LOG` is not global — it is implemented inside `src/daemon.js`,
-`src/research/probe.js` and `src/research/layertest.js` individually. A new ad-hoc script
+file. Note that `AGENTKEYS_LOG` is not global — it is implemented inside `src/daemon.ts`,
+`src/research/probe.ts` and `src/research/layertest.ts` individually. A new ad-hoc script
 gets no logging for free.
 
 ## Environment variables
@@ -57,14 +57,14 @@ gets no logging for free.
 
 | File | Writes to device? | Purpose |
 |---|---|---|
-| `probe.js` | no | enumerate interfaces, read `sys.version` and `device.status` |
-| `layertest.js` | **yes** | install the agent layer, set six colours, hold, restore |
-| `mixedlayertest.js` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
-| `backlighttest.js` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
-| `ag1819test.js` | **yes** | one-time AG18/AG19 test on row 2; resets the keymap to the saved default afterward |
-| `keymap.js` | **yes** | shared temporary keymap installation and restoration support |
+| `probe.ts` | no | enumerate interfaces, read `sys.version` and `device.status` |
+| `layertest.ts` | **yes** | install the agent layer, set six colours, hold, restore |
+| `mixedlayertest.ts` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
+| `backlighttest.ts` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
+| `ag1819test.ts` | **yes** | one-time AG18/AG19 test on row 2; resets the keymap to the saved default afterward |
+| `keymap.ts` | **yes** | shared temporary keymap installation and restoration support |
 
-The application daemon remains at `src/daemon.js`.
+The application daemon is authored at `src/daemon.ts` and runs from `dist/daemon.js`.
 
 ### Running the layer test
 
@@ -75,7 +75,7 @@ open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/layertest.log" \
   --env AGENTKEYS_LAYER=3 \
   --env AGENTKEYS_HOLD_MS=60000 \
-  --args "$PWD/src/research/layertest.js"
+  --args "$PWD/dist/research/layertest.js"
 ```
 
 Then wait and `cat layertest.log`. It refuses to start if the vendor app is running,
@@ -91,7 +91,7 @@ Close the Work Louder Input app and switch to the layer to test. If your termina
 permission, run:
 
 ```sh
-node src/research/ag1819test.js
+node dist/research/ag1819test.js
 ```
 
 Otherwise, use the permitted app wrapper:
@@ -101,7 +101,7 @@ rm -f ag1819test.log
 open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/ag1819test.log" \
   --env AGENTKEYS_PHASE_MS=30000 \
-  --args "$PWD/src/research/ag1819test.js"
+  --args "$PWD/dist/research/ag1819test.js"
 tail -f ag1819test.log
 ```
 

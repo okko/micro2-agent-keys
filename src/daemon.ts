@@ -1,10 +1,9 @@
-'use strict';
-
-const http = require('http');
-const { Device, listDevices } = require('./device');
-const { setThreads, setZones, EFFECT } = require('./oai');
-const { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } = require('./states');
-const { VSCodeIntegration, INTEGRATION_SLOT_COUNT } = require('./vscode');
+import * as http from 'http';
+import * as fs from 'fs';
+import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './device.js';
+import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
+import { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } from './states.js';
+import { VSCodeIntegration, INTEGRATION_SLOT_COUNT, type VSCodeSlot } from './vscode.js';
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const HOST = '127.0.0.1';
@@ -13,74 +12,89 @@ const RECONNECT_MS = 3000;
 
 // LaunchServices discards stdout, so the app-bundle launch needs a real file.
 if (process.env.AGENTKEYS_LOG) {
-  const stream = require('fs').createWriteStream(process.env.AGENTKEYS_LOG, { flags: 'a' });
-  const write = (...args) => stream.write(args.map(String).join(' ') + '\n');
+  const stream = fs.createWriteStream(process.env.AGENTKEYS_LOG, { flags: 'a' });
+  const write = (...args: unknown[]): void => {
+    stream.write(args.map(String).join(' ') + '\n');
+  };
   console.log = write;
   console.error = write;
   process.on('uncaughtException', (err) => write('uncaught:', err.stack));
 }
 
-const slots = Array.from({ length: SLOT_COUNT }, (_, index) => ({
+interface Slot {
+  index: number;
+  state: string;
+  label: string | null;
+  updatedAt: string | null;
+}
+
+const slots: Slot[] = Array.from({ length: SLOT_COUNT }, (_, index) => ({
   index,
   state: DEFAULT_STATE,
   label: null,
   updatedAt: null,
 }));
 
-let device = null;
-let reconnectTimer = null;
+let device: Device | null = null;
+let reconnectTimer: NodeJS.Timeout | null = null;
 
-function log(...args) {
+function log(...args: unknown[]): void {
   console.log(new Date().toISOString(), ...args);
 }
 
-function threadFor(slot) {
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function threadFor(slot: Slot): ThreadInput {
   const spec = STATES[slot.state];
   return { id: slot.index, color: spec.color, effect: spec.effect, speed: spec.speed ?? 0.5 };
 }
 
-async function push(changed) {
+async function push(changed?: Slot): Promise<void> {
   if (!device) return;
   const targets = changed ? [changed] : slots;
   try {
     await setThreads(device, targets.map(threadFor));
   } catch (err) {
-    log('push failed:', err.message);
+    log('push failed:', errorMessage(err));
     await dropDevice();
   }
 }
 
 const vscode = new VSCodeIntegration({
   log,
-  onSlot: async (binding) => {
+  onSlot: async (binding: VSCodeSlot) => {
     const slot = slots[binding.slot];
     slot.state = binding.state;
-    slot.label = binding.label;
-    slot.updatedAt = binding.stateChangedAt;
+    slot.label = binding.label ?? null;
+    slot.updatedAt = binding.stateChangedAt ?? null;
     await push(slot);
   },
 });
 
-async function dropDevice() {
+async function dropDevice(): Promise<void> {
   const current = device;
   device = null;
   if (current) {
     try {
       await current.close();
-    } catch {}
+    } catch {
+      // best effort close
+    }
   }
   scheduleReconnect();
 }
 
-function scheduleReconnect() {
+function scheduleReconnect(): void {
   if (reconnectTimer) return;
-  reconnectTimer = setTimeout(async () => {
+  reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    await connect().catch(() => scheduleReconnect());
+    connect().catch(() => scheduleReconnect());
   }, RECONNECT_MS);
 }
 
-async function connect() {
+async function connect(): Promise<void> {
   if (device) return;
   if (!listDevices().length) {
     scheduleReconnect();
@@ -88,13 +102,14 @@ async function connect() {
   }
 
   device = await Device.open();
-  device.onNotify = (message) => {
-    const key = message?.m === 'v.oai.hid' ? message.p?.k : null;
+  const onNotify: NotifyHandler = (message: DeviceMessage) => {
+    const key = message?.m === 'v.oai.hid' ? message.p?.k ?? null : null;
     const pressed = message?.p?.act === 1;
     const match = typeof key === 'string' ? key.match(/^AG0([0-3])$/) : null;
     if (!pressed || !match) return;
-    vscode.open(Number(match[1])).catch((err) => log(`key ${key} open failed: ${err.message}`));
+    vscode.open(Number(match[1])).catch((err: unknown) => log(`key ${key} open failed: ${errorMessage(err)}`));
   };
+  device.onNotify = onNotify;
   log('device connected');
 
   await setZones(device, {
@@ -104,7 +119,7 @@ async function connect() {
   await push();
 }
 
-function send(res, code, body) {
+function send(res: http.ServerResponse, code: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(code, {
     'content-type': 'application/json',
@@ -113,11 +128,11 @@ function send(res, code, body) {
   res.end(payload);
 }
 
-function readBody(req) {
+function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
-    const chunks = [];
-    req.on('data', (chunk) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY) {
         reject(new Error('body too large'));
@@ -132,15 +147,20 @@ function readBody(req) {
 }
 
 /** Blocks DNS-rebinding: a browser cannot forge a loopback Host header. */
-function hostAllowed(req) {
+function hostAllowed(req: http.IncomingMessage): boolean {
   const host = req.headers.host ?? '';
   return host === `${HOST}:${PORT}` || host === `localhost:${PORT}`;
 }
 
-async function handle(req, res) {
+interface SlotBody {
+  state?: unknown;
+  label?: unknown;
+}
+
+async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!hostAllowed(req)) return send(res, 403, { error: 'forbidden host' });
 
-  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`);
 
   if (req.method === 'GET' && url.pathname === '/state') {
     return send(res, 200, { connected: Boolean(device), slots });
@@ -155,7 +175,7 @@ async function handle(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/integrations/vscode/hooks') {
-    let body;
+    let body: unknown;
     try {
       body = JSON.parse((await readBody(req)) || '{}');
     } catch {
@@ -173,7 +193,7 @@ async function handle(req, res) {
     try {
       return send(res, 200, { ok: true, ...(await vscode.open(index)) });
     } catch (err) {
-      return send(res, 409, { error: err.message });
+      return send(res, 409, { error: errorMessage(err) });
     }
   }
 
@@ -194,9 +214,9 @@ async function handle(req, res) {
       return send(res, 400, { error: `slot must be 0..${SLOT_COUNT - 1}` });
     }
 
-    let body;
+    let body: SlotBody;
     try {
-      body = JSON.parse((await readBody(req)) || '{}');
+      body = JSON.parse((await readBody(req)) || '{}') as SlotBody;
     } catch {
       return send(res, 400, { error: 'invalid JSON' });
     }
@@ -218,19 +238,19 @@ async function handle(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  handle(req, res).catch((err) => {
-    log('request failed:', err.message);
+  handle(req, res).catch((err: unknown) => {
+    log('request failed:', errorMessage(err));
     if (!res.headersSent) send(res, 500, { error: 'internal error' });
   });
 });
 
 let shuttingDown = false;
-async function shutdown(signal) {
+async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`${signal}, shutting down`);
 
-  clearTimeout(reconnectTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   vscode.stop();
   server.close();
 
@@ -238,19 +258,19 @@ async function shutdown(signal) {
     try {
       await device.close();
     } catch (err) {
-      log('close failed:', err.message);
+      log('close failed:', errorMessage(err));
     }
   }
   process.exit(0);
 }
 
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => shutdown(signal));
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => shutdown(signal));
 
 server.listen(PORT, HOST, () => log(`listening on http://${HOST}:${PORT}`));
-vscode.start().catch((err) => log(`VS Code integration disabled: ${err.message}`));
+vscode.start().catch((err: unknown) => log(`VS Code integration disabled: ${errorMessage(err)}`));
 if (process.env.AGENTKEYS_NO_DEVICE !== '1') {
-  connect().catch((err) => {
-    log('connect failed:', err.message);
+  connect().catch((err: unknown) => {
+    log('connect failed:', errorMessage(err));
     scheduleReconnect();
   });
 }

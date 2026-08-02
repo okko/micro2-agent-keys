@@ -80,7 +80,7 @@ test('daemon restart replays a permission wait and subsequent completion', async
   let output = '';
 
   const start = () => {
-    child = spawn(process.execPath, ['src/daemon.js'], {
+    child = spawn(process.execPath, ['dist/daemon.js'], {
       cwd: path.join(__dirname, '..'),
       env: {
         ...process.env,

@@ -33,7 +33,7 @@ Joystick: VENDOR
 ```
 
 It deep-equals `CODEX_LAYER` in
-[`src/research/keymap.js`](../src/research/keymap.js).
+[`src/research/keymap.ts`](../src/research/keymap.ts).
 
 Agent bindings may be moved to any physical switch and do not need to be contiguous or
 ordered. Ordinary HID keycodes and agent keycodes can coexist on the same layer:
@@ -55,7 +55,7 @@ ordered. Ordinary HID keycodes and agent keycodes can coexist on the same layer:
 
 The research helper restores its saved baseline, not necessarily the keymap present
 immediately before a test. In particular,
-[`src/research/ag1819test.js`](../src/research/ag1819test.js) resets the keyboard to the
+[`src/research/ag1819test.ts`](../src/research/ag1819test.ts) resets the keyboard to the
 saved default keymap after running. Custom keymaps must be exported before that one-time
 test.
 

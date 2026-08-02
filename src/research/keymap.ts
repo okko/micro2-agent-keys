@@ -1,24 +1,47 @@
-'use strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { DeviceLike } from '../oai.js';
 
 // Research support only. The daemon never writes keymap.json - you bind the agent
 // keycodes yourself, once. Everything here exists so test scripts can install a layer
 // temporarily and be sure of putting the original back.
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
 const KEYMAP_FILE = 'keymap.json';
 const MARKER = 'KV_OAI_AG00';
 const STATE_DIR = path.join(os.homedir(), '.local', 'state', 'agentkeys');
-const BACKUP_PATH = path.join(STATE_DIR, 'keymap.backup.json');
+export const BACKUP_PATH = path.join(STATE_DIR, 'keymap.backup.json');
+
+export interface KeymapLayout {
+  encoders: string[][];
+  buttons: unknown[];
+  keymap: string[][];
+  joystick?: { type: string; sectors: unknown[] };
+  [key: string]: unknown;
+}
+
+export interface KeymapLayer {
+  id: number;
+  name: string;
+  color?: number;
+  layout: KeymapLayout;
+  lights?: unknown;
+  os?: number;
+  [key: string]: unknown;
+}
+
+interface KeymapDocument {
+  profiles: { layers: KeymapLayer[] }[];
+}
+
+export type LayerBuilder = (original: KeymapLayer, index: number) => KeymapLayer;
 
 /**
  * `id` is a placeholder; install() overwrites it with the target index. Writing
  * keymap.json triggers a live reload but keeps the active layer (observed on
  * hardware), so this only becomes visible on the layer the user is already on.
  */
-const CODEX_LAYER = {
+export const CODEX_LAYER: KeymapLayer = {
   id: 0,
   name: 'Layer 1',
   color: 16711680,
@@ -37,31 +60,39 @@ const CODEX_LAYER = {
 };
 
 const RELOAD_MS = 2500;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function asText(result) {
+function isDataResult(result: unknown): result is { data: string } {
+  return typeof result === 'object' && result !== null && 'data' in result && typeof result.data === 'string';
+}
+
+function asText(result: unknown): string {
   if (typeof result === 'string') return result;
-  if (result && typeof result.data === 'string') return result.data;
+  if (isDataResult(result)) return result.data;
   return JSON.stringify(result);
 }
 
-async function readKeymap(device) {
+export async function readKeymap(device: DeviceLike): Promise<string> {
   return asText(await device.call('fs.read', { file: KEYMAP_FILE }));
 }
 
-async function writeKeymap(device, text) {
+async function writeKeymap(device: DeviceLike, text: string): Promise<void> {
   await device.call('fs.write', { file: KEYMAP_FILE, data: text });
   await sleep(RELOAD_MS);
 }
 
-function isCodexLayout(text) {
+export function isCodexLayout(text: string): boolean {
   return text.includes(MARKER);
 }
 
 /** Default builder: replaces the whole layer with the stock agent layout. */
-function codexLayer(original, index) {
+function codexLayer(original: KeymapLayer, index: number): KeymapLayer {
   return { ...CODEX_LAYER, id: index, name: original.name, lights: original.lights };
 }
+
+export type InstallResult =
+  | { installed: false; reason: 'already installed' }
+  | { installed: true; backup: string };
 
 /**
  * Installs the Codex layer, preserving the user's own keymap on first use so it
@@ -69,7 +100,11 @@ function codexLayer(original, index) {
  * the host app and `device.status.layer_index`. `buildLayer` receives the
  * pristine layer and returns whatever should replace it.
  */
-async function install(device, layerNumber = 1, buildLayer = codexLayer) {
+export async function install(
+  device: DeviceLike,
+  layerNumber = 1,
+  buildLayer: LayerBuilder = codexLayer
+): Promise<InstallResult> {
   const index = layerNumber - 1;
   const live = await readKeymap(device);
 
@@ -78,10 +113,10 @@ async function install(device, layerNumber = 1, buildLayer = codexLayer) {
     fs.writeFileSync(BACKUP_PATH, live);
   }
 
-  // Build from the pristine keymap so changing layerNumber cannot stack layers.
   const base = fs.existsSync(BACKUP_PATH) ? fs.readFileSync(BACKUP_PATH, 'utf8') : live;
-  const keymap = JSON.parse(base);
-  const layers = keymap.profiles[0].layers;
+  const keymap = JSON.parse(base) as KeymapDocument;
+  const layers = keymap.profiles[0]?.layers;
+  if (!layers) throw new Error('keymap has no profile layers');
   if (index < 0 || index >= layers.length) {
     throw new Error(`layer ${layerNumber} does not exist (keymap has ${layers.length})`);
   }
@@ -95,7 +130,11 @@ async function install(device, layerNumber = 1, buildLayer = codexLayer) {
   return { installed: true, backup: BACKUP_PATH };
 }
 
-async function restore(device) {
+export type RestoreResult =
+  | { restored: false; reason: 'no backup' }
+  | { restored: true; verified: boolean };
+
+export async function restore(device: DeviceLike): Promise<RestoreResult> {
   if (!fs.existsSync(BACKUP_PATH)) return { restored: false, reason: 'no backup' };
 
   const original = fs.readFileSync(BACKUP_PATH, 'utf8');
@@ -110,13 +149,18 @@ async function restore(device) {
  * back: on success, on throw, and on SIGINT/SIGTERM. An interrupted run that
  * leaves the Codex layer installed is what makes ad-hoc experiments dangerous.
  */
-async function withCodexLayer(device, layerNumber, fn, buildLayer) {
+export async function withCodexLayer<T>(
+  device: DeviceLike,
+  layerNumber: number,
+  fn: () => T | Promise<T>,
+  buildLayer?: LayerBuilder
+): Promise<{ installed: InstallResult; result: T; restored: RestoreResult }> {
   const installed = await install(device, layerNumber, buildLayer);
 
-  let restoring = null;
-  const restoreOnce = () => (restoring ??= restore(device));
+  let restoring: Promise<RestoreResult> | null = null;
+  const restoreOnce = (): Promise<RestoreResult> => (restoring ??= restore(device));
 
-  const onSignal = (signal) => {
+  const onSignal = (signal: NodeJS.Signals): void => {
     restoreOnce().finally(() => process.exit(signal === 'SIGINT' ? 130 : 143));
   };
   process.on('SIGINT', onSignal);
@@ -133,12 +177,7 @@ async function withCodexLayer(device, layerNumber, fn, buildLayer) {
   }
 }
 
-module.exports = {
-  install,
-  restore,
-  withCodexLayer,
-  readKeymap,
-  isCodexLayout,
-  BACKUP_PATH,
-  CODEX_LAYER,
-};
+export function deviceLayerIndex(status: unknown): number | null {
+  if (typeof status !== 'object' || status === null || !('layer_index' in status)) return null;
+  return typeof status.layer_index === 'number' ? status.layer_index : null;
+}

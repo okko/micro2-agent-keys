@@ -1,18 +1,16 @@
-'use strict';
-
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const test = require('node:test');
-const {
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import {
   VSCodeIntegration,
   buildSessionUrl,
   emptyRun,
   nativeSessionResource,
   reduceEvent,
   workspaceMetadata,
-} = require('../src/vscode');
+} from '../dist/vscode.js';
 
 const IDS = [
   '00000000-0000-4000-8000-000000000000',

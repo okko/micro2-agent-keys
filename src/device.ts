@@ -1,17 +1,15 @@
-'use strict';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { execFileSync } from 'child_process';
+import * as HID from 'node-hid';
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const HID = require('node-hid');
-
-const WL_VID = 0x303a;
-const CM2_PID = 0x8298;
+export const WL_VID = 0x303a;
+export const CM2_PID = 0x8298;
 
 // The RPC endpoint is exposed on a vendor-defined usage page, separate from the
 // keyboard interfaces the OS owns.
-const VENDOR_USAGE_PAGE = 0xff00;
+export const VENDOR_USAGE_PAGE = 0xff00;
 
 const REPORT_ID = 0x06;
 const CHANNEL_DEBUG = 1;
@@ -27,16 +25,30 @@ const MAX_RPC_ID = 999;
 
 const LOCK_PATH = path.join(os.homedir(), '.local', 'state', 'agentkeys', 'device.lock');
 
-function isAlive(pid) {
+export class DeviceError extends Error {}
+
+/** Shape of any message the device sends: either an RPC reply (correlated by `id`)
+ * or an unsolicited notification (`m`/`p`), never both. */
+export interface DeviceMessage {
+  id?: string | number;
+  result?: unknown;
+  error?: { message?: string };
+  m?: string;
+  p?: { k?: string; act?: number } & Record<string, unknown>;
+}
+
+export type NotifyHandler = (message: DeviceMessage) => void;
+
+function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
   } catch (err) {
-    return err.code === 'EPERM';
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 
-function releaseLock() {
+function releaseLock(): void {
   try {
     if (Number(fs.readFileSync(LOCK_PATH, 'utf8').trim()) === process.pid) {
       fs.rmSync(LOCK_PATH, { force: true });
@@ -52,7 +64,7 @@ function releaseLock() {
  * unresponsive and needing physical access to recover, so single access is
  * enforced here. See docs/hardware-safety.md.
  */
-function acquireLock() {
+function acquireLock(): void {
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -62,7 +74,8 @@ function acquireLock() {
       process.once('exit', releaseLock);
       return;
     } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
+      const errno = err as NodeJS.ErrnoException;
+      if (errno.code !== 'EEXIST') throw err;
       const owner = Number(fs.readFileSync(LOCK_PATH, 'utf8').trim());
       if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
         throw new DeviceError(
@@ -76,11 +89,11 @@ function acquireLock() {
   throw new DeviceError('could not acquire the device lock');
 }
 
-function escapeUnicode(str) {
+function escapeUnicode(str: string): string {
   return str.replace(/[\u0080-\uffff]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 }
 
-function listDevices() {
+export function listDevices(): HID.Device[] {
   return HID.devices().filter(
     (d) => d.vendorId === WL_VID && d.usagePage === VENDOR_USAGE_PAGE && d.path
   );
@@ -95,12 +108,12 @@ const VENDOR_APP = '/Applications/input.app/';
  * rather than `pgrep -f`, which also matches any process merely mentioning the
  * path in its arguments.
  */
-function assertNoVendorApp() {
+export function assertNoVendorApp(): void {
   const out = execFileSync('ps', ['-A', '-o', 'pid=,comm='], { encoding: 'utf8' });
   const pids = out
     .split('\n')
     .map((line) => line.trim().match(/^(\d+)\s+(.+)$/))
-    .filter((m) => m && m[2].startsWith(VENDOR_APP))
+    .filter((m): m is RegExpMatchArray => m !== null && m[2].startsWith(VENDOR_APP))
     .map((m) => m[1]);
 
   if (pids.length) {
@@ -110,25 +123,31 @@ function assertNoVendorApp() {
   }
 }
 
-class DeviceError extends Error {}
+interface PendingRequest {
+  settle: (msg: DeviceMessage) => void;
+  fail: (err: Error) => void;
+}
 
-class Device {
-  #hid = null;
-  #buffers = { [CHANNEL_DEBUG]: '', [CHANNEL_RPC]: '' };
-  #pending = new Map();
+export class Device {
+  #hid: HID.HIDAsync | null = null;
+  #buffers: Record<number, string> = { [CHANNEL_DEBUG]: '', [CHANNEL_RPC]: '' };
+  #pending = new Map<string, PendingRequest>();
   #nextId = 1;
-  #tail = Promise.resolve();
+  #tail: Promise<unknown> = Promise.resolve();
 
   /** Set to receive device-initiated messages, which carry no request id. */
-  onNotify = null;
+  onNotify: NotifyHandler | null = null;
 
-  constructor(info) {
+  info: HID.Device;
+
+  constructor(info: HID.Device) {
     this.info = info;
   }
 
-  static async open(info) {
+  static async open(info?: HID.Device): Promise<Device> {
     const target = info ?? listDevices()[0];
     if (!target) throw new DeviceError('no Work Louder device found');
+    if (!target.path) throw new DeviceError('device has no HID path');
 
     acquireLock();
     const device = new Device(target);
@@ -143,12 +162,12 @@ class Device {
       throw err;
     }
 
-    device.#hid.on('data', (data) => device.#onData(data));
-    device.#hid.on('error', (err) => device.#failAll(err));
+    device.#hid.on('data', (data: Buffer) => device.#onData(data));
+    device.#hid.on('error', (err: Error) => device.#failAll(err));
     return device;
   }
 
-  #onData(data) {
+  #onData(data: Buffer): void {
     const channel = data[1];
     const length = data[2];
     const payload = data.slice(3, 3 + length).toString('utf8');
@@ -156,14 +175,14 @@ class Device {
 
     this.#buffers[channel] += payload;
     const lines = this.#buffers[channel].split(/\r?\n/);
-    this.#buffers[channel] = lines.pop();
+    this.#buffers[channel] = lines.pop() ?? '';
 
     if (channel !== CHANNEL_RPC) return;
     for (const line of lines) {
       if (!line.trim()) continue;
-      let msg;
+      let msg: DeviceMessage;
       try {
-        msg = JSON.parse(line);
+        msg = JSON.parse(line) as DeviceMessage;
       } catch {
         continue;
       }
@@ -174,12 +193,13 @@ class Device {
     }
   }
 
-  #failAll(err) {
+  #failAll(err: Error): void {
     for (const entry of this.#pending.values()) entry.fail(err);
     this.#pending.clear();
   }
 
-  async #writeMessage(message) {
+  async #writeMessage(message: string): Promise<void> {
+    if (!this.#hid) throw new DeviceError('device is not open');
     const buf = Buffer.from(message, 'utf8');
     for (let offset = 0; offset < buf.length; offset += MAX_CHUNK) {
       const size = Math.min(MAX_CHUNK, buf.length - offset);
@@ -196,17 +216,17 @@ class Device {
    * Requests are serialized: the device handles one at a time and replies are
    * correlated only by id.
    */
-  call(method, params = null) {
-    const run = () => this.#call(method, params);
+  call(method: string, params: unknown = null): Promise<unknown> {
+    const run = (): Promise<unknown> => this.#call(method, params);
     const result = this.#tail.then(run, run);
     this.#tail = result.then(
-      () => new Promise((r) => setTimeout(r, COOLDOWN_MS)),
-      () => new Promise((r) => setTimeout(r, COOLDOWN_MS))
+      () => new Promise<void>((r) => setTimeout(r, COOLDOWN_MS)),
+      () => new Promise<void>((r) => setTimeout(r, COOLDOWN_MS))
     );
     return result;
   }
 
-  #call(method, params) {
+  #call(method: string, params: unknown): Promise<unknown> {
     if (!this.#hid) throw new DeviceError('device is not open');
 
     const id = this.#nextId;
@@ -233,26 +253,16 @@ class Device {
         },
       });
 
-      this.#writeMessage(escapeUnicode(JSON.stringify({ method, params, id }))).catch((err) => {
-        this.#pending.get(key)?.fail(err);
+      this.#writeMessage(escapeUnicode(JSON.stringify({ method, params, id }))).catch((err: unknown) => {
+        this.#pending.get(key)?.fail(err instanceof Error ? err : new DeviceError(String(err)));
       });
     });
   }
 
-  async close() {
+  async close(): Promise<void> {
     const hid = this.#hid;
     this.#hid = null;
     if (hid) await hid.close();
     releaseLock();
   }
 }
-
-module.exports = {
-  Device,
-  DeviceError,
-  listDevices,
-  assertNoVendorApp,
-  WL_VID,
-  CM2_PID,
-  VENDOR_USAGE_PAGE,
-};
