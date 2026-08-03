@@ -180,7 +180,3 @@ file-based recovery after restarts.
 - Whether the joystick also reports through the standard gamepad interface while vendor
   notifications are enabled.
 - Why the `ambient` zone has no visible effect on the tested unit.
-- Whether every intermediate high agent ID has been physically exercised. Firmware
-  bounds cover the full `AG00` through `AG19` range, while hardware tests specifically
-  cover `AG00` through `AG05`, `AG18`, and `AG19`.
-- Exact rear-button hold thresholds for standby, power-off, and factory reset.
