@@ -51,6 +51,7 @@ interface RunState {
   error: string | null;
   turns: Set<string>;
   tools: Map<string, string>;
+  questionToolIds: Set<string>;
   questionHooksObserved: boolean;
   permissions: Set<string>;
   completed: boolean;
@@ -108,6 +109,7 @@ export function emptyRun(): RunState {
     error: null,
     turns: new Set(),
     tools: new Map(),
+    questionToolIds: new Set(),
     questionHooksObserved: false,
     permissions: new Set(),
     completed: false,
@@ -247,6 +249,7 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
     const question = data?.toolName === 'vscode_askQuestions';
+    if (id && question) run.questionToolIds.add(id);
     if (data?.fromHook && question) run.questionHooksObserved = true;
     if (
       id &&
@@ -254,8 +257,10 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     ) run.tools.set(id, data?.toolName ?? '');
     run.completed = false;
   } else if (event?.type === 'tool.execution_complete') {
-    if (data?.fromHook && data?.toolName === 'vscode_askQuestions') {
-      run.questionHooksObserved = true;
+    const completedQuestion = data?.toolCallId ? run.questionToolIds.delete(data.toolCallId) : false;
+    const hookQuestion = data?.fromHook && data?.toolName === 'vscode_askQuestions';
+    if (hookQuestion) run.questionHooksObserved = true;
+    if (hookQuestion || (source === SOURCE_NATIVE && completedQuestion)) {
       for (const [id, name] of run.tools) {
         if (name === 'vscode_askQuestions') run.tools.delete(id);
       }
@@ -273,11 +278,13 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     run.completed = true;
     run.turns.clear();
     run.tools.clear();
+    run.questionToolIds.clear();
     run.permissions.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
     run.completed = true;
     run.turns.clear();
     run.tools.clear();
+    run.questionToolIds.clear();
     run.permissions.clear();
   } else {
     return { run, prompt: false, state: null };

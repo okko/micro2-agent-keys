@@ -130,6 +130,59 @@ test('normalizes input and latches errors through session end', () => {
   assert.equal(reduceEvent(run, event('hook.end', { hookType: 'sessionEnd' })).state, 'error');
 });
 
+test('native transcript completion clears a missed question post-hook', () => {
+  const run = emptyRun();
+  assert.equal(
+    reduceEvent(
+      run,
+      event('tool.execution_start', {
+        toolCallId: 'hook-question',
+        toolName: 'vscode_askQuestions',
+        fromHook: true,
+      }),
+      'native'
+    ).state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(
+      run,
+      event('tool.execution_start', {
+        toolCallId: 'transcript-question',
+        toolName: 'vscode_askQuestions',
+      }),
+      'native'
+    ).state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(run, event('tool.execution_complete', { toolCallId: 'transcript-question' }), 'native').state,
+    'running'
+  );
+
+  const transcriptOnlyRun = emptyRun();
+  reduceEvent(
+    transcriptOnlyRun,
+    event('tool.execution_start', {
+      toolCallId: 'first-transcript-question',
+      toolName: 'vscode_askQuestions',
+    }),
+    'native'
+  );
+  reduceEvent(transcriptOnlyRun, event('tool.execution_complete', { toolCallId: 'first-transcript-question' }), 'native');
+  assert.equal(
+    reduceEvent(
+      transcriptOnlyRun,
+      event('tool.execution_start', {
+        toolCallId: 'next-transcript-question',
+        toolName: 'vscode_askQuestions',
+      }),
+      'native'
+    ).state,
+    'input'
+  );
+});
+
 test('builds an encoded exact-session URL', () => {
   const url = buildSessionUrl('/tmp/Prøject space', IDS[0]);
   assert.match(url, /^vscode:\/\/file\/tmp\/Pr%C3%B8ject%20space\?/);
