@@ -72,6 +72,14 @@ interface RunState {
   completed: boolean;
 }
 
+interface StartupReplay {
+  slot: VSCodeSlot;
+  eventOffset: number | null;
+  eventIdentity: string | null;
+  journalOffset: number | null;
+  journalIdentity: string | null;
+}
+
 interface Compatibility {
   producer: string | null;
   eventVersion: number | null;
@@ -508,6 +516,7 @@ interface Session {
   boundSlot: number | null;
   missingScans: number;
   lastEventAt: string | null;
+  startupReplay: StartupReplay | null;
 }
 
 interface Candidate {
@@ -529,6 +538,8 @@ interface PersistedSession {
   resource?: string;
   offset: number;
   identity?: string | null;
+  journalOffset?: number;
+  journalIdentity?: string | null;
   compatibility?: Partial<Compatibility>;
   lastEventAt?: string | null;
 }
@@ -640,13 +651,17 @@ export class VSCodeIntegration {
         resource: raw.resource ?? `${RESOURCE_SCHEME}:/${raw.id}`,
         offset: typeof raw.identity === 'string' ? raw.offset : 0,
         identity: typeof raw.identity === 'string' ? raw.identity : null,
-        journalOffset: 0,
-        journalIdentity: null,
+        journalOffset:
+          typeof raw.journalOffset === 'number' && Number.isInteger(raw.journalOffset) && raw.journalOffset >= 0
+            ? raw.journalOffset
+            : 0,
+        journalIdentity: typeof raw.journalIdentity === 'string' ? raw.journalIdentity : null,
         run: emptyRun(),
         compatibility: { ...emptyCompatibility(), ...raw.compatibility },
         boundSlot: null,
         missingScans: 0,
         lastEventAt: raw.lastEventAt ?? null,
+        startupReplay: null,
       });
     }
     for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
@@ -669,9 +684,15 @@ export class VSCodeIntegration {
         boundSlot: null,
         missingScans: 0,
         lastEventAt: null,
+        startupReplay: null,
       };
+      const eventOffset = session.identity ? session.offset : null;
+      const eventIdentity = session.identity;
+      const journalOffset = session.journalIdentity ? session.journalOffset : null;
+      const journalIdentity = session.journalIdentity;
       session.boundSlot = index;
       session.offset = 0;
+      session.journalOffset = 0;
       session.run = emptyRun();
       this.sessions.set(session.id, session);
       this.slots[index] = {
@@ -690,6 +711,13 @@ export class VSCodeIntegration {
         lastEventAt: raw.lastEventAt,
         runError: raw.runError,
         eventOffset: 0,
+      };
+      session.startupReplay = {
+        slot: { ...this.slots[index] as VSCodeSlot },
+        eventOffset,
+        eventIdentity,
+        journalOffset,
+        journalIdentity,
       };
     }
   }
@@ -712,6 +740,8 @@ export class VSCodeIntegration {
         resource: session.resource,
         offset: session.offset,
         identity: session.identity,
+        journalOffset: session.journalOffset,
+        journalIdentity: session.journalIdentity,
         compatibility: session.compatibility,
         lastEventAt: session.lastEventAt,
       })),
@@ -885,6 +915,7 @@ export class VSCodeIntegration {
             boundSlot: null,
             missingScans: 0,
             lastEventAt: null,
+            startupReplay: null,
           };
           this.sessions.set(id, session);
           if (initial) continue;
@@ -899,8 +930,39 @@ export class VSCodeIntegration {
           }
         }
         session.missingScans = 0;
+        const startup = initial ? session.startupReplay : null;
+        let changedWhileStopped = false;
+        if (startup && startup.eventOffset !== null) {
+          const stat = fs.statSync(session.eventsPath);
+          changedWhileStopped =
+            startup.eventIdentity !== `${stat.dev}:${stat.ino}` || startup.eventOffset !== stat.size;
+        }
+        if (startup && startup.journalOffset !== null && session.journalPath) {
+          const stat = fs.statSync(session.journalPath);
+          changedWhileStopped ||=
+            startup.journalIdentity !== `${stat.dev}:${stat.ino}` || startup.journalOffset !== stat.size;
+        }
         await this.readAppended(session);
         if (session.journalPath) await this.readJournalAppended(session);
+        if (startup) {
+          const slot = this.slots[startup.slot.slot];
+          if (slot?.sessionId === session.id) {
+            if (!changedWhileStopped) {
+              const eventOffset = slot.eventOffset;
+              Object.assign(slot, startup.slot);
+              slot.eventOffset = eventOffset;
+              if (slot.state === 'done') {
+                slot.state = 'idle';
+                slot.stateChangedAt = new Date().toISOString();
+                slot.doneAt = null;
+              }
+            }
+            session.startupReplay = null;
+            await this.onSlot({ ...slot });
+          } else {
+            session.startupReplay = null;
+          }
+        }
       }
       for (const slot of this.slots) {
         if (!slot || !slot.sessionId || admittedIds.has(slot.sessionId)) continue;
@@ -1096,7 +1158,7 @@ export class VSCodeIntegration {
       slot.doneAt = null;
       slot.runError = null;
     }
-    if (allocated || changed) await this.onSlot({ ...slot });
+    if ((allocated || changed) && !session.startupReplay) await this.onSlot({ ...slot });
   }
 
   async applyHook(event: unknown): Promise<boolean> {

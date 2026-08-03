@@ -665,7 +665,7 @@ test('restart replay reconstructs outstanding input for a bound session', async 
   assert.equal(second.slots[0].state, 'done');
 });
 
-test('restart re-announces an acknowledged completed session', async (t) => {
+test('restart preserves an acknowledged completed session as idle', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'project');
@@ -686,7 +686,26 @@ test('restart re-announces an acknowledged completed session', async (t) => {
   const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
   await second.start();
   t.after(() => second.stop());
-  assert.equal(second.slots[0].state, 'done');
+  assert.equal(second.slots[0].state, 'idle');
+});
+
+test('restart clears a completed session when no new events arrived', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  await first.scan();
+  assert.equal(first.slots[0].state, 'done');
+  first.stop();
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0].state, 'idle');
 });
 
 test('restart releases a binding whose event stream disappeared', async (t) => {

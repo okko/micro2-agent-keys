@@ -27,6 +27,8 @@ interface ApiSlot {
 
 interface StatusResponse {
   connected: boolean;
+  deviceVisible?: boolean;
+  deviceError?: string | null;
   slots: ApiSlot[];
 }
 
@@ -71,7 +73,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 function printStatus(data: StatusResponse): void {
-  console.log(data.connected ? 'keyboard: connected' : 'keyboard: disconnected');
+  const status = data.connected
+    ? 'keyboard: connected'
+    : data.deviceError
+      ? `keyboard: disconnected (${data.deviceError})`
+      : data.deviceVisible === false
+        ? 'keyboard: disconnected (vendor HID interface not visible; check USB and Input Monitoring)'
+        : 'keyboard: disconnected';
+  console.log(status);
   for (const slot of data.slots) {
     console.log(`  ${slot.index}  ${slot.state.padEnd(8)} ${slot.label ?? ''}`);
   }

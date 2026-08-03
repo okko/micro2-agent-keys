@@ -45,6 +45,9 @@ let reconcileTimer: NodeJS.Timeout | null = null;
 let pushGeneration = 0;
 const pendingPushes = new Set<Promise<void>>();
 let shuttingDown = false;
+let visibleDeviceCount = 0;
+let deviceVisibilityKnown = false;
+let deviceError: string | null = null;
 
 function log(...args: unknown[]): void {
   console.log(new Date().toISOString(), ...args);
@@ -144,12 +147,31 @@ async function connect(): Promise<void> {
 }
 
 async function connectDevice(): Promise<void> {
-  if (!listDevices().length) {
+  const candidates = listDevices();
+  const wasVisible = visibleDeviceCount > 0;
+  visibleDeviceCount = candidates.length;
+  const isVisible = visibleDeviceCount > 0;
+  if (!deviceVisibilityKnown || wasVisible !== isVisible) {
+    log(
+      isVisible
+        ? `vendor HID interface visible (${visibleDeviceCount})`
+        : 'vendor HID interface not visible; check USB and Input Monitoring permission'
+    );
+    deviceVisibilityKnown = true;
+  }
+  if (!candidates.length) {
+    deviceError = 'vendor HID interface not visible';
     scheduleReconnect();
     return;
   }
 
-  const candidate = await Device.open();
+  let candidate: Device;
+  try {
+    candidate = await Device.open(candidates[0]);
+  } catch (err) {
+    deviceError = errorMessage(err);
+    throw err;
+  }
   const onNotify: NotifyHandler = (message: DeviceMessage) => {
     const key = message?.m === 'v.oai.hid' ? message.p?.k ?? null : null;
     const pressed = message?.p?.act === 1;
@@ -168,6 +190,7 @@ async function connectDevice(): Promise<void> {
       return;
     }
     device = candidate;
+    deviceError = null;
     log('device connected');
     await push();
   } catch (err) {
@@ -229,7 +252,12 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   }
 
   if (req.method === 'GET' && url.pathname === '/state') {
-    return send(res, 200, { connected: Boolean(device), slots });
+    return send(res, 200, {
+      connected: Boolean(device),
+      deviceVisible: visibleDeviceCount > 0,
+      deviceError,
+      slots,
+    });
   }
 
   if (req.method === 'GET' && url.pathname === '/integrations/vscode/slots') {
