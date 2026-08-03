@@ -149,6 +149,10 @@ test('native permissioned tool requests wait for execution approval', () => {
   );
   assert.equal(
     reduceEvent(run, event('tool.execution_start', { toolCallId: 'permissioned-tool', toolName: 'run_in_terminal' }), 'native').state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(run, event('tool.execution_complete', { toolCallId: 'permissioned-tool' }), 'native').state,
     'running'
   );
 
@@ -166,6 +170,48 @@ test('native permissioned tool requests wait for execution approval', () => {
   assert.equal(
     reduceEvent(batch, event('tool.execution_start', { toolCallId: 'first-tool', toolName: 'run_in_terminal' }), 'native').state,
     'input'
+  );
+});
+
+test('native external file requests wait for execution approval', () => {
+  const cwd = '/workspace/project';
+  const outside = emptyRun();
+  assert.equal(
+    reduceEvent(
+      outside,
+      event('assistant.message', {
+        toolRequests: [{ toolCallId: 'external-read', name: 'read_file', arguments: { filePath: '/private/file' } }],
+      }),
+      'native',
+      cwd
+    ).state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(
+      outside,
+      event('tool.execution_start', { toolCallId: 'external-read', toolName: 'read_file' }),
+      'native',
+      cwd
+    ).state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(outside, event('permission.completed', { requestId: 'external-read' }), 'native', cwd).state,
+    'running'
+  );
+
+  const inside = emptyRun();
+  assert.equal(
+    reduceEvent(
+      inside,
+      event('assistant.message', {
+        toolRequests: [{ toolCallId: 'internal-read', name: 'read_file', arguments: { filePath: 'src/vscode.ts' } }],
+      }),
+      'native',
+      cwd
+    ).state,
+    'running'
   );
 });
 
@@ -201,12 +247,64 @@ test('native journal tracks permission waits before transcript execution', async
   await integration.scan();
   assert.equal(integration.slots[0].state, 'input');
 
+  append(journalPath, {
+    ...pending,
+    v: [
+      {
+        toolCallId: 'permissioned-tool',
+        isConfirmed: { type: 4 },
+        isComplete: true,
+        toolSpecificData: {
+          requestUnsandboxedExecution: true,
+          terminalCommandState: { exitCode: 0 },
+        },
+      },
+    ],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
   append(
     eventsPath,
-    event('tool.execution_start', { toolCallId: 'permissioned-tool', toolName: 'run_in_terminal' }),
-    event('tool.execution_complete', { toolCallId: 'permissioned-tool' })
+    event('assistant.message', {
+      toolRequests: [
+        { toolCallId: 'external-a', name: 'read_file', arguments: { filePath: '/private/a' } },
+        { toolCallId: 'external-b', name: 'read_file', arguments: { filePath: '/private/b' } },
+      ],
+    })
   );
-  append(journalPath, pending);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  const externalPending = {
+    kind: 2,
+    k: ['requests', 2, 'response'],
+    v: [
+      { toolCallId: 'external-a', isComplete: true },
+      { toolCallId: 'external-b', isComplete: true },
+    ],
+  };
+  append(journalPath, externalPending);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(journalPath, {
+    ...externalPending,
+    v: [
+      { toolCallId: 'external-a', isConfirmed: { type: 4 }, isComplete: true },
+      { toolCallId: 'external-b', isComplete: true },
+    ],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(journalPath, {
+    ...externalPending,
+    v: [
+      { toolCallId: 'external-a', isConfirmed: { type: 4 }, isComplete: true },
+      { toolCallId: 'external-b', isConfirmed: { type: 4 }, isComplete: true },
+    ],
+  });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
 });
@@ -312,6 +410,104 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
       toolName: 'vscode_askQuestions',
       toolUseId: 'hook-question',
       timestamp: '2026-08-01T10:00:04.000Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(
+    eventsPath,
+    event(
+      'assistant.message',
+      {
+        toolRequests: [
+          { toolCallId: 'external-read', name: 'read_file', arguments: { filePath: '/private/external-file' } },
+        ],
+      },
+      '2026-08-01T10:00:04.100Z'
+    ),
+    event(
+      'tool.execution_start',
+      { toolCallId: 'external-read', toolName: 'read_file' },
+      '2026-08-01T10:00:04.200Z'
+    )
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PreToolUse',
+      sessionId: IDS[0],
+      toolName: 'read_file',
+      toolUseId: 'external-read__vscode-1785759144224',
+      timestamp: '2026-08-01T10:00:04.300Z',
+    }),
+    false
+  );
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PostToolUse',
+      sessionId: IDS[0],
+      toolName: 'read_file',
+      toolUseId: 'external-read__vscode-1785759144224',
+      timestamp: '2026-08-01T10:00:04.350Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PreToolUse',
+      sessionId: IDS[0],
+      toolName: 'read_file',
+      toolUseId: 'ordinary-read__vscode-1785759144225',
+      timestamp: '2026-08-01T10:00:04.400Z',
+    }),
+    false
+  );
+
+  append(
+    eventsPath,
+    event('assistant.message', {
+      toolRequests: [
+        { toolCallId: 'denied-external-read', name: 'read_file', arguments: { filePath: '/private/denied-file' } },
+      ],
+    })
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PermissionDenied',
+      sessionId: IDS[0],
+      toolName: 'read_file',
+      toolUseId: 'denied-external-read__vscode-1785759144225',
+      timestamp: '2026-08-01T10:00:04.450Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'running');
+
+  const requestId = `terminal-confirmation:${'a'.repeat(64)}`;
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PermissionRequest',
+      sessionId: IDS[0],
+      toolName: 'vscode_get_terminal_confirmation',
+      requestId,
+      timestamp: '2026-08-01T10:00:05.000Z',
+    }),
+    true
+  );
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(
+    await integration.applyHook({
+      hookEventName: 'PermissionDenied',
+      sessionId: IDS[0],
+      toolName: 'vscode_get_terminal_confirmation',
+      requestId,
+      timestamp: '2026-08-01T10:00:06.000Z',
     }),
     true
   );

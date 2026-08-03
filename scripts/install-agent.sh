@@ -30,6 +30,7 @@ cat > "$PLIST" <<PLIST
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>ExitTimeOut</key><integer>5</integer>
   <key>StandardOutPath</key><string>$HOME/.local/state/agentkeys/daemon.log</string>
   <key>StandardErrorPath</key><string>$HOME/.local/state/agentkeys/daemon.log</string>
 </dict>
@@ -75,6 +76,20 @@ cat > "$HOOKFILE" <<'HOOKS'
       }
     ],
     "PostToolUse": [
+      {
+        "type": "command",
+        "command": "~/.local/bin/agentkeys-vscode-hook",
+        "timeout": 2
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "type": "command",
+        "command": "~/.local/bin/agentkeys-vscode-hook",
+        "timeout": 2
+      }
+    ],
+    "PermissionDenied": [
       {
         "type": "command",
         "command": "~/.local/bin/agentkeys-vscode-hook",

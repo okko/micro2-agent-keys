@@ -41,6 +41,8 @@ export interface VSCodeEventData {
   sessionId?: string;
   toolRequests?: {
     toolCallId?: string;
+    name?: string;
+    toolName?: string;
     arguments?: unknown;
   }[];
 }
@@ -117,7 +119,7 @@ function eventKey<K extends keyof VSCodeEventData>(
   return typeof value === 'string' ? value : null;
 }
 
-function requestsPermission(argumentsValue: unknown): boolean {
+function requestsPermission(argumentsValue: unknown, cwd?: string | null): boolean {
   let parsed = argumentsValue;
   if (typeof parsed === 'string') {
     try {
@@ -128,7 +130,20 @@ function requestsPermission(argumentsValue: unknown): boolean {
   }
   if (!parsed || typeof parsed !== 'object') return false;
   const options = parsed as Record<string, unknown>;
-  return options.requestUnsandboxedExecution === true || options.requestAllowNetwork === true;
+  if (options.requestUnsandboxedExecution === true || options.requestAllowNetwork === true) return true;
+  if (!cwd) return false;
+
+  const paths = [options.filePath, ...(Array.isArray(options.filePaths) ? options.filePaths : [])];
+  const root = path.resolve(cwd);
+  return paths.some((candidate) => {
+    if (typeof candidate !== 'string' || !candidate) return false;
+    const relative = path.relative(root, path.resolve(root, candidate));
+    return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  });
+}
+
+function nativeHookToolCallId(toolUseId: string): string {
+  return toolUseId.replace(/__vscode-\d+$/, '');
 }
 
 export function emptyRun(): RunState {
@@ -197,6 +212,7 @@ interface NativePatch {
 interface NativeToolInvocation {
   toolCallId?: unknown;
   isConfirmed?: unknown;
+  isComplete?: unknown;
   toolSpecificData?: {
     requestUnsandboxedExecution?: unknown;
     requestAllowNetwork?: unknown;
@@ -238,7 +254,7 @@ function nativeCompletionTimestamp(patch: NativePatch): number | string | null {
   return asNativeRequests(requests)?.at(-1)?.modelState?.completedAt ?? null;
 }
 
-function nativePermissionEvents(patch: NativePatch): VSCodeEvent[] {
+function nativePermissionEvents(patch: NativePatch, pendingPermissionIds: Set<string> = new Set()): VSCodeEvent[] {
   const key = patch.k;
   const response =
     Array.isArray(key) && key[0] === 'requests' && Number.isInteger(key[1]) && key[2] === 'response'
@@ -252,7 +268,10 @@ function nativePermissionEvents(patch: NativePatch): VSCodeEvent[] {
 
   const events: VSCodeEvent[] = [];
   for (const value of response as NativeToolInvocation[]) {
-    if (typeof value?.toolCallId !== 'string' || !requestsPermission(value.toolSpecificData)) continue;
+    if (
+      typeof value?.toolCallId !== 'string' ||
+      (!requestsPermission(value.toolSpecificData) && !pendingPermissionIds.has(value.toolCallId))
+    ) continue;
     const waiting = value.isConfirmed == null && value.toolSpecificData?.terminalCommandState == null;
     events.push({
       type: waiting ? 'permission.requested' : 'permission.completed',
@@ -290,7 +309,12 @@ function inspectCompatibility(eventsPath: string, source: SessionSource, journal
   return compatibility;
 }
 
-export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSource = SOURCE_COPILOT_CLI): Transition {
+export function reduceEvent(
+  run: RunState,
+  event: VSCodeEvent,
+  source: SessionSource = SOURCE_COPILOT_CLI,
+  cwd: string | null = null
+): Transition {
   const data = event?.data;
   const hookType = data?.hookType;
   const prompt =
@@ -311,14 +335,14 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     if (id) run.turns.delete(id);
   } else if (source === SOURCE_NATIVE && event?.type === 'assistant.message') {
     for (const request of data?.toolRequests ?? []) {
-      if (request.toolCallId && requestsPermission(request.arguments)) {
+      if (request.toolCallId && requestsPermission(request.arguments, cwd)) {
         run.pendingPermissionIds.add(request.toolCallId);
       }
     }
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
     if (id) {
-      run.pendingPermissionIds.delete(id);
+      if (source !== SOURCE_NATIVE) run.pendingPermissionIds.delete(id);
       run.startedToolIds.add(id);
     }
     const question = data?.toolName === 'vscode_askQuestions';
@@ -973,7 +997,7 @@ export class VSCodeIntegration {
       if (line.trim()) {
         try {
           const patch = JSON.parse(line) as NativePatch;
-          for (const event of nativePermissionEvents(patch)) {
+          for (const event of nativePermissionEvents(patch, session.run.pendingPermissionIds)) {
             await this.applyEvent(session, event);
           }
           if (isNativeCompletionPatch(patch)) {
@@ -1047,7 +1071,7 @@ export class VSCodeIntegration {
 
   async applyEvent(session: Session, event: VSCodeEvent): Promise<void> {
     updateCompatibility(session.compatibility, event, session.source);
-    const transition = reduceEvent(session.run, event, session.source);
+    const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
     session.lastEventAt = event.timestamp ?? new Date().toISOString();
     let allocated = false;
@@ -1077,23 +1101,62 @@ export class VSCodeIntegration {
 
   async applyHook(event: unknown): Promise<boolean> {
     const hook = event as
-      | { sessionId?: string; toolName?: string; hookEventName?: string; toolUseId?: string; timestamp?: string }
+      | {
+          sessionId?: string;
+          toolName?: string;
+          hookEventName?: string;
+          toolUseId?: string;
+          requestId?: string;
+          timestamp?: string;
+        }
       | null
       | undefined;
-    if (
-      !SESSION_ID.test(hook?.sessionId ?? '') ||
-      hook?.toolName !== 'vscode_askQuestions' ||
-      !['PreToolUse', 'PostToolUse'].includes(hook?.hookEventName ?? '') ||
-      typeof hook?.toolUseId !== 'string' ||
-      !hook.toolUseId
-    ) return false;
+    if (!hook || !SESSION_ID.test(hook.sessionId ?? '')) return false;
     const session = this.sessions.get(hook.sessionId as string);
     if (!session || session.source !== SOURCE_NATIVE || session.boundSlot === null) return false;
-    await this.applyEvent(session, {
-      type: hook.hookEventName === 'PreToolUse' ? 'tool.execution_start' : 'tool.execution_complete',
-      data: { toolCallId: hook.toolUseId, toolName: hook.toolName, fromHook: true },
-      timestamp: typeof hook.timestamp === 'string' ? hook.timestamp : new Date().toISOString(),
-    });
+    const timestamp = typeof hook.timestamp === 'string' ? hook.timestamp : new Date().toISOString();
+    if (
+      hook.toolName === 'vscode_askQuestions' &&
+      ['PreToolUse', 'PostToolUse'].includes(hook.hookEventName ?? '') &&
+      typeof hook.toolUseId === 'string' &&
+      hook.toolUseId
+    ) {
+      await this.applyEvent(session, {
+        type: hook.hookEventName === 'PreToolUse' ? 'tool.execution_start' : 'tool.execution_complete',
+        data: { toolCallId: hook.toolUseId, toolName: hook.toolName, fromHook: true },
+        timestamp,
+      });
+    } else if (
+      hook.toolName === 'vscode_get_terminal_confirmation' &&
+      ['PermissionRequest', 'PostToolUse', 'PermissionDenied'].includes(hook.hookEventName ?? '') &&
+      typeof hook.requestId === 'string' &&
+      hook.requestId.startsWith('terminal-confirmation:')
+    ) {
+      await this.applyEvent(session, {
+        type: hook.hookEventName === 'PermissionRequest' ? 'permission.requested' : 'permission.completed',
+        data: { requestId: hook.requestId },
+        timestamp,
+      });
+    } else if (
+      hook.toolName !== 'vscode_askQuestions' &&
+      hook.toolName !== 'vscode_get_terminal_confirmation' &&
+      (
+        hook.hookEventName === 'PostToolUse' ||
+        hook.hookEventName === 'PermissionDenied'
+      ) &&
+      typeof hook.toolUseId === 'string' &&
+      hook.toolUseId
+    ) {
+      const requestId = nativeHookToolCallId(hook.toolUseId);
+      if (!session.run.pendingPermissionIds.has(requestId)) return false;
+      await this.applyEvent(session, {
+        type: 'permission.completed',
+        data: { requestId },
+        timestamp,
+      });
+    } else {
+      return false;
+    }
     this.save();
     return true;
   }

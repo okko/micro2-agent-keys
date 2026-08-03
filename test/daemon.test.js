@@ -34,10 +34,52 @@ async function waitFor(check, timeout = 5000) {
 }
 
 async function stop(child) {
-  if (child.exitCode !== null) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
   child.kill('SIGTERM');
   await new Promise((resolve) => child.once('exit', resolve));
 }
+
+test('daemon shutdown closes an incomplete HTTP request', async () => {
+  const port = await freePort();
+  const child = spawn(process.execPath, ['dist/daemon.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: {
+      ...process.env,
+      AGENTKEYS_NO_DEVICE: '1',
+      AGENTKEYS_PORT: String(port),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let socket;
+
+  try {
+    await waitFor(async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/state`);
+      return response.ok;
+    });
+    socket = net.createConnection(port, '127.0.0.1');
+    await new Promise((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+    });
+    socket.write(
+      'POST /integrations/vscode/hooks HTTP/1.1\r\n' +
+        `Host: 127.0.0.1:${port}\r\n` +
+        'Content-Type: application/json\r\n' +
+        'Content-Length: 100\r\n\r\n{}'
+    );
+
+    const startedAt = Date.now();
+    await stop(child);
+    assert.ok(Date.now() - startedAt < 1000, 'daemon shutdown was delayed by an incomplete request');
+  } finally {
+    socket?.destroy();
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await new Promise((resolve) => child.once('exit', resolve));
+    }
+  }
+});
 
 test('daemon restart replays a permission wait and subsequent completion', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-'));

@@ -39,10 +39,12 @@ suggested the device had stopped enumerating. That was a red herring. Use
 
 ## Rules
 
-1. **Never run two processes against the device at once.** This is the whole lesson.
+1. **Never run two AgentKeys or research processes against the device at once.**
 2. Take the exclusive lock before opening. It is enforced in `Device.open()`.
-3. **Quit the vendor app (`input.app`) first.** It opens the same interface and does
-   *not* respect our lock. This is the one remaining way to reproduce the incident.
+3. **Before direct research tools that write the keymap, quit the vendor app
+  (`input.app`).** It opens the same interface and does *not* respect our lock. This
+  does not apply to the production daemon: keep Input.app running for key macros; the
+  daemon's non-exclusive connection is designed to coexist with it.
 4. Any code that writes `keymap.json` must restore it in its **failure** path, not just
    on success. Use `withCodexLayer()`.
 5. Prefer read-only probes. Treat every `fs.write` as carrying a risk of leaving the
@@ -58,6 +60,8 @@ suggested the device had stopped enumerating. That was a red herring. Use
 - Released if the HID open itself throws.
 - Released only by the `Device` instance that acquired it, so a late repeated close
   cannot remove a newer same-process lock.
+- Daemon shutdown is forced after four seconds if native HID cleanup stalls; the
+  process `exit` handler still releases its token-owned lock.
 - A **live** holder causes a `DeviceError`. A **stale** holder (dead PID) is reclaimed
   automatically.
 - A fresh incomplete lock is treated as an acquisition in progress rather than stale.

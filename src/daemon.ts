@@ -9,6 +9,8 @@ const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const HOST = '127.0.0.1';
 const MAX_BODY = 4096;
 const RECONNECT_MS = 3000;
+const RECONCILE_MS = 250;
+const SHUTDOWN_TIMEOUT_MS = 4000;
 
 // LaunchServices discards stdout, so the app-bundle launch needs a real file.
 if (process.env.AGENTKEYS_LOG) {
@@ -38,6 +40,8 @@ const slots: Slot[] = Array.from({ length: SLOT_COUNT }, (_, index) => ({
 let device: Device | null = null;
 let connecting: Promise<void> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+let reconcileTimer: NodeJS.Timeout | null = null;
+let pushGeneration = 0;
 const pendingPushes = new Set<Promise<void>>();
 let shuttingDown = false;
 
@@ -57,19 +61,39 @@ function threadFor(slot: Slot): ThreadInput {
 function push(changed?: Slot): Promise<void> {
   const current = device;
   if (!current) return Promise.resolve();
+  const generation = ++pushGeneration;
+  if (reconcileTimer) clearTimeout(reconcileTimer);
+  reconcileTimer = null;
   const targets = changed ? [changed] : slots;
-  const operation = setThreads(current, targets.map(threadFor)).then(
+  const write = setThreads(current, targets.map(threadFor));
+  const operation = write.then(
     () => {},
     async (err: unknown) => {
       log('push failed:', errorMessage(err));
       await dropDevice(current);
     }
   );
-  pendingPushes.add(operation);
-  void operation.then(
-    () => pendingPushes.delete(operation),
-    () => pendingPushes.delete(operation)
+  void write.then(
+    () => {
+      if (shuttingDown || device !== current || generation !== pushGeneration) return;
+      reconcileTimer = setTimeout(() => {
+        reconcileTimer = null;
+        if (shuttingDown || device !== current || generation !== pushGeneration) return;
+        const reconciliation = setThreads(current, slots.map(threadFor)).then(
+          () => {},
+          async (err: unknown) => {
+            log('reconciliation failed:', errorMessage(err));
+            await dropDevice(current);
+          }
+        );
+        pendingPushes.add(reconciliation);
+        void reconciliation.finally(() => pendingPushes.delete(reconciliation));
+      }, RECONCILE_MS);
+    },
+    () => {}
   );
+  pendingPushes.add(operation);
+  void operation.finally(() => pendingPushes.delete(operation));
   return operation;
 }
 
@@ -88,6 +112,9 @@ const vscode = new VSCodeIntegration({
 async function dropDevice(current: Device): Promise<void> {
   if (device !== current) return;
   device = null;
+  pushGeneration++;
+  if (reconcileTimer) clearTimeout(reconcileTimer);
+  reconcileTimer = null;
   try {
     await current.close();
   } catch {
@@ -284,9 +311,16 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`${signal}, shutting down`);
+  const shutdownTimer = setTimeout(() => {
+    log('shutdown timed out; forcing exit');
+    process.exit(0);
+  }, SHUTDOWN_TIMEOUT_MS);
 
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
+  if (reconcileTimer) clearTimeout(reconcileTimer);
+  reconcileTimer = null;
+  pushGeneration++;
   vscode.stop();
 
   await new Promise<void>((resolve) => {
@@ -296,6 +330,7 @@ async function shutdown(signal: string): Promise<void> {
       }
       resolve();
     });
+    server.closeAllConnections();
   });
 
   if (connecting) {
@@ -316,6 +351,7 @@ async function shutdown(signal: string): Promise<void> {
       log('close failed:', errorMessage(err));
     }
   }
+  clearTimeout(shutdownTimer);
   process.exit(0);
 }
 

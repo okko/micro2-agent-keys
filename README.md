@@ -4,9 +4,9 @@ Drive the six agent keys on a [Work Louder Creator Micro 2](https://worklouder.c
 any script, so up to six concurrent coding-agent sessions each get a key that shows
 their status.
 
-No custom firmware, and no vendor application needed at runtime. It talks to the device
-over its existing USB HID interface, using the JSON-RPC messages the stock firmware
-already accepts.
+No custom firmware. It coexists with Input.app at runtime and talks to the device over
+its existing USB HID interface, using the JSON-RPC messages the stock firmware already
+accepts. Keep Input.app running so its key macros continue to work.
 
 | State   | Colour       | Meaning                        |
 | ------- | ------------ | ------------------------------ |
@@ -23,9 +23,9 @@ your scripts ──HTTP──> daemon ──USB HID JSON-RPC──> keyboard
   (no perms)         (holds the Input Monitoring grant)
 ```
 
-The daemon owns the single HID connection and the macOS permission. Everything else
-is an unprivileged HTTP client, so hooks, shell aliases and editor tasks need no
-special entitlement.
+The daemon owns this project's single HID connection and the macOS permission. Input.app
+continues to run alongside it; everything else in this project is an unprivileged HTTP
+client, so hooks, shell aliases and editor tasks need no special entitlement.
 
 Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array of
 per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
@@ -117,6 +117,11 @@ scripts/make-app.sh        # builds AgentKeys.app
 scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
 ```
 
+Leave Input.app running when installing or restarting the daemon. The daemon opens the
+vendor interface non-exclusively so Input.app can continue providing key macros.
+Shutdown has a four-second watchdog, shorter than launchd's five-second exit budget, so
+a native HID operation that does not unwind cannot stall reinstall indefinitely.
+
 `install-agent.sh` symlinks the `agentkeys` command into `~/.local/bin`, so that
 directory has to be on your `PATH`; the script says so if it is not. The CLI is only an
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
@@ -124,10 +129,12 @@ the symlink and the LaunchAgent both point at it.
 
 The installer also writes `~/.copilot/hooks/agentkeys.json`. VS Code's preview agent
 hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
-native Chat transcript's buffered writes. It also registers lifecycle hooks to clear the
-VS Code integration slots (AG00..AG03) on session start/end, so stale yellow input
-state does not survive between local chat sessions. The `chat.useHooks` setting must be
-enabled; it defaults to enabled in the verified VS Code version.
+native Chat transcript's buffered writes. Generic `PostToolUse` or `PermissionDenied`
+events clear external-file approval state without forwarding tool input.
+Lifecycle hooks clear the VS Code integration slots (AG00..AG03) on session start/end,
+so stale yellow input state does not survive between local chat sessions. The
+`chat.useHooks` setting must be enabled; it defaults to enabled in the verified VS Code
+version.
 
 For the evidence and rationale behind this hybrid file-plus-hook model, see
 [`docs/findings.md`](docs/findings.md), section "VS Code chat telemetry findings".
@@ -231,10 +238,16 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
     - Agent Host `sessionEnd` or native Chat request `result` -> `done`
 
     Native Chat's `vscode_askQuestions` transition comes from the installed
-    `PreToolUse`/`PostToolUse` hooks. Execution approval waits come from persisted tool
-    records that explicitly request unsandboxed or network access. The journal exposes
-    pending confirmations before execution; transcript events provide replay and execution
-    correlation, while the journal remains the completion source.
+    `PreToolUse`/`PostToolUse` hooks. Transcript tool requests identify explicit network,
+    unsandboxed, and outside-workspace file approvals before execution; native execution
+    starts retain that input state. The chat-session journal keeps an approval pending
+    while its confirmation is null and no terminal command state exists, then clears it
+    when a confirmation is persisted. This also covers external-file journal records,
+    which omit the original access flags. Correlated `PostToolUse`, `PermissionDenied`,
+    and tool completion are fallbacks. No command or tool input is retained. Automatic
+    outside-sandbox terminal confirmations use verified
+    `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
+    local command fingerprint. Persisted records support restart recovery.
 
 5. **Recover after restart**
 

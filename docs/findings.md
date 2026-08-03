@@ -122,12 +122,20 @@ Both `v.oai.thstatus` and `v.oai.rgbcfg` return `{"ok":1}` for malformed payload
 including `null`. A successful RPC response therefore confirms receipt only; it does
 not validate the payload or prove a visible result.
 
+The production daemon follows each state-change burst with one delayed, idempotent
+full-state reconciliation. This recovers a lighting update that returned successfully
+without becoming visible, while always sampling the latest state so an old retry cannot
+overwrite a newer transition.
+
 ## Device lifecycle
 
 - Reading, writing, and reading back byte-identical `keymap.json` content works.
 - Agent thread state survives layer changes.
 - The vendor agent bridge is registered once at boot on all hardware variants.
 - Only one process should own the device communication interface at a time.
+- Shutdown closes active HTTP connections and has a four-second watchdog. This bounds
+  launchd stop/reinstall even when an in-progress native HID open or close does not
+  settle.
 - The Work Louder application must be closed before the research tools acquire the
   device.
 
@@ -138,8 +146,27 @@ The effective telemetry model used by this project is:
 - persisted Agent Host event streams are the source of truth for session discovery,
   replay, recovery, and lifecycle state;
 - native VS Code Chat completion is derived from its persisted chat-session journal;
-- native execution approval waits are identified from unconfirmed journal tool records
-  carrying explicit unsandboxed or network access flags, before tool execution starts;
+- native transcript tool requests expose explicit network and unsandboxed flags, and
+  external-file requests can be identified by resolving their structured paths against
+  the session workspace;
+- the transcript writes `tool.execution_start` when the approval UI opens, not after the
+  user accepts, so a permissioned native start must retain input state;
+- generic approvals do not emit a verified pre-approval `PermissionRequest` hook.
+  `PostToolUse` or `PermissionDenied` clears input state as a fallback without forwarding
+  tool input. The hook ID's `__vscode-<number>` suffix is removed to correlate it with the
+  transcript tool-call ID, and transcript completion remains a final fallback;
+- the persisted journal provides the approval-response boundary. A waiting record has
+  `isConfirmed: null`, `isComplete: true`, and no `terminalCommandState`; after the user
+  responds, `isConfirmed` is populated and terminal calls also gain a command state.
+  Process creation and `PreToolUse` are not response signals because both may occur before
+  the user accepts;
+- journal records for external reads omit access flags, so records whose tool-call IDs are
+  already pending from the transcript are also interpreted. Each confirmation clears only
+  its matching request, preserving other parallel approval waits;
+- unconfirmed journal records recover approval waits across restarts;
+- automatic outside-sandbox retry waits use `PermissionRequest`, `PostToolUse`, and
+  `PermissionDenied` hooks for the internal terminal-confirmation tool; the hook runner
+  forwards only a SHA-256 command fingerprint;
 - native live input prompts require preview hook events for timely
   `PreToolUse`/`PostToolUse` tracking;
 - lifecycle hook events clear stale native-chat state between runs.
