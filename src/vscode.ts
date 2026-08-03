@@ -1045,9 +1045,10 @@ export class VSCodeIntegration {
     const transition = reduceEvent(session.run, event, session.source);
     session.run = transition.run;
     session.lastEventAt = event.timestamp ?? new Date().toISOString();
+    let allocated = false;
     if (transition.prompt && session.boundSlot === null) {
       if (session.compatibility.supported && this.providerVerified()) {
-        this.allocate(session, session.lastEventAt);
+        allocated = this.allocate(session, session.lastEventAt) !== null;
       }
       else this.log(`Unsupported VS Code event producer for ${session.id.slice(0, 8)}`);
     }
@@ -1066,7 +1067,7 @@ export class VSCodeIntegration {
       slot.doneAt = null;
       slot.runError = null;
     }
-    await this.onSlot({ ...slot });
+    if (allocated || changed) await this.onSlot({ ...slot });
   }
 
   async applyHook(event: unknown): Promise<boolean> {

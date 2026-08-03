@@ -362,7 +362,7 @@ test('prefers Agent Host telemetry when VS Code mirrors the same session nativel
   await integration.scan();
   assert.equal(integration.sessions.get(IDS[0]).source, 'copilot-cli');
   assert.equal(integration.slots[0].state, 'running');
-  assert.deepEqual(observed, ['running', 'running']);
+  assert.deepEqual(observed, ['running']);
 
   observed.length = 0;
   await integration.scan();
