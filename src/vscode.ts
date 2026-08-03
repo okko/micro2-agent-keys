@@ -64,6 +64,8 @@ interface RunState {
   questionHooksObserved: boolean;
   /** Approval request or tool-call IDs still waiting for permission. */
   pendingPermissionIds: Set<string>;
+  /** Tool-call IDs that have started during the current run. */
+  startedToolIds: Set<string>;
   /** Whether request or session completion has been observed. */
   completed: boolean;
 }
@@ -137,6 +139,7 @@ export function emptyRun(): RunState {
     knownQuestionToolIds: new Set(),
     questionHooksObserved: false,
     pendingPermissionIds: new Set(),
+    startedToolIds: new Set(),
     completed: false,
   };
 }
@@ -182,12 +185,23 @@ export function updateCompatibility(
 interface NativeRequest {
   result?: unknown;
   modelState?: { completedAt?: number | string };
+  response?: unknown;
 }
 
 interface NativePatch {
   kind?: number;
   k?: unknown[];
   v?: unknown;
+}
+
+interface NativeToolInvocation {
+  toolCallId?: unknown;
+  isConfirmed?: unknown;
+  toolSpecificData?: {
+    requestUnsandboxedExecution?: unknown;
+    requestAllowNetwork?: unknown;
+    terminalCommandState?: unknown;
+  };
 }
 
 function asNativeRequests(value: unknown): NativeRequest[] | null {
@@ -222,6 +236,30 @@ function nativeCompletionTimestamp(patch: NativePatch): number | string | null {
   const requests: unknown =
     patch.kind === 0 ? (patch.v as { requests?: unknown } | undefined)?.requests : key?.length === 1 ? patch.v : null;
   return asNativeRequests(requests)?.at(-1)?.modelState?.completedAt ?? null;
+}
+
+function nativePermissionEvents(patch: NativePatch): VSCodeEvent[] {
+  const key = patch.k;
+  const response =
+    Array.isArray(key) && key[0] === 'requests' && Number.isInteger(key[1]) && key[2] === 'response'
+      ? patch.v
+      : patch.kind === 0
+        ? asNativeRequests((patch.v as { requests?: unknown } | undefined)?.requests)?.at(-1)?.response
+        : patch.kind === 2 && key?.length === 1 && key[0] === 'requests'
+          ? asNativeRequests(patch.v)?.at(-1)?.response
+          : null;
+  if (!Array.isArray(response)) return [];
+
+  const events: VSCodeEvent[] = [];
+  for (const value of response as NativeToolInvocation[]) {
+    if (typeof value?.toolCallId !== 'string' || !requestsPermission(value.toolSpecificData)) continue;
+    const waiting = value.isConfirmed == null && value.toolSpecificData?.terminalCommandState == null;
+    events.push({
+      type: waiting ? 'permission.requested' : 'permission.completed',
+      data: { requestId: value.toolCallId },
+    });
+  }
+  return events;
 }
 
 function inspectCompatibility(eventsPath: string, source: SessionSource, journalPath: string | null = null): Compatibility {
@@ -279,7 +317,10 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     }
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
-    if (id) run.pendingPermissionIds.delete(id);
+    if (id) {
+      run.pendingPermissionIds.delete(id);
+      run.startedToolIds.add(id);
+    }
     const question = data?.toolName === 'vscode_askQuestions';
     if (id && question) run.knownQuestionToolIds.add(id);
     if (data?.fromHook && question) run.questionHooksObserved = true;
@@ -302,7 +343,7 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
       run.activeTools.delete(data.toolCallId);
     }
   } else if (event?.type === 'permission.requested') {
-    if (data?.requestId) run.pendingPermissionIds.add(data.requestId);
+    if (data?.requestId && !run.startedToolIds.has(data.requestId)) run.pendingPermissionIds.add(data.requestId);
   } else if (event?.type === 'permission.completed') {
     if (data?.requestId) run.pendingPermissionIds.delete(data.requestId);
   } else if (event?.type === 'session.error' || event?.type === 'turn.error') {
@@ -313,12 +354,14 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
     run.pendingPermissionIds.clear();
+    run.startedToolIds.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
     run.completed = true;
     run.turns.clear();
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
     run.pendingPermissionIds.clear();
+    run.startedToolIds.clear();
   } else {
     return { run, prompt: false, state: null };
   }
@@ -925,6 +968,9 @@ export class VSCodeIntegration {
       if (line.trim()) {
         try {
           const patch = JSON.parse(line) as NativePatch;
+          for (const event of nativePermissionEvents(patch)) {
+            await this.applyEvent(session, event);
+          }
           if (isNativeCompletionPatch(patch)) {
             const timestamp = nativeCompletionTimestamp(patch);
             await this.applyEvent(session, {

@@ -138,8 +138,8 @@ The effective telemetry model used by this project is:
 - persisted Agent Host event streams are the source of truth for session discovery,
   replay, recovery, and lifecycle state;
 - native VS Code Chat completion is derived from its persisted chat-session journal;
-- native execution approval waits are identified by explicit unsandboxed or network
-  access flags in persisted tool requests, before tool execution starts;
+- native execution approval waits are identified from unconfirmed journal tool records
+  carrying explicit unsandboxed or network access flags, before tool execution starts;
 - native live input prompts require preview hook events for timely
   `PreToolUse`/`PostToolUse` tracking;
 - lifecycle hook events clear stale native-chat state between runs.

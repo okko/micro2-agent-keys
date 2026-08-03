@@ -151,6 +151,64 @@ test('native permissioned tool requests wait for execution approval', () => {
     reduceEvent(run, event('tool.execution_start', { toolCallId: 'permissioned-tool', toolName: 'run_in_terminal' }), 'native').state,
     'running'
   );
+
+  const batch = emptyRun();
+  reduceEvent(
+    batch,
+    event('assistant.message', {
+      toolRequests: [
+        { toolCallId: 'first-tool', arguments: { requestUnsandboxedExecution: true } },
+        { toolCallId: 'second-tool', arguments: { requestAllowNetwork: true } },
+      ],
+    }),
+    'native'
+  );
+  assert.equal(
+    reduceEvent(batch, event('tool.execution_start', { toolCallId: 'first-tool', toolName: 'run_in_terminal' }), 'native').state,
+    'input'
+  );
+});
+
+test('native journal tracks permission waits before transcript execution', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  const pending = {
+    kind: 2,
+    k: ['requests', 1, 'response'],
+    v: [
+      {
+        toolCallId: 'permissioned-tool',
+        isComplete: true,
+        toolSpecificData: { requestUnsandboxedExecution: true },
+      },
+    ],
+  };
+  append(journalPath, pending);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(
+    eventsPath,
+    event('tool.execution_start', { toolCallId: 'permissioned-tool', toolName: 'run_in_terminal' }),
+    event('tool.execution_complete', { toolCallId: 'permissioned-tool' })
+  );
+  append(journalPath, pending);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
 });
 
 test('native transcript completion clears a missed question post-hook', () => {
