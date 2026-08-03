@@ -171,6 +171,7 @@ Bound to `127.0.0.1` only, and requests must carry a loopback `Host` header so a
 page cannot drive your keyboard.
 
 ```
+GET  /build                 -> { buildId }
 GET  /state                 -> { connected, slots: [...] }
 POST /slots/:index          <- { "state": "running", "label": "optional" }
 POST /reset
@@ -181,9 +182,16 @@ POST /integrations/vscode/slots/:index/open
 ```
 
 ```sh
+curl -s localhost:8787/build
 curl -s localhost:8787/state
 curl -s -X POST localhost:8787/slots/3 -H 'content-type: application/json' -d '{"state":"error"}'
 ```
+
+Every successful `npm run build` writes a new ID to `dist/build-id`. The daemon reads
+that file once at startup, so `GET /build` identifies the code loaded by the running
+process rather than whatever is currently on disk. After restarting the LaunchAgent,
+run `scripts/verify-build.sh`; it compares the live endpoint with `dist/build-id` and
+exits unsuccessfully if they differ.
 
 ## Wiring it to an agent
 

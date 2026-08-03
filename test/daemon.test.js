@@ -39,6 +39,27 @@ async function stop(child) {
   await new Promise((resolve) => child.once('exit', resolve));
 }
 
+test('daemon reports the emitted build id', async (t) => {
+  const port = await freePort();
+  const child = spawn(process.execPath, ['dist/daemon.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: {
+      ...process.env,
+      AGENTKEYS_NO_DEVICE: '1',
+      AGENTKEYS_PORT: String(port),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  t.after(() => stop(child));
+
+  const response = await waitFor(async () => {
+    const current = await fetch(`http://127.0.0.1:${port}/build`);
+    return current.ok ? current : false;
+  });
+  const buildId = fs.readFileSync(path.join(__dirname, '..', 'dist', 'build-id'), 'utf8').trim();
+  assert.deepEqual(await response.json(), { buildId });
+});
+
 test('daemon shutdown closes an incomplete HTTP request', async () => {
   const port = await freePort();
   const child = spawn(process.execPath, ['dist/daemon.js'], {

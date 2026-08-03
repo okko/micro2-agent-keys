@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "postbuild": "chmod 755 dist/cli.js",
+    "postbuild": "node scripts/write-build-id.mjs && chmod 755 dist/cli.js",
     "check": "tsc --noEmit",
     "predaemon": "npm run build",
     "daemon": "node dist/daemon.js",

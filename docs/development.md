@@ -66,6 +66,19 @@ gets no logging for free.
 
 The application daemon is authored at `src/daemon.ts` and runs from `dist/daemon.js`.
 
+### Verifying a restart
+
+`npm run build` emits a unique build ID in `dist/build-id`. The daemon captures that ID
+at startup and returns it from `GET http://localhost:8787/build` as
+`{"buildId":"..."}`. After deployment or `scripts/restart-agent.sh`, run:
+
+```sh
+scripts/verify-build.sh
+```
+
+The script compares the endpoint with `dist/build-id`; a match proves that the
+responding daemon loaded the current build without relying on process counts or PIDs.
+
 ### Running the layer test
 
 ```sh

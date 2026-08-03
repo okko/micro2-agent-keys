@@ -11,6 +11,7 @@ const MAX_BODY = 4096;
 const RECONNECT_MS = 3000;
 const RECONCILE_MS = 250;
 const SHUTDOWN_TIMEOUT_MS = 4000;
+const BUILD_ID = fs.readFileSync(new URL('./build-id', import.meta.url), 'utf8').trim();
 
 // LaunchServices discards stdout, so the app-bundle launch needs a real file.
 if (process.env.AGENTKEYS_LOG) {
@@ -222,6 +223,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   if (!hostAllowed(req)) return send(res, 403, { error: 'forbidden host' });
 
   const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`);
+
+  if (req.method === 'GET' && url.pathname === '/build') {
+    return send(res, 200, { buildId: BUILD_ID });
+  }
 
   if (req.method === 'GET' && url.pathname === '/state') {
     return send(res, 200, { connected: Boolean(device), slots });
