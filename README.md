@@ -231,8 +231,9 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
     - Agent Host `sessionEnd` or native Chat request `result` -> `done`
 
     Native Chat's `vscode_askQuestions` transition comes from the installed
-    `PreToolUse`/`PostToolUse` hooks. Persisted transcript events remain the restart
-    fallback; the journal remains the completion source.
+    `PreToolUse`/`PostToolUse` hooks. Execution approval waits come from persisted tool
+    requests that explicitly request unsandboxed or network access. Persisted transcript
+    events remain the restart fallback; the journal remains the completion source.
 
 5. **Recover after restart**
 

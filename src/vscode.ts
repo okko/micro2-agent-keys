@@ -39,6 +39,10 @@ export interface VSCodeEventData {
   version?: number;
   copilotVersion?: string;
   sessionId?: string;
+  toolRequests?: {
+    toolCallId?: string;
+    arguments?: unknown;
+  }[];
 }
 
 export interface VSCodeEvent {
@@ -102,6 +106,20 @@ function eventKey<K extends keyof VSCodeEventData>(
 ): string | null {
   const value = data?.[preferred] ?? data?.[fallback];
   return typeof value === 'string' ? value : null;
+}
+
+function requestsPermission(argumentsValue: unknown): boolean {
+  let parsed = argumentsValue;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed) as unknown;
+    } catch {
+      return false;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return false;
+  const options = parsed as Record<string, unknown>;
+  return options.requestUnsandboxedExecution === true || options.requestAllowNetwork === true;
 }
 
 export function emptyRun(): RunState {
@@ -246,8 +264,15 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
   } else if (event?.type === 'assistant.turn_end') {
     const id = eventKey(data, 'turnId', 'interactionId');
     if (id) run.turns.delete(id);
+  } else if (source === SOURCE_NATIVE && event?.type === 'assistant.message') {
+    for (const request of data?.toolRequests ?? []) {
+      if (request.toolCallId && requestsPermission(request.arguments)) {
+        run.permissions.add(request.toolCallId);
+      }
+    }
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
+    if (id) run.permissions.delete(id);
     const question = data?.toolName === 'vscode_askQuestions';
     if (id && question) run.questionToolIds.add(id);
     if (data?.fromHook && question) run.questionHooksObserved = true;
@@ -257,6 +282,7 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
     ) run.tools.set(id, data?.toolName ?? '');
     run.completed = false;
   } else if (event?.type === 'tool.execution_complete') {
+    if (data?.toolCallId) run.permissions.delete(data.toolCallId);
     const completedQuestion = data?.toolCallId ? run.questionToolIds.delete(data.toolCallId) : false;
     const hookQuestion = data?.fromHook && data?.toolName === 'vscode_askQuestions';
     if (hookQuestion) run.questionHooksObserved = true;

@@ -130,6 +130,29 @@ test('normalizes input and latches errors through session end', () => {
   assert.equal(reduceEvent(run, event('hook.end', { hookType: 'sessionEnd' })).state, 'error');
 });
 
+test('native permissioned tool requests wait for execution approval', () => {
+  const run = emptyRun();
+  assert.equal(
+    reduceEvent(
+      run,
+      event('assistant.message', {
+        toolRequests: [
+          {
+            toolCallId: 'permissioned-tool',
+            arguments: JSON.stringify({ requestUnsandboxedExecution: true }),
+          },
+        ],
+      }),
+      'native'
+    ).state,
+    'input'
+  );
+  assert.equal(
+    reduceEvent(run, event('tool.execution_start', { toolCallId: 'permissioned-tool', toolName: 'run_in_terminal' }), 'native').state,
+    'running'
+  );
+});
+
 test('native transcript completion clears a missed question post-hook', () => {
   const run = emptyRun();
   assert.equal(
