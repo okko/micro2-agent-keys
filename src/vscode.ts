@@ -566,6 +566,7 @@ export class VSCodeIntegration {
   timer: NodeJS.Timeout | null;
   scanning: boolean;
   started: boolean;
+  lifecycleVersion: number;
 
   constructor(options: VSCodeIntegrationOptions = {}) {
     this.root =
@@ -588,6 +589,7 @@ export class VSCodeIntegration {
     this.timer = null;
     this.scanning = false;
     this.started = false;
+    this.lifecycleVersion = 0;
   }
 
   load(): void {
@@ -698,6 +700,7 @@ export class VSCodeIntegration {
 
   async start(): Promise<void> {
     if (this.started) return;
+    const lifecycleVersion = ++this.lifecycleVersion;
     this.load();
     this.started = true;
     try {
@@ -705,6 +708,7 @@ export class VSCodeIntegration {
     } catch (err) {
       this.log(`VS Code initial scan failed: ${(err as Error).message}`);
     }
+    if (!this.started || this.lifecycleVersion !== lifecycleVersion) return;
     this.timer = setInterval(
       () => this.scan().catch((err: unknown) => this.log(`VS Code scan failed: ${(err as Error).message}`)),
       this.scanIntervalMs
@@ -713,6 +717,7 @@ export class VSCodeIntegration {
   }
 
   stop(): void {
+    this.lifecycleVersion++;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     if (this.started) this.save();

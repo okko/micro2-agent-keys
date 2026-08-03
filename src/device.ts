@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import * as HID from 'node-hid';
 
@@ -19,11 +20,13 @@ const MAX_CHUNK = REPORT_SIZE - 3;
 
 const REQUEST_TIMEOUT_MS = 10000;
 const COOLDOWN_MS = 50;
+const INCOMPLETE_LOCK_STALE_MS = 30000;
 
 /** Ids outside [0, 999) are not accepted. */
 const MAX_RPC_ID = 999;
 
-const LOCK_PATH = path.join(os.homedir(), '.local', 'state', 'agentkeys', 'device.lock');
+const LOCK_PATH =
+  process.env.AGENTKEYS_DEVICE_LOCK ?? path.join(os.homedir(), '.local', 'state', 'agentkeys', 'device.lock');
 
 export class DeviceError extends Error {}
 
@@ -48,9 +51,9 @@ function isAlive(pid: number): boolean {
   }
 }
 
-function releaseLock(): void {
+function releaseLock(token: string): void {
   try {
-    if (Number(fs.readFileSync(LOCK_PATH, 'utf8').trim()) === process.pid) {
+    if (fs.readFileSync(LOCK_PATH, 'utf8').trim() === `${process.pid} ${token}`) {
       fs.rmSync(LOCK_PATH, { force: true });
     }
   } catch {
@@ -64,24 +67,40 @@ function releaseLock(): void {
  * unresponsive and needing physical access to recover, so single access is
  * enforced here. See docs/hardware-safety.md.
  */
-function acquireLock(): void {
+function acquireLock(): string {
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
+  const token = randomUUID();
   for (let attempt = 0; attempt < 2; attempt++) {
+    let created = false;
     try {
       const fd = fs.openSync(LOCK_PATH, 'wx', 0o600);
-      fs.writeSync(fd, String(process.pid));
-      fs.closeSync(fd);
-      process.once('exit', releaseLock);
-      return;
+      created = true;
+      try {
+        fs.writeSync(fd, `${process.pid} ${token}`);
+      } finally {
+        fs.closeSync(fd);
+      }
+      return token;
     } catch (err) {
+      if (created) {
+        fs.rmSync(LOCK_PATH, { force: true });
+        throw err;
+      }
       const errno = err as NodeJS.ErrnoException;
       if (errno.code !== 'EEXIST') throw err;
-      const owner = Number(fs.readFileSync(LOCK_PATH, 'utf8').trim());
+      const ownerText = fs.readFileSync(LOCK_PATH, 'utf8').trim();
+      const owner = Number(ownerText.split(/\s+/, 1)[0]);
       if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
         throw new DeviceError(
           `device is already in use by pid ${owner}. Concurrent access can leave the ` +
             `keyboard unresponsive; stop that process first, or delete ${LOCK_PATH} if it is stale.`
         );
+      }
+      if (
+        (!Number.isInteger(owner) || owner <= 0) &&
+        Date.now() - fs.statSync(LOCK_PATH).mtimeMs < INCOMPLETE_LOCK_STALE_MS
+      ) {
+        throw new DeviceError(`device lock is still being acquired at ${LOCK_PATH}`);
       }
       fs.rmSync(LOCK_PATH, { force: true });
     }
@@ -130,6 +149,8 @@ interface PendingRequest {
 
 export class Device {
   #hid: HID.HIDAsync | null = null;
+  #lockToken: string | null = null;
+  #lockExitHandler: (() => void) | null = null;
   #buffers: Record<number, string> = { [CHANNEL_DEBUG]: '', [CHANNEL_RPC]: '' };
   #pending = new Map<string, PendingRequest>();
   #nextId = 1;
@@ -149,8 +170,11 @@ export class Device {
     if (!target) throw new DeviceError('no Work Louder device found');
     if (!target.path) throw new DeviceError('device has no HID path');
 
-    acquireLock();
+    const lockToken = acquireLock();
     const device = new Device(target);
+    device.#lockToken = lockToken;
+    device.#lockExitHandler = () => releaseLock(lockToken);
+    process.once('exit', device.#lockExitHandler);
     try {
       // Non-exclusive keeps the OS's own claim intact so typing still works.
       device.#hid =
@@ -158,7 +182,10 @@ export class Device {
           ? await HID.HIDAsync.open(target.path, { nonExclusive: true })
           : await HID.HIDAsync.open(target.path);
     } catch (err) {
-      releaseLock();
+      device.#lockToken = null;
+      process.off('exit', device.#lockExitHandler);
+      device.#lockExitHandler = null;
+      releaseLock(lockToken);
       throw err;
     }
 
@@ -261,8 +288,17 @@ export class Device {
 
   async close(): Promise<void> {
     const hid = this.#hid;
+    const lockToken = this.#lockToken;
+    const lockExitHandler = this.#lockExitHandler;
     this.#hid = null;
-    if (hid) await hid.close();
-    releaseLock();
+    this.#lockToken = null;
+    this.#lockExitHandler = null;
+    if (lockExitHandler) process.off('exit', lockExitHandler);
+    this.#failAll(new DeviceError('device closed'));
+    try {
+      if (hid) await hid.close();
+    } finally {
+      if (lockToken) releaseLock(lockToken);
+    }
   }
 }

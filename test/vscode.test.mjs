@@ -640,6 +640,45 @@ test('recovers when the session-state root appears after startup', async (t) => 
   assert.equal(integration.doctor().ready, true);
 });
 
+test('stop during the initial scan does not start the polling timer', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  let finishScan;
+  integration.scan = () => new Promise((resolve) => (finishScan = resolve));
+
+  const starting = integration.start();
+  while (!finishScan) await new Promise((resolve) => setImmediate(resolve));
+  integration.stop();
+  finishScan();
+  await starting;
+
+  assert.equal(integration.started, false);
+  assert.equal(integration.timer, null);
+});
+
+test('an obsolete initial scan cannot replace a restarted polling timer', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  const finishScans = [];
+  integration.scan = () => new Promise((resolve) => finishScans.push(resolve));
+
+  const firstStart = integration.start();
+  while (finishScans.length < 1) await new Promise((resolve) => setImmediate(resolve));
+  integration.stop();
+  const secondStart = integration.start();
+  while (finishScans.length < 2) await new Promise((resolve) => setImmediate(resolve));
+  finishScans[1]();
+  await secondStart;
+  const restartedTimer = integration.timer;
+
+  finishScans[0]();
+  await firstStart;
+  assert.equal(integration.timer, restartedTimer);
+  integration.stop();
+});
+
 test('resets an unbound offset when the event file was replaced while stopped', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

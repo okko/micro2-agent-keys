@@ -36,7 +36,10 @@ const slots: Slot[] = Array.from({ length: SLOT_COUNT }, (_, index) => ({
 }));
 
 let device: Device | null = null;
+let connecting: Promise<void> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+const pendingPushes = new Set<Promise<void>>();
+let shuttingDown = false;
 
 function log(...args: unknown[]): void {
   console.log(new Date().toISOString(), ...args);
@@ -51,20 +54,29 @@ function threadFor(slot: Slot): ThreadInput {
   return { id: slot.index, color: spec.color, effect: spec.effect, speed: spec.speed ?? 0.5 };
 }
 
-async function push(changed?: Slot): Promise<void> {
-  if (!device) return;
+function push(changed?: Slot): Promise<void> {
+  const current = device;
+  if (!current) return Promise.resolve();
   const targets = changed ? [changed] : slots;
-  try {
-    await setThreads(device, targets.map(threadFor));
-  } catch (err) {
-    log('push failed:', errorMessage(err));
-    await dropDevice();
-  }
+  const operation = setThreads(current, targets.map(threadFor)).then(
+    () => {},
+    async (err: unknown) => {
+      log('push failed:', errorMessage(err));
+      await dropDevice(current);
+    }
+  );
+  pendingPushes.add(operation);
+  void operation.then(
+    () => pendingPushes.delete(operation),
+    () => pendingPushes.delete(operation)
+  );
+  return operation;
 }
 
 const vscode = new VSCodeIntegration({
   log,
   onSlot: async (binding: VSCodeSlot) => {
+    if (shuttingDown) return;
     const slot = slots[binding.slot];
     slot.state = binding.state;
     slot.label = binding.label ?? null;
@@ -73,21 +85,19 @@ const vscode = new VSCodeIntegration({
   },
 });
 
-async function dropDevice(): Promise<void> {
-  const current = device;
+async function dropDevice(current: Device): Promise<void> {
+  if (device !== current) return;
   device = null;
-  if (current) {
-    try {
-      await current.close();
-    } catch {
-      // best effort close
-    }
+  try {
+    await current.close();
+  } catch {
+    // best effort close
   }
   scheduleReconnect();
 }
 
 function scheduleReconnect(): void {
-  if (reconnectTimer) return;
+  if (shuttingDown || reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect().catch(() => scheduleReconnect());
@@ -95,13 +105,23 @@ function scheduleReconnect(): void {
 }
 
 async function connect(): Promise<void> {
-  if (device) return;
+  if (shuttingDown || device) return;
+  if (connecting) return connecting;
+  connecting = connectDevice();
+  try {
+    await connecting;
+  } finally {
+    connecting = null;
+  }
+}
+
+async function connectDevice(): Promise<void> {
   if (!listDevices().length) {
     scheduleReconnect();
     return;
   }
 
-  device = await Device.open();
+  const candidate = await Device.open();
   const onNotify: NotifyHandler = (message: DeviceMessage) => {
     const key = message?.m === 'v.oai.hid' ? message.p?.k ?? null : null;
     const pressed = message?.p?.act === 1;
@@ -109,14 +129,28 @@ async function connect(): Promise<void> {
     if (!pressed || !match) return;
     vscode.open(Number(match[1])).catch((err: unknown) => log(`key ${key} open failed: ${errorMessage(err)}`));
   };
-  device.onNotify = onNotify;
-  log('device connected');
-
-  await setZones(device, {
-    keys: { color: 0x000000, effect: EFFECT.off, brightness: 0 },
-    ambient: { color: 0x101010, effect: EFFECT.solid, brightness: 0.3 },
-  });
-  await push();
+  candidate.onNotify = onNotify;
+  try {
+    await setZones(candidate, {
+      keys: { color: 0x000000, effect: EFFECT.off, brightness: 0 },
+      ambient: { color: 0x101010, effect: EFFECT.solid, brightness: 0.3 },
+    });
+    if (shuttingDown) {
+      await candidate.close();
+      return;
+    }
+    device = candidate;
+    log('device connected');
+    await push();
+  } catch (err) {
+    if (device === candidate) device = null;
+    try {
+      await candidate.close();
+    } catch {
+      // best effort close
+    }
+    throw err;
+  }
 }
 
 function send(res: http.ServerResponse, code: number, body: unknown): void {
@@ -203,8 +237,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
       slot.label = null;
       slot.updatedAt = new Date().toISOString();
     }
+    const resetSlots = slots.map((slot) => ({ ...slot }));
     await push();
-    return send(res, 200, { ok: true, slots });
+    return send(res, 200, { ok: true, slots: resetSlots });
   }
 
   const match = url.pathname.match(/^\/slots\/(\d+)$/);
@@ -230,8 +265,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     slot.state = state;
     slot.label = typeof body.label === 'string' ? body.label.slice(0, 64) : null;
     slot.updatedAt = new Date().toISOString();
-    await push(slot);
-    return send(res, 200, { ok: true, slot });
+    const updatedSlot = { ...slot };
+    await push(updatedSlot);
+    return send(res, 200, { ok: true, slot: updatedSlot });
   }
 
   return send(res, 404, { error: 'not found' });
@@ -244,19 +280,38 @@ const server = http.createServer((req, res) => {
   });
 });
 
-let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`${signal}, shutting down`);
 
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
   vscode.stop();
-  server.close();
 
-  if (device) {
+  await new Promise<void>((resolve) => {
+    server.close((err) => {
+      if (err && (err as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
+        log('server close failed:', errorMessage(err));
+      }
+      resolve();
+    });
+  });
+
+  if (connecting) {
     try {
-      await device.close();
+      await connecting;
+    } catch {
+      // A failed connection has no live handle to close.
+    }
+  }
+  while (pendingPushes.size) await Promise.allSettled([...pendingPushes]);
+
+  const current = device;
+  device = null;
+  if (current) {
+    try {
+      await current.close();
     } catch (err) {
       log('close failed:', errorMessage(err));
     }

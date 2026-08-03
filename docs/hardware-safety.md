@@ -50,13 +50,17 @@ suggested the device had stopped enumerating. That was a red herring. Use
 
 ## The device lock
 
-`src/device.ts` maintains a PID lockfile at `~/.local/state/agentkeys/device.lock`.
+`src/device.ts` maintains a PID-and-acquisition-token lockfile at
+`~/.local/state/agentkeys/device.lock`.
 
 - Acquired in `Device.open()` before the HID open.
 - Released in `close()`, and on process `exit`.
 - Released if the HID open itself throws.
+- Released only by the `Device` instance that acquired it, so a late repeated close
+  cannot remove a newer same-process lock.
 - A **live** holder causes a `DeviceError`. A **stale** holder (dead PID) is reclaimed
   automatically.
+- A fresh incomplete lock is treated as an acquisition in progress rather than stale.
 
 Verified behaviour:
 
