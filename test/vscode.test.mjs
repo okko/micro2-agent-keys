@@ -335,6 +335,55 @@ test('restart replay reconstructs outstanding input for a bound session', async 
   assert.equal(second.slots[0].state, 'done');
 });
 
+test('restart releases a native binding no longer active in VS Code', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'native-project');
+  fs.mkdirSync(cwd);
+  const { eventsPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'turn-1' }));
+  await first.scan();
+  first.stop();
+
+  const observed = [];
+  const second = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    nativeSessionActive: () => false,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0], null);
+  assert.deepEqual(observed.map(({ slot, state }) => ({ slot, state })), [{ slot: 0, state: 'idle' }]);
+});
+
+test('restart preserves the exact native session resource', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'native-project');
+  fs.mkdirSync(cwd);
+  const { eventsPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  await first.scan();
+  first.stop();
+
+  const launched = [];
+  const second = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    launch: async (url) => launched.push(url),
+  });
+  await second.start();
+  t.after(() => second.stop());
+  await second.open(0);
+  assert.equal(new URL(launched[0]).searchParams.get('session'), nativeSessionResource(IDS[0]));
+});
+
 test('keeps an incomplete JSONL record for the next scan', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

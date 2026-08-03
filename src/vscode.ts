@@ -298,6 +298,23 @@ export function nativeSessionResource(sessionId: string): string {
   return `${NATIVE_RESOURCE_SCHEME}://local/${Buffer.from(sessionId).toString('base64url')}`;
 }
 
+function nativeSessionActive(indexPath: string, sessionId: string): boolean | null {
+  try {
+    const query =
+      `SELECT CASE WHEN EXISTS (` +
+      `SELECT 1 FROM ItemTable WHERE key IN ('memento/interactive-session', 'chat.terminalSessions') ` +
+      `AND instr(CAST(value AS TEXT), '${sessionId}') > 0) THEN 1 ELSE 0 END`;
+    const result = execFileSync('/usr/bin/sqlite3', [indexPath, query], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1000,
+    }).trim();
+    return result === '1' ? true : result === '0' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildSessionUrl(cwd: string, sessionId: string, resource: string = `${RESOURCE_SCHEME}:/${sessionId}`): string {
   if (!path.isAbsolute(cwd)) throw new Error('project path is not absolute');
   if (!SESSION_ID.test(sessionId)) throw new Error('invalid VS Code session id');
@@ -391,6 +408,7 @@ interface Candidate {
   cwd: string;
   eventsPath: string;
   journalPath: string | null;
+  indexPath?: string;
   source: SessionSource;
   resource: string;
 }
@@ -421,6 +439,7 @@ export interface VSCodeIntegrationOptions {
   onSlot?: (slot: VSCodeSlot) => void | Promise<void>;
   log?: (...args: unknown[]) => void;
   launch?: (url: string) => Promise<void>;
+  nativeSessionActive?: (indexPath: string, sessionId: string) => boolean | null;
   scanIntervalMs?: number;
 }
 
@@ -457,6 +476,7 @@ export class VSCodeIntegration {
   onSlot: (slot: VSCodeSlot) => void | Promise<void>;
   log: (...args: unknown[]) => void;
   launch: (url: string) => Promise<void>;
+  nativeSessionActive: (indexPath: string, sessionId: string) => boolean | null;
   scanIntervalMs: number;
   slots: (VSCodeSlot | null)[];
   sessions: Map<string, Session>;
@@ -478,6 +498,7 @@ export class VSCodeIntegration {
     this.onSlot = options.onSlot ?? (() => {});
     this.log = options.log ?? (() => {});
     this.launch = options.launch ?? launchUrl;
+    this.nativeSessionActive = options.nativeSessionActive ?? nativeSessionActive;
     this.scanIntervalMs = options.scanIntervalMs ?? SCAN_INTERVAL_MS;
     this.slots = Array(INTEGRATION_SLOT_COUNT).fill(null);
     this.sessions = new Map();
@@ -547,7 +568,11 @@ export class VSCodeIntegration {
       this.slots[index] = {
         slot: index,
         sessionId: session.id,
-        cwd: raw.cwd,
+        cwd: session.cwd,
+        eventsPath: session.eventsPath,
+        journalPath: session.journalPath,
+        source: session.source,
+        resource: session.resource,
         label: raw.label,
         boundAt: raw.boundAt,
         state: raw.state ?? 'idle',
@@ -641,7 +666,7 @@ export class VSCodeIntegration {
     };
   }
 
-  nativeCandidates(): Candidate[] {
+  nativeCandidates(initial = false): Candidate[] {
     const candidates: Candidate[] = [];
     let workspaceIds: string[];
     try {
@@ -664,6 +689,7 @@ export class VSCodeIntegration {
         continue;
       }
       const transcripts = path.join(directory, 'GitHub.copilot-chat', 'transcripts');
+      const indexPath = path.join(directory, 'state.vscdb');
       let files: string[];
       try {
         files = fs.readdirSync(transcripts);
@@ -681,11 +707,19 @@ export class VSCodeIntegration {
         } catch {
           continue;
         }
+        const persisted = this.sessions.get(id);
+        const persistedSlot = persisted?.boundSlot === null ? null : this.slots[persisted?.boundSlot ?? -1];
+        if (
+          initial &&
+          persistedSlot &&
+          this.nativeSessionActive(indexPath, id) === false
+        ) continue;
         candidates.push({
           id,
           cwd,
           eventsPath,
           journalPath: chatPath,
+          indexPath,
           source: SOURCE_NATIVE,
           resource: nativeSessionResource(id),
         });
@@ -705,7 +739,7 @@ export class VSCodeIntegration {
         // Root does not exist yet; native candidates may still be usable.
       }
       const candidatesById = new Map(
-        this.nativeCandidates().map((candidate) => [candidate.id, candidate] as const)
+        this.nativeCandidates(initial).map((candidate) => [candidate.id, candidate] as const)
       );
       for (const candidate of ids.map((id) => this.admit(id)).filter((c): c is Candidate => c !== null)) {
         candidatesById.set(candidate.id, candidate);
@@ -760,6 +794,13 @@ export class VSCodeIntegration {
         if (!slot || !slot.sessionId || admittedIds.has(slot.sessionId)) continue;
         const session = this.sessions.get(slot.sessionId);
         if (!session) continue;
+        if (initial) {
+          session.boundSlot = null;
+          this.slots[slot.slot] = null;
+          await this.onSlot({ slot: slot.slot, state: 'idle', stateChangedAt: new Date().toISOString() });
+          this.log(`Released stale VS Code slot ${slot.slot} for ${slot.sessionId.slice(0, 8)}`);
+          continue;
+        }
         session.missingScans++;
         if (session.missingScans < 3 || slot.runError === 'event-stream-missing') continue;
         slot.state = 'error';
