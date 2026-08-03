@@ -93,29 +93,13 @@ Never call `install()` bare.
 
 ## Recovery when wedged
 
-**There is no external power-off on this device.** Unplugging does nothing, because it
-has an internal battery.
+**There is no external soft reset on this device.** Unplugging does nothing, because it has an internal battery.
 
-As far as could be determined, only the **rear button** can power it down, and that
-button is **inside the case** — four screws. The touch sensor only puts it into
-standby, which is not enough.
+The rear button is a software button and when the device is stuck
+the rear button has no impact.. The user must open the four screws
+and press the soft reset button inside the case.
 
-The rear button responds to how long it is held, and acts **on release**:
-
-| Hold duration | Observed result |
-|---|---|
-| tap | standby / battery animation |
-| hold | powers off — **this is the safe one**, and the device shows it is armed |
-| hold longer | arms a factory reset — destructive |
-
-The exact hold thresholds are not recorded here. Release while it is indicating
-power-off, which is non-destructive, then power back on.
-
-If the board ends up in bootloader mode, the vendor app detects it and offers to
-reflash, stepping through backup, download, bootload and restore.
-
-A factory reset is survivable — it restores a default keymap, so the device comes back
-with a valid `keymap.json`.
+A soft reset is survivable — it restores a default keymap, so the device comes back with a valid `keymap.json`.
 
 ## Backups
 
