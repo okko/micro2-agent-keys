@@ -52,12 +52,19 @@ export interface VSCodeEvent {
 }
 
 interface RunState {
+  /** Error latched for the current run until the next prompt. */
   error: string | null;
+  /** Assistant turns that have started but not ended. */
   turns: Set<string>;
-  tools: Map<string, string>;
-  questionToolIds: Set<string>;
+  /** Currently executing tools, keyed by tool-call ID. */
+  activeTools: Map<string, string>;
+  /** Question IDs retained even when transcript duplicates are not active tools. */
+  knownQuestionToolIds: Set<string>;
+  /** Whether hooks have provided question lifecycle events for this run. */
   questionHooksObserved: boolean;
-  permissions: Set<string>;
+  /** Approval request or tool-call IDs still waiting for permission. */
+  pendingPermissionIds: Set<string>;
+  /** Whether request or session completion has been observed. */
   completed: boolean;
 }
 
@@ -126,10 +133,10 @@ export function emptyRun(): RunState {
   return {
     error: null,
     turns: new Set(),
-    tools: new Map(),
-    questionToolIds: new Set(),
+    activeTools: new Map(),
+    knownQuestionToolIds: new Set(),
     questionHooksObserved: false,
-    permissions: new Set(),
+    pendingPermissionIds: new Set(),
     completed: false,
   };
 }
@@ -267,51 +274,51 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
   } else if (source === SOURCE_NATIVE && event?.type === 'assistant.message') {
     for (const request of data?.toolRequests ?? []) {
       if (request.toolCallId && requestsPermission(request.arguments)) {
-        run.permissions.add(request.toolCallId);
+        run.pendingPermissionIds.add(request.toolCallId);
       }
     }
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
-    if (id) run.permissions.delete(id);
+    if (id) run.pendingPermissionIds.delete(id);
     const question = data?.toolName === 'vscode_askQuestions';
-    if (id && question) run.questionToolIds.add(id);
+    if (id && question) run.knownQuestionToolIds.add(id);
     if (data?.fromHook && question) run.questionHooksObserved = true;
     if (
       id &&
       !(source === SOURCE_NATIVE && question && run.questionHooksObserved && !data?.fromHook)
-    ) run.tools.set(id, data?.toolName ?? '');
+    ) run.activeTools.set(id, data?.toolName ?? '');
     run.completed = false;
   } else if (event?.type === 'tool.execution_complete') {
-    if (data?.toolCallId) run.permissions.delete(data.toolCallId);
-    const completedQuestion = data?.toolCallId ? run.questionToolIds.delete(data.toolCallId) : false;
+    if (data?.toolCallId) run.pendingPermissionIds.delete(data.toolCallId);
+    const completedQuestion = data?.toolCallId ? run.knownQuestionToolIds.delete(data.toolCallId) : false;
     const hookQuestion = data?.fromHook && data?.toolName === 'vscode_askQuestions';
     if (hookQuestion) run.questionHooksObserved = true;
     if (hookQuestion || (source === SOURCE_NATIVE && completedQuestion)) {
-      for (const [id, name] of run.tools) {
-        if (name === 'vscode_askQuestions') run.tools.delete(id);
+      for (const [id, name] of run.activeTools) {
+        if (name === 'vscode_askQuestions') run.activeTools.delete(id);
       }
     }
     if (data?.toolCallId) {
-      run.tools.delete(data.toolCallId);
+      run.activeTools.delete(data.toolCallId);
     }
   } else if (event?.type === 'permission.requested') {
-    if (data?.requestId) run.permissions.add(data.requestId);
+    if (data?.requestId) run.pendingPermissionIds.add(data.requestId);
   } else if (event?.type === 'permission.completed') {
-    if (data?.requestId) run.permissions.delete(data.requestId);
+    if (data?.requestId) run.pendingPermissionIds.delete(data.requestId);
   } else if (event?.type === 'session.error' || event?.type === 'turn.error') {
     run.error = event.type;
   } else if (source === SOURCE_NATIVE && event?.type === 'request.completed') {
     run.completed = true;
     run.turns.clear();
-    run.tools.clear();
-    run.questionToolIds.clear();
-    run.permissions.clear();
+    run.activeTools.clear();
+    run.knownQuestionToolIds.clear();
+    run.pendingPermissionIds.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
     run.completed = true;
     run.turns.clear();
-    run.tools.clear();
-    run.questionToolIds.clear();
-    run.permissions.clear();
+    run.activeTools.clear();
+    run.knownQuestionToolIds.clear();
+    run.pendingPermissionIds.clear();
   } else {
     return { run, prompt: false, state: null };
   }
@@ -319,8 +326,8 @@ export function reduceEvent(run: RunState, event: VSCodeEvent, source: SessionSo
   let state = 'running';
   if (run.error) state = 'error';
   else if (
-    run.permissions.size ||
-    [...run.tools.values()].some((name) => name === 'ask_user' || name === 'vscode_askQuestions')
+    run.pendingPermissionIds.size ||
+    [...run.activeTools.values()].some((name) => name === 'ask_user' || name === 'vscode_askQuestions')
   ) state = 'input';
   else if (run.completed) state = 'done';
   return { run, prompt: false, state };

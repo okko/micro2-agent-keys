@@ -123,7 +123,7 @@ test('normalizes input and latches errors through session end', () => {
   let run = emptyRun();
   ({ run } = reduceEvent(run, event('user.message')));
   assert.equal(reduceEvent(run, event('tool.execution_start', { toolCallId: 'a', toolName: 'ask_user' })).state, 'input');
-  run.tools.set('a', 'ask_user');
+  run.activeTools.set('a', 'ask_user');
   assert.equal(reduceEvent(run, event('tool.execution_complete', { toolCallId: 'a' })).state, 'running');
   assert.equal(reduceEvent(run, event('turn.error')).state, 'error');
   run.error = 'turn.error';
