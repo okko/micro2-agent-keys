@@ -469,6 +469,55 @@ test('restart replay reconstructs outstanding input for a bound session', async 
   assert.equal(second.slots[0].state, 'done');
 });
 
+test('restart re-announces an acknowledged completed session', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const first = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    launch: async () => {},
+  });
+  await first.start();
+  append(eventsPath, event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  await first.scan();
+  await first.open(0);
+  assert.equal(first.slots[0].state, 'idle');
+  first.stop();
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0].state, 'done');
+});
+
+test('restart releases a binding whose event stream disappeared', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'));
+  await first.scan();
+  first.stop();
+  fs.rmSync(path.dirname(eventsPath), { recursive: true });
+
+  const observed = [];
+  const second = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0], null);
+  assert.deepEqual(observed.map(({ slot, state }) => ({ slot, state })), [{ slot: 0, state: 'idle' }]);
+});
+
 test('restart releases a native binding no longer active in VS Code', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

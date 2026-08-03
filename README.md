@@ -245,6 +245,11 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
    - recorded error -> `error`
    - completed run -> `done`
 
+  Restart intentionally re-announces a completed, still-bound session as green, even
+  if it was acknowledged white before the restart. Pressing the key acknowledges it
+  again. A session that is no longer discoverable is instead unbound and initialized
+  white, so no missing transcript can leave an unacknowledgeable green key.
+
 6. **Open the session**
 
    Pressing a physical key constructs an exact-session VS Code URL containing:
