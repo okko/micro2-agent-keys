@@ -57,6 +57,47 @@ fi
 
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
+"$ROOT/scripts/verify-build.sh"
+
+PORT="${AGENTKEYS_PORT:-8787}"
+DEVICE_STATE=""
+attempt=0
+while [ "$attempt" -lt 40 ]; do
+  if DEVICE_STATE="$(curl --fail --silent "http://127.0.0.1:$PORT/state")" &&
+    printf '%s' "$DEVICE_STATE" | node -e '
+const state = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+process.exit(state.connected === true ? 0 : 1);
+'; then
+    break
+  fi
+  attempt=$((attempt + 1))
+  sleep 0.25
+done
+
+if [ -z "$DEVICE_STATE" ]; then
+  echo "error: daemon became unreachable while verifying keyboard access" >&2
+  verified=false
+elif ! printf '%s' "$DEVICE_STATE" | node -e '
+const state = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+if (state.connected === true) process.exit(0);
+const reason = state.deviceError || (state.deviceVisible === false
+  ? "vendor HID interface is not visible"
+  : "connection did not complete");
+console.error(`error: daemon cannot access the keyboard: ${reason}`);
+process.exit(1);
+'; then
+  verified=false
+else
+  verified=true
+fi
+
+if [ "$verified" != true ]; then
+  echo "Connect the keyboard and allow AgentKeys in System Settings → Privacy & Security → Input Monitoring, then run this installer again." >&2
+  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent" || true
+  exit 1
+fi
+echo "Input Monitoring: verified (keyboard connected)"
+
 ln -sfn "$ROOT/dist/cli.js" "$BINDIR/agentkeys"
 
 cat > "$HOOKRUNNER" <<RUNNER
