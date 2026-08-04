@@ -148,6 +148,10 @@ System Settings → Privacy & Security → Input Monitoring.
 Re-running `make-app.sh` after a Node upgrade changes the code hash and you will have
 to approve it again; the script warns when that happens.
 
+`install-agent.sh` verifies that launchd is serving the newly built daemon and that the
+daemon can connect to the keyboard. If keyboard access cannot be verified, installation
+fails, explains the reported device error, and opens the Input Monitoring settings pane.
+
 ## Usage
 
 ```sh
@@ -256,6 +260,12 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
     outside-sandbox terminal confirmations use verified
     `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
     local command fingerprint. Persisted records support restart recovery.
+
+    Polling is deliberately bounded to protect CPU use and battery life. No polling
+    interval may be shorter than 100 ms, and periodic scans are configured so a
+    persisted state change normally reaches the key within 100–300 ms. File events and
+    hooks should trigger or coalesce scans instead of introducing faster polling or
+    busy-wait loops.
 
 5. **Recover after restart**
 
