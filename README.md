@@ -115,25 +115,13 @@ scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
 
 Leave Input.app running when installing or restarting the daemon. The daemon opens the
 vendor interface non-exclusively so Input.app can continue providing key macros.
-Shutdown has a four-second watchdog, shorter than launchd's five-second exit budget, so
-a native HID operation that does not unwind cannot stall reinstall indefinitely.
 
 `install-agent.sh` symlinks the `agentkeys` command into `~/.local/bin`, so that
 directory has to be on your `PATH`; the script says so if it is not. The CLI is only an
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
 the symlink and the LaunchAgent both point at it.
 
-The installer also writes `~/.copilot/hooks/agentkeys.json`. VS Code's preview agent
-hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
-native Chat transcript's buffered writes. Generic `PostToolUse` or `PermissionDenied`
-events clear external-file approval state without forwarding tool input.
-Lifecycle hooks clear the VS Code integration slots (AG00..AG03) on session start/end,
-so stale yellow input state does not survive between local chat sessions. The
-`chat.useHooks` setting must be enabled; it defaults to enabled in the verified VS Code
-version.
-
-For the evidence and rationale behind this hybrid file-plus-hook model, see
-[`docs/findings.md`](docs/findings.md), section "VS Code chat telemetry findings".
+The installer also writes `~/.copilot/hooks/agentkeys.json` for VS Code integration.
 
 macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
 interfaces alongside the vendor one. The grant is attached to a code signature, so a
