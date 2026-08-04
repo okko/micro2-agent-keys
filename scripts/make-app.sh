@@ -42,4 +42,5 @@ echo "built $APP"
 
 if [ -n "$OLD_HASH" ] && [ "$OLD_HASH" != "$NEW_HASH" ]; then
   echo "warning: code hash changed, re-grant Input Monitoring for AgentKeys in System Settings → Privacy & Security → Input Monitoring" >&2
+  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
 fi
