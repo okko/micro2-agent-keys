@@ -9,7 +9,8 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys set <slot> <state> [label]   set one slot (slot 0..${SLOT_COUNT - 1})
   agentkeys status                       show all slots
   agentkeys reset                        set every slot to idle
-  agentkeys states                       list valid state names
+  agentkeys list-states                  list valid state names
+
   agentkeys vscode slots                 show automatic VS Code bindings
   agentkeys vscode open <slot>           open an exact VS Code session
   agentkeys doctor vscode                check VS Code integration availability
@@ -121,7 +122,7 @@ async function main(argv: string[]): Promise<void> {
       await request('POST', '/reset');
       return;
 
-    case 'states':
+    case 'list-states':
       for (const name of Object.keys(STATES)) {
         const aliases = Object.entries(ALIASES)
           .filter(([, target]) => target === name)

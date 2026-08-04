@@ -160,7 +160,7 @@ agentkeys set 1 done
 agentkeys set 2 input
 agentkeys reset
 agentkeys status
-agentkeys states          # list names and aliases
+agentkeys list-states     # list names and aliases
 agentkeys vscode slots
 agentkeys vscode open 0
 agentkeys doctor vscode
