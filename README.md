@@ -1,8 +1,7 @@
 # micro2-agentkeys
 
 Drive the six agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc from
-command line and/or via a local HTTP API, so up to twenty concurrent coding-agent sessions
-each get a key that shows their status.
+command line and/or via a local HTTP API, so up to twenty concurrent coding-agent sessions each get a key that shows their status.
 Also provides a VS Code integration.
 
 No custom firmware. It coexists with Input.app at runtime and talks to the device over
@@ -123,11 +122,10 @@ the symlink and the LaunchAgent both point at it.
 
 The installer also writes `~/.copilot/hooks/agentkeys.json` for VS Code integration.
 
-macOS gates this keyboard behind **Input Monitoring**, because it presents keyboard
-interfaces alongside the vendor one. The grant is attached to a code signature, so a
-bare `node` invocation cannot hold it — hence the tiny `AgentKeys.app`, which is just
-the `node` binary in a signed bundle. Approve it once when prompted, under
-System Settings → Privacy & Security → Input Monitoring.
+The tiny `AgentKeys.app` is just the `node` binary in a signed bundle so that it
+meets the macOS requirement to have **Input Monitoring** permissions.
+
+Approve it once when prompted, under System Settings → Privacy & Security → Input Monitoring.
 
 Re-running `make-app.sh` after a Node upgrade changes the code hash and you will have
 to approve it again; the script warns when that happens.
@@ -175,12 +173,6 @@ curl -s localhost:8787/state
 curl -s -X POST localhost:8787/slots/3 -H 'content-type: application/json' -d '{"state":"error"}'
 ```
 
-Every successful `npm run build` writes a new ID to `dist/build-id`. The daemon reads
-that file once at startup, so `GET /build` identifies the code loaded by the running
-process rather than whatever is currently on disk. After restarting the LaunchAgent,
-run `scripts/verify-build.sh`; it compares the live endpoint with `dist/build-id` and
-exits unsuccessfully if they differ.
-
 ## Wiring an agent to report its status in a key color
 
 Give each session a slot number and call the CLI at the transitions you care about:
@@ -209,6 +201,7 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 ## Docs for development in this repository
 
 - [How the VS Code integration works](docs/vscode-integration-details.md)
+- [How the daemon deployment is verified](docs/daemon-deployment.md)
 - [docs/hardware-safety.md](docs/hardware-safety.md) — **read before writing to the
   device.** How a two-process run once left it unresponsive, and the guardrails that now prevent that.
 - [docs/protocol.md](docs/protocol.md) — HID framing, JSON-RPC, lighting, keycodes.
