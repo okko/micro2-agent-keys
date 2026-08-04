@@ -62,13 +62,13 @@ function threadFor(slot: Slot): ThreadInput {
   return { id: slot.index, color: spec.color, effect: spec.effect, speed: spec.speed ?? 0.5 };
 }
 
-function push(changed?: Slot): Promise<void> {
+function push(changed?: Slot | Slot[]): Promise<void> {
   const current = device;
   if (!current) return Promise.resolve();
   const generation = ++pushGeneration;
   if (reconcileTimer) clearTimeout(reconcileTimer);
   reconcileTimer = null;
-  const targets = changed ? [changed] : slots;
+  const targets = Array.isArray(changed) ? changed : changed ? [changed] : slots;
   const write = setThreads(current, targets.map(threadFor));
   const operation = write.then(
     () => {},
@@ -110,6 +110,17 @@ const vscode = new VSCodeIntegration({
     slot.label = binding.label ?? null;
     slot.updatedAt = binding.stateChangedAt ?? null;
     await push(slot);
+  },
+  onStartup: async (bindings: VSCodeSlot[]) => {
+    if (shuttingDown || !bindings.length) return;
+    const changed = bindings.map((binding) => {
+      const slot = slots[binding.slot];
+      slot.state = binding.state;
+      slot.label = binding.label ?? null;
+      slot.updatedAt = binding.stateChangedAt ?? null;
+      return slot;
+    });
+    await push(changed);
   },
 });
 
