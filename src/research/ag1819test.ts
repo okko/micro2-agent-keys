@@ -95,10 +95,10 @@ async function main(): Promise<void> {
 
   try {
     const status = await device.call('device.status');
-    const layer = process.env.AGENTKEYS_LAYER ? Number(process.env.AGENTKEYS_LAYER) : deviceLayerIndex(status);
+    const layer = process.env.AGENTKEYS_TEST_LAYER ? Number(process.env.AGENTKEYS_TEST_LAYER) : deviceLayerIndex(status);
 
     if (!Number.isInteger(layer) || layer === null || layer < 1) {
-      throw new Error(`invalid layer: ${process.env.AGENTKEYS_LAYER ?? JSON.stringify(status)}`);
+      throw new Error(`invalid layer: ${process.env.AGENTKEYS_TEST_LAYER ?? JSON.stringify(status)}`);
     }
 
     log(`Installing the test on layer ${layer}.`);

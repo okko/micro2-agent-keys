@@ -305,9 +305,9 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `COPILOT_HOME` overrides the Copilot data directory used by the VS Code integration.
 - `AGENTKEYS_VSCODE_WORKSPACE_STORAGE` overrides the native VS Code workspace-storage directory.
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
-- `AGENTKEYS_LAYER` picks which layer the agent keys replace (1-based, default `1`).
+- `AGENTKEYS_TEST_LAYER` picks which layer the agent keys replace (1-based, default `1`) in tests.
 - The daemon reconnects on its own if the keyboard is unplugged.
-- Pressing `AG00` through `AG03` opens the corresponding bound VS Code session.
+- Pressing `AG00` through `AG19` opens the corresponding bound VS Code session.
 
 ## Docs
 

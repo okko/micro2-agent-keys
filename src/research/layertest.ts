@@ -13,7 +13,7 @@ function log(...args: unknown[]): void {
   else console.log(line);
 }
 
-const LAYER = Number(process.env.AGENTKEYS_LAYER ?? 2);
+const LAYER = Number(process.env.AGENTKEYS_TEST_LAYER ?? 2);
 const HOLD_MS = Number(process.env.AGENTKEYS_HOLD_MS ?? 45000);
 const COLOURS = [0xff0000, 0xff6a00, 0xffd000, 0x00ff30, 0x0060ff, 0xb000ff];
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

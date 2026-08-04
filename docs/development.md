@@ -49,7 +49,7 @@ gets no logging for free.
 |---|---|---|
 | `AGENTKEYS_PORT` | daemon, CLI | HTTP port, default `8787` |
 | `AGENTKEYS_LOG` | daemon, probe, layertest, mixedlayertest, backlighttest | redirect output to a file |
-| `AGENTKEYS_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
+| `AGENTKEYS_TEST_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
 | `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
 | `AGENTKEYS_PHASE_MS` | backlighttest, ag1819test | per-phase observation window |
 
@@ -86,7 +86,7 @@ cd ~/git/micro2-agentkeys
 rm -f layertest.log
 open -n -a "$PWD/AgentKeys.app" \
   --env AGENTKEYS_LOG="$PWD/layertest.log" \
-  --env AGENTKEYS_LAYER=3 \
+  --env AGENTKEYS_TEST_LAYER=3 \
   --env AGENTKEYS_HOLD_MS=60000 \
   --args "$PWD/dist/research/layertest.js"
 ```
@@ -118,7 +118,7 @@ open -n -a "$PWD/AgentKeys.app" \
 tail -f ag1819test.log
 ```
 
-By default it temporarily replaces the active layer. Set `AGENTKEYS_LAYER` to target a
+By default it temporarily replaces the active layer. Set `AGENTKEYS_TEST_LAYER` to target a
 different 1-based layer. Follow the prompts to confirm the two leftmost switches on the
 second row light individually, then press and release both. Through the app wrapper,
 each visual and input phase lasts `AGENTKEYS_PHASE_MS`. After the test, the keyboard is
