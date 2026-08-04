@@ -555,6 +555,7 @@ export interface VSCodeIntegrationOptions {
   nativeRoot?: string;
   statePath?: string;
   onSlot?: (slot: VSCodeSlot) => void | Promise<void>;
+  onStartup?: (slots: VSCodeSlot[]) => void | Promise<void>;
   log?: (...args: unknown[]) => void;
   launch?: (url: string) => Promise<void>;
   nativeSessionActive?: (indexPath: string, sessionId: string) => boolean | null;
@@ -592,6 +593,7 @@ export class VSCodeIntegration {
   nativeRoot: string;
   statePath: string;
   onSlot: (slot: VSCodeSlot) => void | Promise<void>;
+  onStartup: (slots: VSCodeSlot[]) => void | Promise<void>;
   log: (...args: unknown[]) => void;
   launch: (url: string) => Promise<void>;
   nativeSessionActive: (indexPath: string, sessionId: string) => boolean | null;
@@ -602,6 +604,7 @@ export class VSCodeIntegration {
   scanning: boolean;
   started: boolean;
   lifecycleVersion: number;
+  startupSlots: Map<number, VSCodeSlot> | null;
 
   constructor(options: VSCodeIntegrationOptions = {}) {
     this.root =
@@ -615,6 +618,9 @@ export class VSCodeIntegration {
       process.env.AGENTKEYS_VSCODE_STATE ??
       path.join(os.homedir(), 'Library', 'Application Support', 'AgentKeys', 'vscode-sessions.json');
     this.onSlot = options.onSlot ?? (() => {});
+    this.onStartup = options.onStartup ?? (async (slots) => {
+      for (const slot of slots) await this.onSlot(slot);
+    });
     this.log = options.log ?? (() => {});
     this.launch = options.launch ?? launchUrl;
     this.nativeSessionActive = options.nativeSessionActive ?? nativeSessionActive;
@@ -625,6 +631,7 @@ export class VSCodeIntegration {
     this.scanning = false;
     this.started = false;
     this.lifecycleVersion = 0;
+    this.startupSlots = null;
   }
 
   load(): void {
@@ -757,10 +764,18 @@ export class VSCodeIntegration {
     const lifecycleVersion = ++this.lifecycleVersion;
     this.load();
     this.started = true;
+    const startupSlots = new Map<number, VSCodeSlot>();
+    this.startupSlots = startupSlots;
     try {
       await this.scan(true);
+      if (!this.started || this.lifecycleVersion !== lifecycleVersion) return;
+      const slots = [...startupSlots.values()].sort((a, b) => a.slot - b.slot);
+      this.startupSlots = null;
+      await this.onStartup(slots);
     } catch (err) {
       this.log(`VS Code initial scan failed: ${(err as Error).message}`);
+    } finally {
+      if (this.startupSlots === startupSlots) this.startupSlots = null;
     }
     if (!this.started || this.lifecycleVersion !== lifecycleVersion) return;
     this.timer = setInterval(
@@ -776,6 +791,15 @@ export class VSCodeIntegration {
     this.timer = null;
     if (this.started) this.save();
     this.started = false;
+  }
+
+  async emitSlot(slot: VSCodeSlot): Promise<void> {
+    const snapshot = { ...slot };
+    if (this.startupSlots) {
+      this.startupSlots.set(slot.slot, snapshot);
+      return;
+    }
+    await this.onSlot(snapshot);
   }
 
   admit(id: string): Candidate | null {
@@ -958,7 +982,7 @@ export class VSCodeIntegration {
               }
             }
             session.startupReplay = null;
-            await this.onSlot({ ...slot });
+            await this.emitSlot(slot);
           } else {
             session.startupReplay = null;
           }
@@ -971,7 +995,7 @@ export class VSCodeIntegration {
         if (initial) {
           session.boundSlot = null;
           this.slots[slot.slot] = null;
-          await this.onSlot({ slot: slot.slot, state: 'idle', stateChangedAt: new Date().toISOString() });
+          await this.emitSlot({ slot: slot.slot, state: 'idle', stateChangedAt: new Date().toISOString() });
           this.log(`Released stale VS Code slot ${slot.slot} for ${slot.sessionId.slice(0, 8)}`);
           continue;
         }
@@ -980,7 +1004,7 @@ export class VSCodeIntegration {
         slot.state = 'error';
         slot.runError = 'event-stream-missing';
         slot.stateChangedAt = new Date().toISOString();
-        await this.onSlot({ ...slot });
+        await this.emitSlot(slot);
       }
       this.save();
     } finally {
@@ -1158,7 +1182,7 @@ export class VSCodeIntegration {
       slot.doneAt = null;
       slot.runError = null;
     }
-    if ((allocated || changed) && !session.startupReplay) await this.onSlot({ ...slot });
+    if ((allocated || changed) && !session.startupReplay) await this.emitSlot(slot);
   }
 
   async applyHook(event: unknown): Promise<boolean> {
@@ -1245,7 +1269,7 @@ export class VSCodeIntegration {
       slot.state = 'error';
       slot.runError = 'project-path-missing';
       slot.stateChangedAt = new Date().toISOString();
-      await this.onSlot({ ...slot });
+      await this.emitSlot(slot);
       this.save();
       throw new Error(`project path does not exist: ${slot.cwd}`);
     }
@@ -1255,7 +1279,7 @@ export class VSCodeIntegration {
     if (current?.sessionId === sessionId && current.state === 'done') {
       current.state = 'idle';
       current.stateChangedAt = new Date().toISOString();
-      await this.onSlot({ ...current });
+      await this.emitSlot(current);
       this.save();
     }
     return { slot: this.publicSlots()[index], url };

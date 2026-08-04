@@ -632,29 +632,36 @@ test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t
   assert.deepEqual(integration.slots.slice(1).map((slot) => slot.sessionId), IDS.slice(1, 4));
 });
 
-test('restart replay reconstructs outstanding input for a bound session', async (t) => {
+test('restart reconstruction batches the final states of bound sessions', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'project');
+  const secondCwd = path.join(files.directory, 'second-project');
   fs.mkdirSync(cwd);
+  fs.mkdirSync(secondCwd);
   const eventsPath = createSession(files.root, IDS[0], cwd);
+  const secondEventsPath = createSession(files.root, IDS[1], secondCwd);
   const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
   await first.start();
   append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'turn-1' }));
+  append(secondEventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'turn-2' }));
   await first.scan();
   first.stop();
 
   append(eventsPath, event('permission.requested', { requestId: 'permission-1' }));
   const observed = [];
+  const startup = [];
   const second = new VSCodeIntegration({
     ...files,
     scanIntervalMs: 60_000,
     onSlot: (slot) => observed.push(slot.state),
+    onStartup: (slots) => startup.push(slots.map(({ slot, state }) => ({ slot, state }))),
   });
   await second.start();
   t.after(() => second.stop());
   assert.equal(second.slots[0].state, 'input');
-  assert.ok(observed.includes('input'));
+  assert.deepEqual(observed, []);
+  assert.deepEqual(startup, [[{ slot: 0, state: 'input' }, { slot: 1, state: 'running' }]]);
 
   append(
     eventsPath,
