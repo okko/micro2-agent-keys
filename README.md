@@ -1,8 +1,9 @@
 # micro2-agentkeys
 
-Drive the six agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc) from
-any script, so up to six concurrent coding-agent sessions each get a key that shows
-their status.
+Drive the six agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc from
+command line and/or via a local HTTP API, so up to twenty concurrent coding-agent sessions
+each get a key that shows their status.
+Also provides a VS Code integration.
 
 No custom firmware. It coexists with Input.app at runtime and talks to the device over
 its existing USB HID interface, using the JSON-RPC messages the stock firmware already
@@ -31,9 +32,9 @@ Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array o
 per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
 
 The daemon never touches your keymap. You bind the agent keycodes to a layer once, the
-way you want them, and from then on the daemon only sends colours. That works because
-lighting is layer-independent: the device holds per-key state whether or not the layer
-is showing, so whenever you switch to it, it already reflects current status.
+way you want them, and from then on the daemon only sends colours. The lighting settings are
+independent of active layer: If you send a per-key state to a key in anothe layer, that key
+will reflect its current status as soon as you switch that layer to be the active one.
 
 ## The agent layer
 
@@ -45,17 +46,15 @@ Agent keys are ordinary keymap bindings. The stock layer uses six, one per agent
 | `KV_OAI_ACT06`..`ACT12` | action keys; they report presses over `v.oai.hid` too |
 | `KV_OAI_ENC_CW` / `_CC` / `_CLK` | encoder clockwise, counter-clockwise, click |
 
-The firmware supports 20 agent slots, `AG00`..`AG19`: both the keycode parser and
-`v.oai.thstatus` use 19 as their inclusive upper bound. The keyboard has 13 physical
-switches, so at most 13 distinct agent slots can be bound at once. The stock layer uses
-only `AG00`..`AG05`. `AG18` and `AG19` have also been verified on hardware for both
+This application and the device firmware support 20 agent slots, `AG00`..`AG19`: both the
+keycode parser and `v.oai.thstatus` use 19 as their inclusive upper bound. The keyboard has 13 physical switches, so at most 13 distinct agent slots can be bound on one layer. The stock
+layer uses only `AG00`..`AG05`. `AG18` and `AG19` have also been verified on hardware for both
 independent lighting and press/release notifications.
 
 ### Default layout
 
-This is the stock agent layer, verified byte-for-byte against the one embedded in the
-published firmware image. Use it as a starting point and change what you like — it is
-also available as `CODEX_LAYER` in [src/research/keymap.ts](src/research/keymap.ts) for scripts.
+This is the stock agent layer embedded in the published firmware image and settable in Input.app.
+Use it as a starting point and change what you like.
 
 ```json
 {
@@ -79,22 +78,19 @@ also available as `CODEX_LAYER` in [src/research/keymap.ts](src/research/keymap.
 
 The four `keymap` rows are the physical key rows, 2/4/4/3. Drop this in as one layer of
 `profiles[0].layers` in the device's `profile.json`, then import the JSON to Input.app
-to write it to the device. Writing that file triggers a live
-reload and leaves the active layer alone, so nothing is force-activated.
+to write it to the device. Writing that file triggers a live reload and does not
+change the active layer.
 
-Managing that file is deliberately out of scope here. Expect the ChatGPT app to gain
+Managing that file is deliberately out of scope here. Assume the ChatGPT app to gain
 the ability to set up and manage the agent-key layer for you in an upcoming version,
-at which point hand-editing JSON becomes optional — a forward-looking statement about
-software that is not released yet, and nothing in this project depends on it. In the
-meantime `install()` in [src/research/keymap.ts](src/research/keymap.ts) can write a layer as a one-off;
-read [docs/hardware-safety.md](docs/hardware-safety.md) first.
+at which point hand-editing your profile JSON becomes optional — a forward-looking
+statement about software that is not released yet.
 
 ### Agent keys can share a layer with your own keys
 
 Nothing marks a layer as an agent layer — the device acts on each keycode individually.
-So a layer can carry the six agent keys *and* your own keycodes side by side: the agent
-keys light up and report presses to the host, everything else types normally. Verified
-on hardware.
+So a layer can carry the agent keys *and* your own keycodes side by side: the agent
+keys light up and report presses to the host, everything else types normally.
 
 The slot-to-key mapping follows the **number in the keycode**, not the position, so
 `KV_OAI_AG00`..`AG05` can sit anywhere in the layout, in any order. Slot 3 lights
