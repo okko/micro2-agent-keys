@@ -1,8 +1,7 @@
-# micro2-agentkeys
+# micro2-agent-keys
 
-Drive the six agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc from
-command line and/or via a local HTTP API, so up to twenty concurrent coding-agent sessions each get a key that shows their status.
-Also provides a VS Code integration.
+Drive up to 20 agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) from
+VS Code, command line and/or via a local HTTP API, so concurrent coding-agent sessions each get a key that shows their status.
 
 No custom firmware. It coexists with Input.app at runtime and talks to the device over
 its existing USB HID interface, using the JSON-RPC messages the stock firmware already
