@@ -1,0 +1,497 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:0b72994f389d>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:f90030452621>",
+            "toolName": "web_fetch",
+            "arguments": {
+              "url": "<redacted>",
+              "max_length": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:8a5d51064276>"
+          },
+          "id": "<id:154108b7e8b7>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3804ce94b380>",
+          "_capture": {
+            "sourceLine": 61,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:5bf9378beed6>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:0b72994f389d>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:cec8ebf21a68>",
+                  "name": "<redacted>",
+                  "args": {
+                    "url": "<redacted>",
+                    "max_length": "<redacted>"
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:0351fd6fb6fb>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:261e3daf33b8>",
+          "_capture": {
+            "sourceLine": 62,
+            "offsetMs": 24
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:5bf9378beed6>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:ef1a091b8ec8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:75fa5c9fff28>",
+          "_capture": {
+            "sourceLine": 63,
+            "offsetMs": 26
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:d744720c592f>",
+            "permissionRequest": {
+              "kind": "url",
+              "toolCallId": "<id:f90030452621>",
+              "intention": "<redacted>",
+              "url": "<redacted>"
+            },
+            "promptRequest": {
+              "url": "<redacted>",
+              "intention": "<redacted>",
+              "toolCallId": "<id:f90030452621>",
+              "kind": "url"
+            }
+          },
+          "id": "<id:38a52c00cb7e>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e389cbe9503d>",
+          "_capture": {
+            "sourceLine": 64,
+            "offsetMs": 29
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:d744720c592f>",
+            "toolCallId": "<id:f90030452621>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:5f1a44ba8959>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:6b8f9d466eca>",
+          "_capture": {
+            "sourceLine": 65,
+            "offsetMs": 5037
+          }
+        },
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:d9cf93f84550>",
+            "toolName": "bash",
+            "arguments": {
+              "command": "<redacted>",
+              "description": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:bfa8d70e443e>",
+            "shellToolInfo": {
+              "possiblePaths": [
+                "<redacted>",
+                "<redacted>",
+                "<redacted>"
+              ],
+              "hasWriteFileRedirection": "<redacted>"
+            }
+          },
+          "id": "<id:3c9a41bea96c>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f5eafd927601>",
+          "_capture": {
+            "sourceLine": 804,
+            "offsetMs": 466647
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:4c20f572b3f4>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:0b72994f389d>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:e8602b2a97b7>",
+                  "name": "<redacted>",
+                  "args": {
+                    "command": "<redacted>",
+                    "description": "<redacted>"
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:4e4824a1a023>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ddebebfac2c5>",
+          "_capture": {
+            "sourceLine": 805,
+            "offsetMs": 466648
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:4c20f572b3f4>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:05bb34889f1b>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f5a20abb55a1>",
+          "_capture": {
+            "sourceLine": 806,
+            "offsetMs": 466716
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:fcd222eb54f4>",
+            "permissionRequest": {
+              "kind": "shell",
+              "toolCallId": "<id:d9cf93f84550>",
+              "fullCommandText": "<redacted>",
+              "intention": "<redacted>",
+              "commands": [
+                {
+                  "identifier": "<redacted>",
+                  "readOnly": "<redacted>"
+                }
+              ],
+              "possiblePaths": [],
+              "possibleUrls": [],
+              "hasWriteFileRedirection": "<redacted>",
+              "canOfferSessionApproval": "<redacted>"
+            },
+            "promptRequest": {
+              "kind": "commands",
+              "fullCommandText": "<redacted>",
+              "intention": "<redacted>",
+              "commandIdentifiers": [
+                "<redacted>"
+              ],
+              "canOfferSessionApproval": "<redacted>",
+              "toolCallId": "<id:d9cf93f84550>"
+            }
+          },
+          "id": "<id:967850192afa>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ca83aa180de4>",
+          "_capture": {
+            "sourceLine": 807,
+            "offsetMs": 466718
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:fcd222eb54f4>",
+            "toolCallId": "<id:d9cf93f84550>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:54acc90edfc1>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e3020a8ea6c2>",
+          "_capture": {
+            "sourceLine": 808,
+            "offsetMs": 1627542
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:1837a04f8d22>",
+            "permissionRequest": {
+              "kind": "url",
+              "toolCallId": "<id:73ff46293132>",
+              "intention": "<redacted>",
+              "url": "<redacted>"
+            },
+            "promptRequest": {
+              "url": "<redacted>",
+              "intention": "<redacted>",
+              "toolCallId": "<id:73ff46293132>",
+              "kind": "url"
+            }
+          },
+          "id": "<id:6c9244b12d30>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b2765bd6cdde>",
+          "_capture": {
+            "sourceLine": 2396,
+            "offsetMs": 25651428
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:93c82a4f8738>",
+            "permissionRequest": {
+              "kind": "read",
+              "toolCallId": "<id:8cd627d7876f>",
+              "intention": "<redacted>",
+              "path": "<redacted>"
+            },
+            "promptRequest": {
+              "kind": "read",
+              "intention": "<redacted>",
+              "path": "<redacted>",
+              "toolCallId": "<id:8cd627d7876f>"
+            }
+          },
+          "id": "<id:7db13dbe76fa>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:98393eeaad43>",
+          "_capture": {
+            "sourceLine": 2397,
+            "pathScope": "outside-working-directory",
+            "offsetMs": 25651428
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:1837a04f8d22>",
+            "toolCallId": "<id:73ff46293132>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:b62278145ca3>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:5222735baddb>",
+          "_capture": {
+            "sourceLine": 2398,
+            "offsetMs": 25651429
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:93c82a4f8738>",
+            "toolCallId": "<id:8cd627d7876f>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:e468823d3f7b>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:d68adf6bc2f9>",
+          "_capture": {
+            "sourceLine": 2399,
+            "offsetMs": 25848144
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": [
+            {
+              "todo_id": "<id:c10f4fe37bf2>",
+              "depends_on": "<redacted>"
+            }
+          ]
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": [
+            {
+              "id": "<id:9984caa43f71>",
+              "title": "<redacted>",
+              "description": "<redacted>",
+              "status": "done",
+              "created_at": "<timestamp>",
+              "updated_at": "<timestamp>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,332 @@
+{
+  "formatVersion": 2,
+  "capturedFrom": {
+    "product": "Visual Studio Code",
+    "version": "1.131.0",
+    "commit": "d0fd3324a737f695bd14f2aee3ca92accd28870f"
+  },
+  "fixtures": [
+    {
+      "file": "native-question.json",
+      "sources": [
+        "native-transcript",
+        "native-journal"
+      ],
+      "observed": [
+        "questions.native.waiting",
+        "questions.native.submit"
+      ]
+    },
+    {
+      "file": "native-outcomes.json",
+      "sources": [
+        "native-journal"
+      ],
+      "observed": [
+        "pre-tool-approval.confirmation-not-needed",
+        "pre-tool-approval.approve",
+        "elicitation.accepted",
+        "elicitation.rejected"
+      ]
+    },
+    {
+      "file": "native-denied.json",
+      "sources": [
+        "native-journal"
+      ],
+      "observed": [
+        "pre-tool-approval.deny"
+      ]
+    },
+    {
+      "file": "native-legacy-confirmation.json",
+      "sources": [
+        "native-journal"
+      ],
+      "observed": [
+        "confirmation-part.resolved"
+      ]
+    },
+    {
+      "file": "agent-host-permissions.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state"
+      ],
+      "observed": [
+        "pre-tool-approval.terminal.waiting",
+        "pre-tool-approval.network.waiting",
+        "pre-tool-approval.external-file.waiting",
+        "pre-tool-approval.approve",
+        "pre-tool-approval.immediate-event-control"
+      ]
+    },
+    {
+      "file": "agent-host-contributed-tool.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state"
+      ],
+      "observed": [
+        "pre-tool-approval.generic-contributed-tool.waiting",
+        "pre-tool-approval.approve",
+        "hooks.pre-tool-use.order",
+        "hooks.pre-mcp-tool-call.order"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "id": "pre-tool-approval",
+      "status": "partial",
+      "observed": [
+        "terminal",
+        "network",
+        "external-file",
+        "generic-contributed-tool",
+        "approve",
+        "deny",
+        "confirmation-not-needed",
+        "immediate-approval-controls"
+      ],
+      "unsupported": [
+        "edit-and-approve",
+        "agent-host-deny-or-edit-outcome"
+      ]
+    },
+    {
+      "id": "post-tool-approval",
+      "status": "unsupported",
+      "observed": [],
+      "unsupported": [
+        "pending-result-confirmation",
+        "approve",
+        "reject"
+      ]
+    },
+    {
+      "id": "authentication",
+      "status": "unsupported",
+      "observed": [],
+      "unsupported": [
+        "missing-auth",
+        "insufficient-scope",
+        "authenticate",
+        "cancel"
+      ]
+    },
+    {
+      "id": "confirmation-part",
+      "status": "partial",
+      "observed": [
+        "resolved"
+      ],
+      "unsupported": [
+        "waiting",
+        "selected-button",
+        "cancel"
+      ]
+    },
+    {
+      "id": "questions",
+      "status": "partial",
+      "observed": [
+        "native-waiting",
+        "native-submit"
+      ],
+      "unsupported": [
+        "native-skip",
+        "native-cancel",
+        "protocol-ask-user"
+      ]
+    },
+    {
+      "id": "plan-review",
+      "status": "unsupported",
+      "observed": [],
+      "unsupported": [
+        "waiting",
+        "approve",
+        "reject",
+        "feedback"
+      ]
+    },
+    {
+      "id": "elicitation",
+      "status": "partial",
+      "observed": [
+        "accepted",
+        "rejected"
+      ],
+      "unsupported": [
+        "pending-form",
+        "pending-url",
+        "decline-versus-cancel"
+      ]
+    },
+    {
+      "id": "modified-files-review",
+      "status": "unsupported",
+      "observed": [],
+      "unsupported": [
+        "waiting",
+        "approve",
+        "reject"
+      ]
+    },
+    {
+      "id": "feedback-review",
+      "status": "unsupported",
+      "observed": [],
+      "unsupported": [
+        "waiting",
+        "approve",
+        "reject"
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "id": "questions.native.wait",
+      "fixture": "native-question.json",
+      "start": {
+        "source": "native-transcript",
+        "sourceLine": 290,
+        "type": "tool.execution_start"
+      },
+      "end": {
+        "source": "native-transcript",
+        "sourceLine": 291,
+        "type": "tool.execution_complete"
+      },
+      "correlationPath": "data.toolCallId",
+      "elapsedMs": 47379,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "pre-tool-approval.terminal.wait",
+      "fixture": "agent-host-permissions.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 807,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 808,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 1160824,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "pre-tool-approval.network.wait",
+      "fixture": "agent-host-permissions.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 64,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 65,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 5008,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "pre-tool-approval.external-file.wait",
+      "fixture": "agent-host-permissions.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 2397,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 2399,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 196716,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "pre-tool-approval.contributed-tool.wait",
+      "fixture": "agent-host-contributed-tool.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 201,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 207,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 16984,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "pre-tool-approval.contributed-tool.immediate-control",
+      "fixture": "agent-host-contributed-tool.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 200,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 204,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 27,
+      "classification": "immediate-approval-control"
+    },
+    {
+      "id": "pre-tool-approval.url.immediate-control",
+      "fixture": "agent-host-permissions.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 2396,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 2398,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 1,
+      "classification": "immediate-approval-control"
+    }
+  ],
+  "derivedFacts": [
+    {
+      "id": "pre-tool-approval.external-file.outside-working-directory",
+      "fixture": "agent-host-permissions.json",
+      "record": {
+        "source": "agent-host-events",
+        "sourceLine": 2397,
+        "type": "permission.requested"
+      },
+      "captureField": "pathScope",
+      "expected": "outside-working-directory"
+    },
+    {
+      "id": "agent-host-state.table-inventory",
+      "fixture": "agent-host-permissions.json",
+      "source": "agent-host-state",
+      "expectedTables": [
+        "inbox_entries",
+        "todo_deps",
+        "todos"
+      ]
+    }
+  ]
+}

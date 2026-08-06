@@ -1,0 +1,2312 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:fbc881f6b3f9>",
+  "label": "resolved-outcomes",
+  "sources": [
+    {
+      "source": "native-transcript",
+      "records": []
+    },
+    {
+      "source": "native-journal",
+      "records": [
+        {
+          "kind": 2,
+          "k": [
+            "requests",
+            0,
+            "response"
+          ],
+          "v": [
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:b45006c5390a>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:585c7be99cf5>",
+              "toolId": "<id:8b5ebf2deae7>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:3d8590531825>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:3d8590531825>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:2f25911436fd>",
+              "toolId": "<id:cb31e9fbfb69>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:ddff5f0354a7>",
+              "toolId": "<id:8b5ebf2deae7>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:b3c25b88f991>",
+              "toolId": "<id:8b5ebf2deae7>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:562ea8b2d62f>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:562ea8b2d62f>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:428d4dbb6365>",
+              "toolId": "<id:cb31e9fbfb69>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:731a9b70b3bd>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:4ca2d29f5a54>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:4ca2d29f5a54>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:cdd367a3e45b>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:01f5616fc999>",
+              "toolId": "<id:8b5ebf2deae7>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:2416495791b2>",
+              "toolId": "<id:8b5ebf2deae7>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:4688e29d8ae3>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:4688e29d8ae3>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:13cde3aa73b6>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:aa8a0dfd9176>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:aa8a0dfd9176>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:024d5cbe9287>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:baff463dfd15>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:baff463dfd15>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:664b9b10bb40>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:3a76e2bd8b2f>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:47798db9e880>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:69754a206052>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:69754a206052>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:5cd70099bd39>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:0e8d60b3a1aa>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:0e8d60b3a1aa>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:53f4fe12654f>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:d577e7ef8c3f>",
+              "toolId": "<id:8b5ebf2deae7>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:658cec8ec22a>",
+              "toolId": "<id:8b5ebf2deae7>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "resultDetails": [],
+              "toolCallId": "<id:28ccba0260ca>",
+              "toolId": "<id:b0a879e63bad>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:8fa6ce5bf510>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:8fa6ce5bf510>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:6f17d9194a4a>",
+              "toolId": "<id:cb31e9fbfb69>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:b965fc5d339d>"
+            }
+          ],
+          "_capture": {
+            "sourceLine": 11
+          }
+        },
+        {
+          "kind": 2,
+          "k": [
+            "requests",
+            0,
+            "response"
+          ],
+          "v": [
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:69754a206052>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:69754a206052>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:5cd70099bd39>",
+              "toolId": "<id:cb31e9fbfb69>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:0e8d60b3a1aa>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:0e8d60b3a1aa>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:53f4fe12654f>",
+              "toolId": "<id:cb31e9fbfb69>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:d577e7ef8c3f>",
+              "toolId": "<id:8b5ebf2deae7>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:658cec8ec22a>",
+              "toolId": "<id:8b5ebf2deae7>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {}
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "resultDetails": [],
+              "toolCallId": "<id:28ccba0260ca>",
+              "toolId": "<id:b0a879e63bad>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:8fa6ce5bf510>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "pastTenseMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:8fa6ce5bf510>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "fragment": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:6f17d9194a4a>",
+              "toolId": "<id:cb31e9fbfb69>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:b965fc5d339d>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:f7326b1da479>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:3599cf3dee85>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "inlineReference",
+              "inlineReference": {
+                "name": "<redacted>",
+                "kind": 12,
+                "containerName": "<redacted>",
+                "location": {
+                  "range": {
+                    "startLineNumber": "<redacted>",
+                    "startColumn": "<redacted>",
+                    "endLineNumber": "<redacted>",
+                    "endColumn": "<redacted>"
+                  },
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "resolveId": "<id:66b99f2265d5>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:e2758b7ebd57>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "presentation": "<redacted>",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:562ea8b2d62f>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "<id:4ca2d29f5a54>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "<id:3d8590531825>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "<id:778c91b1f78e>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 3,
+                "scope": "<redacted>"
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:a42be4dd629b>",
+              "toolId": "<id:060b9babd234>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "id": "<id:f37b6a1b651c>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>"
+            },
+            {
+              "id": "<id:5c7394ca235b>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>"
+            },
+            {
+              "id": "<id:a8e9c7dcb548>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>"
+            },
+            {
+              "id": "<id:9d7a540d5982>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:09e9788b23bc>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolSpecificData": {
+                "kind": "terminal",
+                "terminalToolSessionId": "<id:2563e1602cfa>",
+                "terminalCommandId": "<id:045e8b892b1b>",
+                "commandLine": {
+                  "original": "<redacted>",
+                  "toolEdited": "<redacted>",
+                  "forDisplay": "<redacted>",
+                  "isSandboxWrapped": "<redacted>"
+                },
+                "cwd": {
+                  "$mid": "<redacted>",
+                  "fsPath": "<redacted>",
+                  "external": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>"
+                },
+                "language": "<redacted>",
+                "isBackground": "<redacted>",
+                "requestUnsandboxedExecution": "<redacted>",
+                "requestAllowNetwork": "<redacted>",
+                "confirmation": {
+                  "commandLine": "<redacted>"
+                },
+                "presentationOverrides": {
+                  "commandLine": "<redacted>"
+                },
+                "terminalCommandState": {
+                  "exitCode": "<redacted>",
+                  "timestamp": "<timestamp>",
+                  "duration": "<redacted>"
+                },
+                "terminalCommandUri": {
+                  "$mid": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>",
+                  "query": "<redacted>"
+                },
+                "terminalCommandOutput": {
+                  "text": "<redacted>",
+                  "lineCount": "<redacted>"
+                },
+                "terminalTheme": {
+                  "background": "<redacted>",
+                  "foreground": "<redacted>"
+                }
+              },
+              "toolCallId": "<id:5b467b818cfd>",
+              "toolId": "<id:47ef0d0b596a>"
+            },
+            {
+              "kind": "elicitationSerialized",
+              "title": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "message": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "state": "rejected",
+              "subtitle": "<redacted>",
+              "isHidden": "<redacted>"
+            }
+          ],
+          "i": "<redacted>",
+          "_capture": {
+            "sourceLine": 18
+          }
+        },
+        {
+          "kind": 2,
+          "k": [
+            "requests",
+            0,
+            "response"
+          ],
+          "v": [
+            {
+              "kind": "elicitationSerialized",
+              "title": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "message": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "state": "accepted",
+              "subtitle": "<redacted>",
+              "isHidden": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "external",
+                "label": "<redacted>"
+              },
+              "toolSpecificData": {
+                "kind": "terminal",
+                "terminalToolSessionId": "<id:2563e1602cfa>",
+                "terminalCommandId": "<id:137931157aff>",
+                "commandLine": {
+                  "original": "<redacted>",
+                  "toolEdited": "<redacted>",
+                  "forDisplay": "<redacted>",
+                  "isSandboxWrapped": "<redacted>"
+                },
+                "cwd": {
+                  "$mid": "<redacted>",
+                  "fsPath": "<redacted>",
+                  "external": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>"
+                },
+                "language": "<redacted>",
+                "isBackground": "<redacted>",
+                "requestUnsandboxedExecution": "<redacted>",
+                "requestUnsandboxedExecutionReason": "<redacted>",
+                "confirmation": {
+                  "commandLine": "<redacted>"
+                },
+                "presentationOverrides": {
+                  "commandLine": "<redacted>"
+                },
+                "terminalCommandState": {
+                  "exitCode": "<redacted>",
+                  "timestamp": "<timestamp>",
+                  "duration": "<redacted>"
+                },
+                "terminalCommandUri": {
+                  "$mid": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>",
+                  "query": "<redacted>"
+                },
+                "terminalCommandOutput": {
+                  "text": "<redacted>",
+                  "lineCount": "<redacted>"
+                },
+                "terminalTheme": {
+                  "background": "<redacted>",
+                  "foreground": "<redacted>"
+                }
+              },
+              "toolCallId": "<id:2e134654032a>",
+              "toolId": "<id:a413ded86abd>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:f960a4a87cab>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "inlineReference",
+              "inlineReference": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "presentation": "<redacted>",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:0b4a88927e2a>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "<id:93e206c6eb82>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 3,
+                "scope": "<redacted>"
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:4532947d03ad>",
+              "toolId": "<id:060b9babd234>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "id": "<id:fc1f33ddceee>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>"
+            },
+            {
+              "id": "<id:a76fb729bbd6>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:3d4c804b6b4a>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolSpecificData": {
+                "kind": "terminal",
+                "terminalToolSessionId": "<id:37fb0ee72fa0>",
+                "terminalCommandId": "<id:22071f88b60d>",
+                "commandLine": {
+                  "original": "<redacted>",
+                  "toolEdited": "<redacted>",
+                  "forDisplay": "<redacted>",
+                  "isSandboxWrapped": "<redacted>"
+                },
+                "cwd": {
+                  "$mid": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>"
+                },
+                "language": "<redacted>",
+                "isBackground": "<redacted>",
+                "requestUnsandboxedExecution": "<redacted>",
+                "requestAllowNetwork": "<redacted>",
+                "autoApproveInfo": {
+                  "value": "<redacted>",
+                  "isTrusted": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "supportAlertSyntax": "<redacted>"
+                },
+                "confirmation": {
+                  "commandLine": "<redacted>"
+                },
+                "presentationOverrides": {
+                  "commandLine": "<redacted>"
+                },
+                "terminalCommandState": {
+                  "exitCode": "<redacted>",
+                  "timestamp": "<timestamp>",
+                  "duration": "<redacted>"
+                }
+              },
+              "toolCallId": "<id:8071920b9b4e>",
+              "toolId": "<id:47ef0d0b596a>"
+            }
+          ],
+          "i": "<redacted>",
+          "_capture": {
+            "sourceLine": 24
+          }
+        },
+        {
+          "kind": 2,
+          "k": [
+            "requests"
+          ],
+          "v": [
+            {
+              "requestId": "<id:5cea919bc26e>",
+              "timestamp": "<timestamp>",
+              "agent": {
+                "extensionId": {
+                  "value": "<redacted>",
+                  "_lower": "<redacted>"
+                },
+                "extensionVersion": "<redacted>",
+                "publisherDisplayName": "<redacted>",
+                "extensionPublisherId": "<id:86c1f8323463>",
+                "extensionDisplayName": "<redacted>",
+                "id": "<id:d3480e7c0470>",
+                "description": "<redacted>",
+                "when": "<redacted>",
+                "metadata": {
+                  "themeIcon": {
+                    "id": "<id:e43b0dc87cd4>"
+                  },
+                  "hasFollowups": "<redacted>",
+                  "supportIssueReporting": "<redacted>"
+                },
+                "name": "<redacted>",
+                "fullName": "<redacted>",
+                "isDefault": "<redacted>",
+                "locations": [
+                  "<redacted>"
+                ],
+                "modes": [
+                  "<redacted>"
+                ],
+                "slashCommands": [
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>"
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>"
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>",
+                    "disambiguation": [
+                      {
+                        "category": "<redacted>",
+                        "description": "<redacted>",
+                        "examples": [
+                          "<redacted>"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>",
+                    "sampleRequest": "<redacted>"
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>",
+                    "sampleRequest": "<redacted>",
+                    "isSticky": "<redacted>",
+                    "disambiguation": [
+                      {
+                        "category": "<redacted>",
+                        "description": "<redacted>",
+                        "examples": [
+                          "<redacted>",
+                          "<redacted>",
+                          "<redacted>"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>",
+                    "sampleRequest": "<redacted>",
+                    "disambiguation": [
+                      {
+                        "category": "<redacted>",
+                        "description": "<redacted>",
+                        "examples": [
+                          "<redacted>"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "<redacted>",
+                    "description": "<redacted>",
+                    "sampleRequest": "<redacted>",
+                    "when": "<redacted>",
+                    "disambiguation": [
+                      {
+                        "category": "<redacted>",
+                        "description": "<redacted>",
+                        "examples": [
+                          "<redacted>"
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "disambiguation": []
+              },
+              "modelId": "<id:393e51614d70>",
+              "responseId": "<id:cff263d5b9e6>",
+              "responseTimestamp": "<redacted>",
+              "modelState": {
+                "value": "<redacted>"
+              },
+              "contentReferences": [
+                {
+                  "kind": "reference",
+                  "reference": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              ],
+              "codeCitations": [],
+              "timeSpentWaiting": "<redacted>",
+              "completionTokens": "<redacted>",
+              "promptTokens": "<redacted>",
+              "outputBuffer": "<redacted>",
+              "promptTokenDetails": [
+                {
+                  "category": "<redacted>",
+                  "label": "<redacted>",
+                  "percentageOfPrompt": "<redacted>"
+                },
+                {
+                  "category": "<redacted>",
+                  "label": "<redacted>",
+                  "percentageOfPrompt": "<redacted>"
+                },
+                {
+                  "category": "<redacted>",
+                  "label": "<redacted>",
+                  "percentageOfPrompt": "<redacted>"
+                },
+                {
+                  "category": "<redacted>",
+                  "label": "<redacted>",
+                  "percentageOfPrompt": "<redacted>"
+                },
+                {
+                  "category": "<redacted>",
+                  "label": "<redacted>",
+                  "percentageOfPrompt": "<redacted>"
+                }
+              ],
+              "copilotCredits": "<redacted>",
+              "modeInfo": {
+                "kind": "agent",
+                "isBuiltin": "<redacted>",
+                "telemetryModeId": "<id:e081207224e6>",
+                "telemetryModeName": "<redacted>",
+                "permissionLevel": "<redacted>"
+              },
+              "editedFileEvents": [
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                },
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                },
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                },
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                },
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                },
+                {
+                  "uri": {
+                    "$mid": "<redacted>",
+                    "fsPath": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  },
+                  "eventKind": "<redacted>"
+                }
+              ],
+              "response": [
+                {
+                  "kind": "mcpServersStarting",
+                  "didStartServerIds": []
+                },
+                {
+                  "value": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "baseUri": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                },
+                {
+                  "kind": "thinking",
+                  "value": [],
+                  "id": "<id:49b71fccb51e>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": "<redacted>",
+                  "id": "<id:5aca110e087a>",
+                  "metadata": {
+                    "vscodeReasoningDone": "<redacted>",
+                    "stopReason": "<redacted>"
+                  }
+                },
+                {
+                  "value": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "baseUri": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                },
+                {
+                  "kind": "toolInvocationSerialized",
+                  "invocationMessage": {
+                    "value": "<redacted>",
+                    "isTrusted": "<redacted>",
+                    "supportThemeIcons": "<redacted>",
+                    "supportHtml": "<redacted>",
+                    "supportAlertSyntax": "<redacted>"
+                  },
+                  "isConfirmed": {
+                    "type": 1
+                  },
+                  "isComplete": true,
+                  "source": {
+                    "type": "internal",
+                    "label": "<redacted>"
+                  },
+                  "toolSpecificData": {
+                    "kind": "terminal",
+                    "terminalToolSessionId": "<id:1c8aafd9d1e1>",
+                    "terminalCommandId": "<id:bb8133b3bc71>",
+                    "commandLine": {
+                      "original": "<redacted>",
+                      "toolEdited": "<redacted>",
+                      "forDisplay": "<redacted>",
+                      "isSandboxWrapped": "<redacted>"
+                    },
+                    "cwd": {
+                      "$mid": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>"
+                    },
+                    "language": "<redacted>",
+                    "isBackground": "<redacted>",
+                    "requestUnsandboxedExecution": "<redacted>",
+                    "requestAllowNetwork": "<redacted>",
+                    "autoApproveInfo": {
+                      "value": "<redacted>",
+                      "isTrusted": "<redacted>",
+                      "supportThemeIcons": "<redacted>",
+                      "supportHtml": "<redacted>",
+                      "supportAlertSyntax": "<redacted>"
+                    },
+                    "confirmation": {
+                      "commandLine": "<redacted>"
+                    },
+                    "presentationOverrides": {
+                      "commandLine": "<redacted>"
+                    },
+                    "terminalCommandUri": {
+                      "$mid": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>",
+                      "query": "<redacted>"
+                    },
+                    "terminalCommandState": {
+                      "exitCode": "<redacted>",
+                      "timestamp": "<timestamp>",
+                      "duration": "<redacted>"
+                    },
+                    "terminalCommandOutput": {
+                      "text": "<redacted>",
+                      "lineCount": "<redacted>"
+                    },
+                    "terminalTheme": {
+                      "background": "<redacted>",
+                      "foreground": "<redacted>"
+                    }
+                  },
+                  "toolCallId": "<id:65b4f0639452>",
+                  "toolId": "<id:47ef0d0b596a>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": [],
+                  "id": "<id:4d1588679c87>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": "<redacted>",
+                  "id": "<id:5aca110e087a>",
+                  "metadata": {
+                    "vscodeReasoningDone": "<redacted>",
+                    "stopReason": "<redacted>"
+                  }
+                },
+                {
+                  "value": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "baseUri": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                },
+                {
+                  "kind": "toolInvocationSerialized",
+                  "invocationMessage": {
+                    "value": "<redacted>",
+                    "supportThemeIcons": "<redacted>",
+                    "supportHtml": "<redacted>",
+                    "supportAlertSyntax": "<redacted>",
+                    "uris": {
+                      "<id:448298172858>": {
+                        "$mid": "<redacted>",
+                        "path": "<redacted>",
+                        "scheme": "<redacted>"
+                      }
+                    }
+                  },
+                  "pastTenseMessage": {
+                    "value": "<redacted>",
+                    "supportThemeIcons": "<redacted>",
+                    "supportHtml": "<redacted>",
+                    "supportAlertSyntax": "<redacted>",
+                    "uris": {
+                      "<id:448298172858>": {
+                        "$mid": "<redacted>",
+                        "path": "<redacted>",
+                        "scheme": "<redacted>"
+                      }
+                    }
+                  },
+                  "isConfirmed": {
+                    "type": 1
+                  },
+                  "isComplete": true,
+                  "source": {
+                    "type": "internal",
+                    "label": "<redacted>"
+                  },
+                  "toolCallId": "<id:c2f02b6f993c>",
+                  "toolId": "<id:cb31e9fbfb69>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": [],
+                  "id": "<id:a3dccb2c7747>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": "<redacted>",
+                  "id": "<id:5aca110e087a>",
+                  "metadata": {
+                    "vscodeReasoningDone": "<redacted>",
+                    "stopReason": "<redacted>"
+                  }
+                },
+                {
+                  "value": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "baseUri": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                },
+                {
+                  "kind": "toolInvocationSerialized",
+                  "invocationMessage": {
+                    "value": "<redacted>",
+                    "isTrusted": "<redacted>",
+                    "supportThemeIcons": "<redacted>",
+                    "supportHtml": "<redacted>",
+                    "supportAlertSyntax": "<redacted>"
+                  },
+                  "isConfirmed": {
+                    "type": 4
+                  },
+                  "isComplete": true,
+                  "source": {
+                    "type": "internal",
+                    "label": "<redacted>"
+                  },
+                  "toolSpecificData": {
+                    "kind": "terminal",
+                    "terminalToolSessionId": "<id:af581f7c0d7e>",
+                    "terminalCommandId": "<id:c5af2aa56f61>",
+                    "commandLine": {
+                      "original": "<redacted>",
+                      "toolEdited": "<redacted>",
+                      "forDisplay": "<redacted>",
+                      "isSandboxWrapped": "<redacted>"
+                    },
+                    "cwd": {
+                      "$mid": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>"
+                    },
+                    "language": "<redacted>",
+                    "isBackground": "<redacted>",
+                    "requestUnsandboxedExecution": "<redacted>",
+                    "requestUnsandboxedExecutionReason": "<redacted>",
+                    "requestAllowNetwork": "<redacted>",
+                    "confirmation": {
+                      "commandLine": "<redacted>"
+                    },
+                    "presentationOverrides": {
+                      "commandLine": "<redacted>"
+                    },
+                    "terminalCommandState": {
+                      "exitCode": "<redacted>",
+                      "timestamp": "<timestamp>",
+                      "duration": "<redacted>"
+                    },
+                    "terminalCommandUri": {
+                      "$mid": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>",
+                      "query": "<redacted>"
+                    },
+                    "terminalCommandOutput": {
+                      "text": "<redacted>",
+                      "lineCount": "<redacted>"
+                    },
+                    "terminalTheme": {
+                      "background": "<redacted>",
+                      "foreground": "<redacted>"
+                    }
+                  },
+                  "toolCallId": "<id:c1bc8811c34f>",
+                  "toolId": "<id:47ef0d0b596a>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": [],
+                  "id": "<id:077348a0df5b>"
+                },
+                {
+                  "kind": "thinking",
+                  "value": "<redacted>",
+                  "id": "<id:5aca110e087a>",
+                  "metadata": {
+                    "vscodeReasoningDone": "<redacted>",
+                    "stopReason": "<redacted>"
+                  }
+                },
+                {
+                  "value": "<redacted>",
+                  "supportThemeIcons": "<redacted>",
+                  "supportHtml": "<redacted>",
+                  "baseUri": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                },
+                {
+                  "kind": "toolInvocationSerialized",
+                  "invocationMessage": {
+                    "value": "<redacted>",
+                    "isTrusted": "<redacted>",
+                    "supportThemeIcons": "<redacted>",
+                    "supportHtml": "<redacted>",
+                    "supportAlertSyntax": "<redacted>"
+                  },
+                  "isComplete": true,
+                  "source": {
+                    "type": "internal",
+                    "label": "<redacted>"
+                  },
+                  "toolSpecificData": {
+                    "kind": "terminal",
+                    "terminalToolSessionId": "<id:6d3770ec105a>",
+                    "terminalCommandId": "<id:6004fc7d7db5>",
+                    "commandLine": {
+                      "original": "<redacted>",
+                      "toolEdited": "<redacted>",
+                      "forDisplay": "<redacted>",
+                      "isSandboxWrapped": "<redacted>"
+                    },
+                    "cwd": {
+                      "$mid": "<redacted>",
+                      "external": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>"
+                    },
+                    "language": "<redacted>",
+                    "isBackground": "<redacted>",
+                    "requestUnsandboxedExecution": "<redacted>",
+                    "requestAllowNetwork": "<redacted>",
+                    "requestAllowNetworkReason": "<redacted>",
+                    "confirmation": {
+                      "commandLine": "<redacted>"
+                    },
+                    "presentationOverrides": {
+                      "commandLine": "<redacted>"
+                    }
+                  },
+                  "toolCallId": "<id:1df18778f993>",
+                  "toolId": "<id:47ef0d0b596a>"
+                }
+              ],
+              "message": {
+                "text": "<redacted>",
+                "parts": [
+                  {
+                    "range": {
+                      "start": "<redacted>",
+                      "endExclusive": "<redacted>"
+                    },
+                    "editorRange": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    },
+                    "text": "<redacted>",
+                    "kind": "text"
+                  }
+                ]
+              },
+              "variableData": {
+                "variables": [
+                  {
+                    "value": "<redacted>",
+                    "name": "<redacted>",
+                    "modelDescription": "<redacted>",
+                    "id": "<id:d8e54635f861>",
+                    "kind": "workspace"
+                  },
+                  {
+                    "id": "<id:d36a847a9e90>",
+                    "name": "<redacted>",
+                    "value": {
+                      "$mid": "<redacted>",
+                      "external": "<redacted>",
+                      "path": "<redacted>",
+                      "scheme": "<redacted>"
+                    },
+                    "kind": "promptFile",
+                    "modelDescription": "<redacted>",
+                    "isRoot": "<redacted>",
+                    "automaticallyAdded": "<redacted>"
+                  }
+                ]
+              }
+            }
+          ],
+          "_capture": {
+            "sourceLine": 44
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,415 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:434b4d34d589>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "native-journal",
+      "records": []
+    },
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:68b426244b7d>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:434b4d34d589>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:7e7b67497cee>",
+                  "name": "<redacted>",
+                  "args": {
+                    "files": [
+                      "<redacted>"
+                    ]
+                  }
+                },
+                {
+                  "id": "<id:b1e5caffcfeb>",
+                  "name": "<redacted>",
+                  "args": {
+                    "filePaths": [
+                      "<redacted>",
+                      "<redacted>"
+                    ]
+                  }
+                },
+                {
+                  "id": "<id:bf83f2af13ae>",
+                  "name": "<redacted>",
+                  "args": {
+                    "directory": "<redacted>",
+                    "action": "<redacted>"
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:05c74eae1d58>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f91935f69bbb>",
+          "_capture": {
+            "sourceLine": 198,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:68b426244b7d>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:d384cb19a1ba>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b9d62b62f3d9>",
+          "_capture": {
+            "sourceLine": 199,
+            "offsetMs": 155
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:9020cc19c323>",
+            "permissionRequest": {
+              "kind": "custom-tool",
+              "toolCallId": "<id:f380e3d72300>",
+              "toolName": "problems",
+              "toolDescription": "<redacted>",
+              "args": {
+                "filePaths": [
+                  "<redacted>",
+                  "<redacted>"
+                ]
+              }
+            },
+            "promptRequest": {
+              "kind": "custom-tool",
+              "toolName": "problems",
+              "toolDescription": "<redacted>",
+              "args": {
+                "filePaths": [
+                  "<redacted>",
+                  "<redacted>"
+                ]
+              },
+              "toolCallId": "<id:f380e3d72300>"
+            }
+          },
+          "id": "<id:61c84e043b46>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:7aca65bf2d79>",
+          "_capture": {
+            "sourceLine": 200,
+            "offsetMs": 157
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:1cd30effcb5c>",
+            "permissionRequest": {
+              "kind": "custom-tool",
+              "toolCallId": "<id:f87f2491b390>",
+              "toolName": "runTests",
+              "toolDescription": "<redacted>",
+              "args": {
+                "files": [
+                  "<redacted>"
+                ]
+              }
+            },
+            "promptRequest": {
+              "kind": "custom-tool",
+              "toolName": "runTests",
+              "toolDescription": "<redacted>",
+              "args": {
+                "files": [
+                  "<redacted>"
+                ]
+              },
+              "toolCallId": "<id:f87f2491b390>"
+            }
+          },
+          "id": "<id:bbbd3d06bcaf>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:167fdb8a8c67>",
+          "_capture": {
+            "sourceLine": 201,
+            "offsetMs": 157
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:37598fe96913>",
+            "hookType": "preMcpToolCall",
+            "input": {
+              "toolCallId": "<id:72c3d65f75c8>",
+              "serverName": "<redacted>",
+              "toolName": "git_log_or_diff",
+              "arguments": {
+                "directory": "<redacted>",
+                "action": "<redacted>"
+              },
+              "sessionId": "<id:434b4d34d589>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:d3215dd870c6>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:8893b2265895>",
+          "_capture": {
+            "sourceLine": 202,
+            "offsetMs": 157
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:37598fe96913>",
+            "hookType": "preMcpToolCall",
+            "success": true
+          },
+          "id": "<id:eac8224e8399>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:0bf1b8c61620>",
+          "_capture": {
+            "sourceLine": 203,
+            "offsetMs": 158
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:9020cc19c323>",
+            "toolCallId": "<id:f380e3d72300>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:4c22eb940f44>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:7870cacfa999>",
+          "_capture": {
+            "sourceLine": 204,
+            "offsetMs": 184
+          }
+        },
+        {
+          "type": "external_tool.requested",
+          "data": {
+            "requestId": "<id:4ef5cc4c4004>",
+            "sessionId": "<id:434b4d34d589>",
+            "toolCallId": "<id:f380e3d72300>",
+            "toolName": "problems",
+            "arguments": {
+              "filePaths": [
+                "<redacted>",
+                "<redacted>"
+              ]
+            },
+            "workingDirectory": "<redacted>"
+          },
+          "id": "<id:62e46122a4c8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b3b0374cffdb>",
+          "_capture": {
+            "sourceLine": 205,
+            "offsetMs": 185
+          }
+        },
+        {
+          "type": "external_tool.completed",
+          "data": {
+            "requestId": "<id:4ef5cc4c4004>"
+          },
+          "id": "<id:59c0331cb4c2>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:a11217623a19>",
+          "_capture": {
+            "sourceLine": 206,
+            "offsetMs": 237
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:1cd30effcb5c>",
+            "toolCallId": "<id:f87f2491b390>",
+            "result": {
+              "kind": "approved"
+            }
+          },
+          "id": "<id:b757cb1cdf17>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b341739e3411>",
+          "_capture": {
+            "sourceLine": 207,
+            "offsetMs": 17141
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        }
+      ]
+    }
+  ]
+}

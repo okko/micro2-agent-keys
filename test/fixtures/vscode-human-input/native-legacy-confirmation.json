@@ -1,0 +1,348 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:0c1b4fd5826e>",
+  "label": "resolved",
+  "sources": [
+    {
+      "source": "native-transcript",
+      "records": []
+    },
+    {
+      "source": "native-journal",
+      "records": [
+        {
+          "kind": 2,
+          "k": [
+            "requests",
+            1,
+            "response"
+          ],
+          "v": [
+            {
+              "kind": "toolInvocationSerialized",
+              "presentation": "<redacted>",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:d7ae1906e1c8>": {
+                    "$mid": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>"
+                  }
+                }
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:0432e698d7d6>",
+              "toolId": "<id:060b9babd234>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "id": "<id:29702a2ff6de>",
+              "kind": "undoStop"
+            },
+            {
+              "kind": "codeblockUri",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "isEdit": "<redacted>"
+            },
+            {
+              "kind": "textEditGroup",
+              "uri": {
+                "$mid": "<redacted>",
+                "fsPath": "<redacted>",
+                "external": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              },
+              "edits": [
+                [
+                  {
+                    "text": "<redacted>",
+                    "range": {
+                      "startLineNumber": "<redacted>",
+                      "startColumn": "<redacted>",
+                      "endLineNumber": "<redacted>",
+                      "endColumn": "<redacted>"
+                    }
+                  }
+                ],
+                []
+              ],
+              "done": "<redacted>"
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "supportAlertSyntax": "<redacted>",
+              "uris": {}
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:40d60bc94e30>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolSpecificData": {
+                "kind": "terminal",
+                "terminalToolSessionId": "<id:742eae005ea4>",
+                "terminalCommandId": "<id:d4dfcf749da3>",
+                "commandLine": {
+                  "original": "<redacted>",
+                  "toolEdited": "<redacted>",
+                  "forDisplay": "<redacted>",
+                  "isSandboxWrapped": "<redacted>"
+                },
+                "cwd": {
+                  "$mid": "<redacted>",
+                  "external": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>"
+                },
+                "language": "<redacted>",
+                "isBackground": "<redacted>",
+                "requestUnsandboxedExecution": "<redacted>",
+                "requestAllowNetwork": "<redacted>",
+                "confirmation": {
+                  "commandLine": "<redacted>"
+                },
+                "presentationOverrides": {
+                  "commandLine": "<redacted>"
+                },
+                "terminalCommandState": {
+                  "exitCode": "<redacted>",
+                  "timestamp": "<timestamp>",
+                  "duration": "<redacted>"
+                },
+                "terminalCommandUri": {
+                  "$mid": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>",
+                  "query": "<redacted>"
+                },
+                "terminalCommandOutput": {
+                  "text": "<redacted>",
+                  "lineCount": "<redacted>"
+                },
+                "terminalTheme": {
+                  "background": "<redacted>",
+                  "foreground": "<redacted>"
+                }
+              },
+              "toolCallId": "<id:4517edb2031d>",
+              "toolId": "<id:47ef0d0b596a>",
+              "generatedTitle": "<redacted>"
+            },
+            {
+              "kind": "elicitationSerialized",
+              "title": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "message": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "state": "accepted",
+              "subtitle": "<redacted>",
+              "isHidden": "<redacted>"
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "external",
+                "label": "<redacted>"
+              },
+              "toolSpecificData": {
+                "kind": "terminal",
+                "terminalToolSessionId": "<id:742eae005ea4>",
+                "terminalCommandId": "<id:9f11b786e9d5>",
+                "commandLine": {
+                  "original": "<redacted>",
+                  "toolEdited": "<redacted>",
+                  "forDisplay": "<redacted>",
+                  "isSandboxWrapped": "<redacted>"
+                },
+                "cwd": {
+                  "$mid": "<redacted>",
+                  "external": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>"
+                },
+                "language": "<redacted>",
+                "isBackground": "<redacted>",
+                "requestUnsandboxedExecution": "<redacted>",
+                "requestUnsandboxedExecutionReason": "<redacted>",
+                "confirmation": {
+                  "commandLine": "<redacted>"
+                },
+                "presentationOverrides": {
+                  "commandLine": "<redacted>"
+                },
+                "terminalCommandState": {
+                  "exitCode": "<redacted>",
+                  "timestamp": "<timestamp>",
+                  "duration": "<redacted>"
+                },
+                "terminalCommandUri": {
+                  "$mid": "<redacted>",
+                  "path": "<redacted>",
+                  "scheme": "<redacted>",
+                  "query": "<redacted>"
+                },
+                "terminalCommandOutput": {
+                  "text": "<redacted>",
+                  "lineCount": "<redacted>"
+                },
+                "terminalTheme": {
+                  "background": "<redacted>",
+                  "foreground": "<redacted>"
+                }
+              },
+              "toolCallId": "<id:bf50b54a6efe>",
+              "toolId": "<id:a413ded86abd>"
+            },
+            {
+              "kind": "thinking",
+              "value": [],
+              "id": "<id:f5c230374100>"
+            },
+            {
+              "kind": "thinking",
+              "value": "<redacted>",
+              "id": "<id:5aca110e087a>",
+              "metadata": {
+                "vscodeReasoningDone": "<redacted>",
+                "stopReason": "<redacted>"
+              }
+            },
+            {
+              "value": "<redacted>",
+              "supportThemeIcons": "<redacted>",
+              "supportHtml": "<redacted>",
+              "baseUri": {
+                "$mid": "<redacted>",
+                "path": "<redacted>",
+                "scheme": "<redacted>"
+              }
+            },
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": "<redacted>",
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:6ab64502c633>",
+              "toolId": "<id:47ef0d0b596a>"
+            },
+            {
+              "kind": "confirmation",
+              "title": "<redacted>",
+              "message": {
+                "value": "<redacted>",
+                "isTrusted": {
+                  "enabledCommands": [
+                    "<redacted>"
+                  ]
+                },
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>",
+                "uris": {
+                  "<id:fc4320d53ed3>": {
+                    "$mid": "<redacted>",
+                    "external": "<redacted>",
+                    "path": "<redacted>",
+                    "scheme": "<redacted>",
+                    "query": [
+                      "<redacted>"
+                    ]
+                  }
+                }
+              },
+              "data": {
+                "copilotRequestedRoundLimit": "<redacted>"
+              },
+              "buttons": [
+                "<redacted>",
+                "<redacted>"
+              ],
+              "isUsed": true
+            }
+          ],
+          "i": "<redacted>",
+          "_capture": {
+            "sourceLine": 235
+          }
+        }
+      ]
+    }
+  ]
+}
