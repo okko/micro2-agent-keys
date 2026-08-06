@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  NativeChatProjection,
   VSCodeIntegration,
   buildSessionUrl,
   emptyRun,
@@ -80,7 +81,13 @@ function createNativeSession(nativeRoot, id, cwd) {
         kind: 0,
         v: {
           sessionId: id,
-          requests: [{ result: { timings: {} }, modelState: { completedAt: 1785616800000 } }],
+          requests: [
+            {
+              requestId: 'old-request',
+              result: { timings: {} },
+              modelState: { value: 1, completedAt: 1785616800000 },
+            },
+          ],
         },
       }),
       '',
@@ -111,6 +118,143 @@ function append(file, ...events) {
 function event(type, data = {}, timestamp = '2026-08-01T10:00:00.000Z') {
   return { type, data, timestamp };
 }
+
+test('native chat projection correlates completion with the latest request', () => {
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: {
+      requests: [
+        { requestId: 'older', response: [], modelState: { value: 0 } },
+        {
+          requestId: 'latest',
+          response: [{ kind: 'questionCarousel', resolveId: 'questions', isUsed: false }],
+          modelState: { value: 4 },
+        },
+      ],
+    },
+  });
+
+  projection.apply({ kind: 1, k: ['requests', 0, 'result'], v: {} });
+  let snapshot = projection.snapshot();
+  assert.equal(snapshot.requestId, 'latest');
+  assert.equal(snapshot.active, true);
+  assert.equal(snapshot.busy, false);
+  assert.equal(snapshot.terminal, null);
+  assert.deepEqual([...snapshot.blockers.keys()], ['latest:questionCarousel:questions']);
+
+  projection.apply({ kind: 1, k: ['requests', 1, 'response', 0, 'isUsed'], v: true });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.active, true);
+  assert.equal(snapshot.busy, true);
+  assert.equal(snapshot.blockers.size, 0);
+
+  projection.apply({ kind: 1, k: ['requests', 1, 'modelState'], v: { value: 1, completedAt: 123 } });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.active, false);
+  assert.equal(snapshot.busy, false);
+  assert.equal(snapshot.terminal, 'complete');
+});
+
+test('native chat projection applies request and response array mutations', () => {
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: { requests: [{ requestId: 'first', response: [], modelState: { value: 1, completedAt: 1 } }] },
+  });
+  projection.apply({
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'second', response: [{ kind: 'planReview', resolveId: 'plan' }], modelState: { value: 4 } }],
+  });
+  assert.equal(projection.snapshot().requestId, 'second');
+  assert.deepEqual([...projection.snapshot().blockers.keys()], ['second:planReview:plan']);
+
+  projection.apply({
+    kind: 2,
+    k: ['requests', 1, 'response'],
+    i: 0,
+    v: [{ kind: 'elicitation2', state: 'pending' }],
+  });
+  assert.deepEqual([...projection.snapshot().blockers.keys()], ['second:elicitation2:position-0']);
+
+  projection.apply({ kind: 2, k: ['requests'], i: 1 });
+  assert.equal(projection.snapshot().requestId, 'first');
+  assert.equal(projection.snapshot().terminal, 'complete');
+
+  projection.apply({ kind: 3, k: ['requests', 0, 'modelState'] });
+  assert.equal(projection.snapshot().active, true);
+  assert.equal(projection.snapshot().terminal, null);
+
+  projection.apply({
+    kind: 1,
+    k: ['requests', 0],
+    v: { requestId: 'replacement', response: [], modelState: { value: 2, completedAt: 2 } },
+  });
+  assert.equal(projection.snapshot().requestId, 'replacement');
+  assert.equal(projection.snapshot().terminal, 'cancelled');
+
+  projection.apply({
+    kind: 0,
+    v: { requests: [{ requestId: 'reset', response: [], modelState: { value: 3, completedAt: 3 } }] },
+  });
+  assert.equal(projection.snapshot().requestId, 'reset');
+  assert.equal(projection.snapshot().terminal, 'failed');
+});
+
+test('native chat projection gives parallel blockers stable compound identities', () => {
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: {
+      requests: [
+        {
+          requestId: 'active-request',
+          modelState: { value: 4 },
+          response: [
+            { kind: 'toolInvocation', toolCallId: 'pre-tool', state: { type: 1 } },
+            { kind: 'toolInvocation', toolCallId: 'post-tool', state: { type: 3 } },
+            { kind: 'toolInvocation', toolCallId: 'auth-tool', state: { type: 6 } },
+            { kind: 'confirmation' },
+            { kind: 'questionCarousel', resolveId: 'questions' },
+            { kind: 'planReview', resolveId: 'plan' },
+            { kind: 'elicitation2', state: 'pending' },
+          ],
+        },
+      ],
+      pendingRequests: [{ request: { requestId: 'queued-request' } }],
+    },
+  });
+
+  let snapshot = projection.snapshot();
+  assert.equal(snapshot.requestId, 'active-request');
+  assert.equal(snapshot.active, true);
+  assert.equal(snapshot.busy, false);
+  assert.deepEqual(
+    [...snapshot.blockers.values()].map(({ sourceId, kind }) => [sourceId, kind]),
+    [
+      ['pre-tool', 'tool-confirmation'],
+      ['post-tool', 'tool-result-confirmation'],
+      ['auth-tool', 'tool-authentication'],
+      ['position-3', 'confirmation'],
+      ['questions', 'question'],
+      ['plan', 'plan-review'],
+      ['position-6', 'elicitation'],
+    ]
+  );
+
+  projection.apply({ kind: 1, k: ['requests', 0, 'response', 4, 'isUsed'], v: true });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.blockers.has('active-request:questionCarousel:questions'), false);
+  assert.equal(snapshot.blockers.has('active-request:planReview:plan'), true);
+
+  projection.apply({ kind: 1, k: ['requests', 0, 'response', 5, 'data'], v: { rejected: false } });
+  projection.apply({ kind: 1, k: ['requests', 0, 'response', 5, 'isUsed'], v: true });
+  projection.apply({ kind: 1, k: ['requests', 0, 'response', 6, 'state'], v: 'accepted' });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.blockers.has('active-request:planReview:plan'), false);
+  assert.equal(snapshot.blockers.has('active-request:elicitation2:position-6'), false);
+});
 
 test('parses quoted workspace metadata', () => {
   assert.deepEqual(
@@ -232,9 +376,15 @@ test('native journal tracks permission waits before transcript execution', async
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
 
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'native-request', response: [], modelState: { value: 0 } }],
+  });
   const pending = {
     kind: 2,
     k: ['requests', 1, 'response'],
+    i: 0,
     v: [
       {
         toolCallId: 'permissioned-tool',
@@ -276,9 +426,15 @@ test('native journal tracks permission waits before transcript execution', async
   await integration.scan();
   assert.equal(integration.slots[0].state, 'input');
 
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'external-request', response: [], modelState: { value: 0 } }],
+  });
   const externalPending = {
     kind: 2,
     k: ['requests', 2, 'response'],
+    i: 0,
     v: [
       { toolCallId: 'external-a', isComplete: true },
       { toolCallId: 'external-b', isComplete: true },
@@ -307,6 +463,84 @@ test('native journal tracks permission waits before transcript execution', async
   });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
+});
+
+test('native journal replacement rebuilds the latest request projection', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [
+      {
+        requestId: 'waiting-request',
+        response: [{ kind: 'questionCarousel', resolveId: 'questions' }],
+        modelState: { value: 4 },
+      },
+    ],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  fs.rmSync(journalPath);
+  fs.writeFileSync(
+    journalPath,
+    `${JSON.stringify({
+      kind: 0,
+      v: {
+        sessionId: IDS[0],
+        requests: [{ requestId: 'replacement-request', response: [], modelState: { value: 0 } }],
+      },
+    })}\n`
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.requestId, 'replacement-request');
+  assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.blockers.size, 0);
+});
+
+test('native journal ignores an old completion until the prompted request is inserted', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'new-turn' }));
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 0, 'modelState'],
+    v: { value: 1, completedAt: 1785616801000 },
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'new-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 1, 'modelState'],
+    v: { value: 1, completedAt: 1785616802000 },
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
 });
 
 test('native transcript completion clears a missed question post-hook', () => {
@@ -524,6 +758,11 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
 
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'native-turn-request', response: [], modelState: { value: 0 } }],
+  });
   append(journalPath, { kind: 1, k: ['requests', 1, 'result'], v: { timings: {} } });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'done');

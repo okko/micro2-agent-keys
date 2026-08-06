@@ -205,22 +205,33 @@ export function updateCompatibility(
   }
 }
 
+interface NativeModelState {
+  value?: unknown;
+  completedAt?: number | string;
+}
+
 interface NativeRequest {
+  requestId?: unknown;
   result?: unknown;
-  modelState?: { completedAt?: number | string };
+  modelState?: NativeModelState;
   response?: unknown;
 }
 
-interface NativePatch {
+export interface NativePatch {
   kind?: number;
-  k?: unknown[];
+  k?: (string | number)[];
   v?: unknown;
+  i?: number;
 }
 
-interface NativeToolInvocation {
+interface NativeResponsePart {
+  kind?: unknown;
   toolCallId?: unknown;
+  resolveId?: unknown;
   isConfirmed?: unknown;
   isComplete?: unknown;
+  isUsed?: unknown;
+  state?: unknown;
   toolSpecificData?: {
     requestUnsandboxedExecution?: unknown;
     requestAllowNetwork?: unknown;
@@ -228,71 +239,198 @@ interface NativeToolInvocation {
   };
 }
 
-function asNativeRequests(value: unknown): NativeRequest[] | null {
-  return Array.isArray(value) ? (value as NativeRequest[]) : null;
+interface NativeChatState {
+  requests?: NativeRequest[];
 }
 
-function isNativeCompletionPatch(patch: NativePatch): boolean {
-  const key = patch.k;
-  if (
-    patch.kind === 1 &&
-    Array.isArray(key) &&
-    key[0] === 'requests' &&
-    Number.isInteger(key[1]) &&
-    (key[2] === 'result' || (key[2] === 'modelState' && (patch.v as { completedAt?: unknown } | undefined)?.completedAt))
-  ) return true;
+export type HumanInputBlockerKind =
+  | 'tool-confirmation'
+  | 'tool-result-confirmation'
+  | 'tool-authentication'
+  | 'confirmation'
+  | 'question'
+  | 'plan-review'
+  | 'elicitation';
 
-  const requests =
-    patch.kind === 0
-      ? asNativeRequests((patch.v as { requests?: unknown } | undefined)?.requests)
-      : patch.kind === 2 && key?.length === 1 && key[0] === 'requests'
-        ? asNativeRequests(patch.v)
-        : null;
-  const latest = requests?.at(-1);
-  return Boolean(latest && (latest.result || latest.modelState?.completedAt));
+export interface HumanInputBlocker {
+  id: string;
+  requestId: string;
+  responsePartKind: string;
+  sourceId: string;
+  kind: HumanInputBlockerKind;
 }
 
-function nativeCompletionTimestamp(patch: NativePatch): number | string | null {
-  const key = patch.k;
-  if (patch.kind === 1 && key?.[2] === 'modelState') {
-    return (patch.v as { completedAt?: number | string } | undefined)?.completedAt ?? null;
+export interface ChatExecutionSnapshot {
+  requestId: string | null;
+  active: boolean;
+  busy: boolean;
+  blockers: Map<string, HumanInputBlocker>;
+  terminal: 'complete' | 'cancelled' | 'failed' | null;
+}
+
+function objectAtPath(root: unknown, path: (string | number)[]): Record<string | number, unknown> | null {
+  let current = root;
+  for (const segment of path) {
+    if (!current || typeof current !== 'object') return null;
+    current = (current as Record<string | number, unknown>)[segment];
   }
-  const requests: unknown =
-    patch.kind === 0 ? (patch.v as { requests?: unknown } | undefined)?.requests : key?.length === 1 ? patch.v : null;
-  return asNativeRequests(requests)?.at(-1)?.modelState?.completedAt ?? null;
+  return current && typeof current === 'object'
+    ? current as Record<string | number, unknown>
+    : null;
 }
 
-function nativePermissionEvents(patch: NativePatch, pendingPermissionIds: Set<string> = new Set()): VSCodeEvent[] {
-  const key = patch.k;
-  const response =
-    Array.isArray(key) && key[0] === 'requests' && Number.isInteger(key[1]) && key[2] === 'response'
-      ? patch.v
-      : patch.kind === 0
-        ? asNativeRequests((patch.v as { requests?: unknown } | undefined)?.requests)?.at(-1)?.response
-        : patch.kind === 2 && key?.length === 1 && key[0] === 'requests'
-          ? asNativeRequests(patch.v)?.at(-1)?.response
-          : null;
-  if (!Array.isArray(response)) return [];
-
-  const events: VSCodeEvent[] = [];
-  for (const value of response as NativeToolInvocation[]) {
-    if (
-      typeof value?.toolCallId !== 'string' ||
-      (!requestsPermission(value.toolSpecificData) && !pendingPermissionIds.has(value.toolCallId))
-    ) continue;
-    const waiting = value.isConfirmed == null && value.toolSpecificData?.terminalCommandState == null;
-    events.push({
-      type: waiting ? 'permission.requested' : 'permission.completed',
-      data: { requestId: value.toolCallId },
-    });
+function modelStateTerminal(request: NativeRequest): ChatExecutionSnapshot['terminal'] {
+  const state = request.modelState?.value;
+  if (state === 1) return 'complete';
+  if (state === 2) return 'cancelled';
+  if (state === 3) return 'failed';
+  if (request.result !== undefined) {
+    const errorDetails = (request.result as { errorDetails?: { code?: unknown } } | null)?.errorDetails;
+    if (errorDetails?.code === 'canceled') return 'cancelled';
+    if (errorDetails) return 'failed';
+    return 'complete';
   }
-  return events;
+  return null;
+}
+
+function blockerIdentity(requestId: string, partKind: string, sourceId: string): string {
+  return `${requestId}:${partKind}:${sourceId}`;
+}
+
+function blockerForPart(
+  requestId: string,
+  part: NativeResponsePart,
+  index: number,
+  knownToolConfirmationIds: ReadonlySet<string>
+): HumanInputBlocker | null {
+  const partKind = typeof part.kind === 'string' ? part.kind : 'unknown';
+  const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : null;
+  const stateType = (part.state as { type?: unknown } | null)?.type;
+  let kind: HumanInputBlockerKind | null = null;
+  let sourceId = typeof part.resolveId === 'string' ? part.resolveId : `position-${index}`;
+
+  if (toolCallId) {
+    sourceId = toolCallId;
+    if (stateType === 1) kind = 'tool-confirmation';
+    else if (stateType === 3) kind = 'tool-result-confirmation';
+    else if (stateType === 6) kind = 'tool-authentication';
+    else if (
+      part.isConfirmed == null &&
+      part.toolSpecificData?.terminalCommandState == null &&
+      (knownToolConfirmationIds.has(toolCallId) || requestsPermission(part.toolSpecificData))
+    ) kind = 'tool-confirmation';
+  } else if (partKind === 'confirmation' && !part.isUsed) {
+    kind = 'confirmation';
+  } else if (partKind === 'questionCarousel' && !part.isUsed) {
+    kind = 'question';
+  } else if (partKind === 'planReview' && !part.isUsed) {
+    kind = 'plan-review';
+  } else if (partKind === 'elicitation2') {
+    const state = typeof part.state === 'string'
+      ? part.state
+      : (part.state as { value?: unknown } | null)?.value;
+    if (state === 'pending') kind = 'elicitation';
+  }
+
+  if (!kind) return null;
+  const id = blockerIdentity(requestId, partKind, sourceId);
+  return { id, requestId, responsePartKind: partKind, sourceId, kind };
+}
+
+export class NativeChatProjection {
+  private state: NativeChatState | null = null;
+
+  reset(): void {
+    this.state = null;
+  }
+
+  apply(patch: NativePatch): void {
+    if (patch.kind === 0) {
+      this.state = patch.v && typeof patch.v === 'object' ? patch.v as NativeChatState : null;
+      return;
+    }
+    if (!this.state || !Array.isArray(patch.k) || patch.k.length === 0) return;
+
+    const parent = objectAtPath(this.state, patch.k.slice(0, -1));
+    if (!parent) return;
+    const key = patch.k.at(-1) as string | number;
+    if (patch.kind === 1) {
+      parent[key] = patch.v;
+    } else if (patch.kind === 2) {
+      const current = Array.isArray(parent[key]) ? parent[key] as unknown[] : [];
+      if (Number.isInteger(patch.i) && (patch.i as number) >= 0) current.length = patch.i as number;
+      if (Array.isArray(patch.v)) current.push(...patch.v);
+      parent[key] = current;
+    } else if (patch.kind === 3) {
+      delete parent[key];
+    }
+  }
+
+  snapshot(knownToolConfirmationIds: ReadonlySet<string> = new Set()): ChatExecutionSnapshot {
+    const requests = Array.isArray(this.state?.requests) ? this.state.requests : [];
+    const latest = requests.at(-1);
+    const requestId = typeof latest?.requestId === 'string' ? latest.requestId : null;
+    const blockers = new Map<string, HumanInputBlocker>();
+    if (latest && requestId && Array.isArray(latest.response)) {
+      latest.response.forEach((part, index) => {
+        if (!part || typeof part !== 'object') return;
+        const blocker = blockerForPart(
+          requestId,
+          part as NativeResponsePart,
+          index,
+          knownToolConfirmationIds
+        );
+        if (blocker) blockers.set(blocker.id, blocker);
+      });
+    }
+    const terminal = latest && blockers.size === 0 ? modelStateTerminal(latest) : null;
+    const active = Boolean(latest) && terminal === null;
+    return {
+      requestId,
+      active,
+      busy: active && blockers.size === 0,
+      blockers,
+      terminal,
+    };
+  }
+
+  completionTimestamp(): number | string | null {
+    return this.state?.requests?.at(-1)?.modelState?.completedAt ?? null;
+  }
+
+  requestCount(): number {
+    return Array.isArray(this.state?.requests) ? this.state.requests.length : 0;
+  }
+}
+
+function nativeProjectionFromFile(journalPath: string | null): NativeChatProjection {
+  const projection = new NativeChatProjection();
+  if (!journalPath) return projection;
+  try {
+    for (const line of completeJsonlLines(fs.readFileSync(journalPath, 'utf8'))) {
+      if (!line.trim()) continue;
+      try {
+        projection.apply(JSON.parse(line) as NativePatch);
+      } catch {
+        // Ignore malformed records; the append reader reports them with their offsets.
+      }
+    }
+  } catch {
+    // The normal scan path reports inaccessible session files.
+  }
+  return projection;
+}
+
+function completeJsonlLines(contents: string): string[] {
+  const lines = contents.split('\n');
+  if (!contents.endsWith('\n')) lines.pop();
+  return lines;
 }
 
 function inspectCompatibility(eventsPath: string, source: SessionSource, journalPath: string | null = null): Compatibility {
   const compatibility = emptyCompatibility();
   const contents = fs.readFileSync(eventsPath, 'utf8');
-  for (const line of contents.split('\n')) {
+  for (const line of completeJsonlLines(contents)) {
     if (!line.trim()) continue;
     try {
       updateCompatibility(compatibility, JSON.parse(line) as VSCodeEvent, source);
@@ -301,11 +439,13 @@ function inspectCompatibility(eventsPath: string, source: SessionSource, journal
     }
   }
   if (source === SOURCE_NATIVE && journalPath) {
+    const projection = new NativeChatProjection();
     const journal = fs.readFileSync(journalPath, 'utf8');
-    for (const line of journal.split('\n')) {
+    for (const line of completeJsonlLines(journal)) {
       if (!line.trim()) continue;
       try {
-        if (isNativeCompletionPatch(JSON.parse(line) as NativePatch)) {
+        projection.apply(JSON.parse(line) as NativePatch);
+        if (projection.snapshot().terminal) {
           updateCompatibility(compatibility, { type: 'request.completed' }, source);
           break;
         }
@@ -511,6 +651,11 @@ interface Session {
   identity: string | null;
   journalOffset: number;
   journalIdentity: string | null;
+  nativeProjection: NativeChatProjection;
+  nativeSnapshot: ChatExecutionSnapshot;
+  journalBlockers: Map<string, string>;
+  nativeRequestCount: number;
+  pendingNativePrompts: number;
   run: RunState;
   compatibility: Compatibility;
   boundSlot: number | null;
@@ -642,6 +787,7 @@ export class VSCodeIntegration {
     }
     for (const raw of saved.sessions ?? []) {
       if (!SESSION_ID.test(raw.id) || !Number.isInteger(raw.offset) || raw.offset < 0) continue;
+      const nativeProjection = nativeProjectionFromFile(raw.journalPath ?? null);
       this.sessions.set(raw.id, {
         id: raw.id,
         cwd: raw.cwd ?? '',
@@ -656,6 +802,11 @@ export class VSCodeIntegration {
             ? raw.journalOffset
             : 0,
         journalIdentity: typeof raw.journalIdentity === 'string' ? raw.journalIdentity : null,
+        nativeProjection,
+        nativeSnapshot: nativeProjection.snapshot(),
+        journalBlockers: new Map(),
+        nativeRequestCount: nativeProjection.requestCount(),
+        pendingNativePrompts: 0,
         run: emptyRun(),
         compatibility: { ...emptyCompatibility(), ...raw.compatibility },
         boundSlot: null,
@@ -668,24 +819,33 @@ export class VSCodeIntegration {
       const raw = saved.slots?.[index];
       if (!raw || !SESSION_ID.test(raw.sessionId ?? '')) continue;
       const sessionId = raw.sessionId as string;
-      const session = this.sessions.get(sessionId) ?? {
-        id: sessionId,
-        cwd: raw.cwd ?? '',
-        eventsPath: raw.eventsPath ?? this.eventsPath(sessionId),
-        journalPath: raw.journalPath ?? null,
-        source: raw.source ?? SOURCE_COPILOT_CLI,
-        resource: raw.resource ?? `${RESOURCE_SCHEME}:/${sessionId}`,
-        offset: 0,
-        identity: null,
-        journalOffset: 0,
-        journalIdentity: null,
-        run: emptyRun(),
-        compatibility: emptyCompatibility(),
-        boundSlot: null,
-        missingScans: 0,
-        lastEventAt: null,
-        startupReplay: null,
-      };
+      let session = this.sessions.get(sessionId);
+      if (!session) {
+        const nativeProjection = nativeProjectionFromFile(raw.journalPath ?? null);
+        session = {
+          id: sessionId,
+          cwd: raw.cwd ?? '',
+          eventsPath: raw.eventsPath ?? this.eventsPath(sessionId),
+          journalPath: raw.journalPath ?? null,
+          source: raw.source ?? SOURCE_COPILOT_CLI,
+          resource: raw.resource ?? `${RESOURCE_SCHEME}:/${sessionId}`,
+          offset: 0,
+          identity: null,
+          journalOffset: 0,
+          journalIdentity: null,
+          nativeProjection,
+          nativeSnapshot: nativeProjection.snapshot(),
+          journalBlockers: new Map(),
+          nativeRequestCount: nativeProjection.requestCount(),
+          pendingNativePrompts: 0,
+          run: emptyRun(),
+          compatibility: emptyCompatibility(),
+          boundSlot: null,
+          missingScans: 0,
+          lastEventAt: null,
+          startupReplay: null,
+        };
+      }
       const eventOffset = session.identity ? session.offset : null;
       const eventIdentity = session.identity;
       const journalOffset = session.journalIdentity ? session.journalOffset : null;
@@ -897,6 +1057,7 @@ export class VSCodeIntegration {
         let session = this.sessions.get(id);
         if (!session) {
           const stat = fs.statSync(admitted.eventsPath);
+          const nativeProjection = nativeProjectionFromFile(admitted.journalPath ?? null);
           session = {
             id,
             cwd: admitted.cwd,
@@ -910,6 +1071,11 @@ export class VSCodeIntegration {
             journalIdentity: admitted.journalPath
               ? `${fs.statSync(admitted.journalPath).dev}:${fs.statSync(admitted.journalPath).ino}`
               : null,
+            nativeProjection,
+            nativeSnapshot: nativeProjection.snapshot(),
+            journalBlockers: new Map(),
+            nativeRequestCount: nativeProjection.requestCount(),
+            pendingNativePrompts: 0,
             run: emptyRun(),
             compatibility: inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath),
             boundSlot: null,
@@ -1020,7 +1186,12 @@ export class VSCodeIntegration {
       const bytes = Buffer.byteLength(line) + 1;
       if (line.trim()) {
         try {
-          await this.applyEvent(session, JSON.parse(line) as VSCodeEvent);
+          const replayOffset = session.startupReplay?.eventOffset;
+          await this.applyEvent(
+            session,
+            JSON.parse(line) as VSCodeEvent,
+            replayOffset !== null && replayOffset !== undefined && lineOffset < replayOffset
+          );
         } catch (err) {
           if (err instanceof SyntaxError) this.log(`Malformed VS Code event at ${session.id.slice(0, 8)}:${lineOffset}`);
           else throw err;
@@ -1039,10 +1210,16 @@ export class VSCodeIntegration {
     if (!session.journalPath) return;
     const stat = fs.statSync(session.journalPath);
     const identity = `${stat.dev}:${stat.ino}`;
-    if (session.journalIdentity && session.journalIdentity !== identity) session.journalOffset = 0;
+    const reset = Boolean(session.journalIdentity && session.journalIdentity !== identity) || stat.size < session.journalOffset;
+    if (reset) {
+      session.journalOffset = 0;
+      session.nativeProjection.reset();
+    }
     session.journalIdentity = identity;
-    if (stat.size < session.journalOffset) session.journalOffset = 0;
-    if (stat.size === session.journalOffset) return;
+    if (stat.size === session.journalOffset) {
+      if (reset) await this.reconcileNativeSnapshot(session, session.nativeProjection.snapshot());
+      return;
+    }
     const length = stat.size - session.journalOffset;
     const fd = fs.openSync(session.journalPath, 'r');
     const buffer = Buffer.alloc(length);
@@ -1059,16 +1236,7 @@ export class VSCodeIntegration {
       if (line.trim()) {
         try {
           const patch = JSON.parse(line) as NativePatch;
-          for (const event of nativePermissionEvents(patch, session.run.pendingPermissionIds)) {
-            await this.applyEvent(session, event);
-          }
-          if (isNativeCompletionPatch(patch)) {
-            const timestamp = nativeCompletionTimestamp(patch);
-            await this.applyEvent(session, {
-              type: 'request.completed',
-              timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString(),
-            });
-          }
+          session.nativeProjection.apply(patch);
         } catch (err) {
           if (err instanceof SyntaxError) this.log(`Malformed VS Code journal at ${session.id.slice(0, 8)}:${offset}`);
           else throw err;
@@ -1077,6 +1245,54 @@ export class VSCodeIntegration {
       offset += bytes;
     }
     session.journalOffset = offset;
+    await this.reconcileNativeSnapshot(
+      session,
+      session.nativeProjection.snapshot(session.run.pendingPermissionIds)
+    );
+  }
+
+  async reconcileNativeSnapshot(session: Session, current: ChatExecutionSnapshot): Promise<void> {
+    const previous = session.nativeSnapshot;
+    const requestCount = session.nativeProjection.requestCount();
+    const insertedRequests = Math.max(0, requestCount - session.nativeRequestCount);
+    if (insertedRequests > 0) {
+      session.pendingNativePrompts = Math.max(0, session.pendingNativePrompts - insertedRequests);
+    } else if (current.requestId !== previous.requestId && session.pendingNativePrompts > 0) {
+      session.pendingNativePrompts--;
+    }
+    session.nativeRequestCount = requestCount;
+    const nextBlockers = new Map<string, string>();
+    for (const [blockerId, blocker] of current.blockers) {
+      nextBlockers.set(blockerId, blocker.sourceId);
+      if (!session.journalBlockers.has(blockerId)) {
+        await this.applyEvent(session, {
+          type: 'permission.requested',
+          data: { requestId: blocker.sourceId },
+        });
+      }
+    }
+    for (const [blockerId, sourceId] of session.journalBlockers) {
+      if (!nextBlockers.has(blockerId)) {
+        await this.applyEvent(session, { type: 'permission.completed', data: { requestId: sourceId } });
+      }
+    }
+    session.journalBlockers = nextBlockers;
+    session.nativeSnapshot = current;
+
+    if (
+      current.terminal &&
+      session.pendingNativePrompts === 0 &&
+      (previous.requestId !== current.requestId || previous.terminal !== current.terminal)
+    ) {
+      const completedAt = session.nativeProjection.completionTimestamp();
+      const timestamp = completedAt ? new Date(completedAt).toISOString() : new Date().toISOString();
+      await this.applyEvent(
+        session,
+        current.terminal === 'failed'
+          ? { type: 'turn.error', timestamp }
+          : { type: 'request.completed', timestamp }
+      );
+    }
   }
 
   allocate(session: Session, timestamp?: string | null): number | null {
@@ -1131,10 +1347,13 @@ export class VSCodeIntegration {
     );
   }
 
-  async applyEvent(session: Session, event: VSCodeEvent): Promise<void> {
+  async applyEvent(session: Session, event: VSCodeEvent, historicalReplay = false): Promise<void> {
     updateCompatibility(session.compatibility, event, session.source);
     const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
+    if (transition.prompt && session.source === SOURCE_NATIVE && !historicalReplay) {
+      session.pendingNativePrompts++;
+    }
     session.lastEventAt = event.timestamp ?? new Date().toISOString();
     let allocated = false;
     if (transition.prompt && session.boundSlot === null) {

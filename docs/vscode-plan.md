@@ -82,7 +82,7 @@ Do not implement a guessed decoder for a state until at least one real waiting a
 resolved fixture establish its on-disk or hook representation. Mark states that have no
 external signal as unsupported instead of silently reporting `running`.
 
-## Phase 2: reconstruct native chat state
+## DONE: Phase 2: reconstruct native chat state
 
 Replace the current journal pattern matching with a small typed projection of the latest
 request. It does not need to rebuild the whole chat UI, but it must apply the mutation-log
