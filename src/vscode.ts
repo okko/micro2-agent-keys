@@ -56,6 +56,14 @@ export interface VSCodeEvent {
 interface RunState {
   /** Error latched for the current run until the next prompt. */
   error: string | null;
+  /** Latest chat request receiving execution transitions. */
+  requestId: string | null;
+  /** Whether the latest request can still produce work or input. */
+  active: boolean;
+  /** Human-input blockers for the latest request, keyed by stable identity. */
+  blockers: Map<string, HumanInputBlocker>;
+  /** Terminal outcome for the latest request. */
+  terminal: RequestOutcome | null;
   /** Assistant turns that have started but not ended. */
   turns: Set<string>;
   /** Currently executing tools, keyed by tool-call ID. */
@@ -68,8 +76,6 @@ interface RunState {
   pendingPermissionIds: Set<string>;
   /** Tool-call IDs that have started during the current run. */
   startedToolIds: Set<string>;
-  /** Whether request or session completion has been observed. */
-  completed: boolean;
 }
 
 interface StartupReplay {
@@ -157,13 +163,16 @@ function nativeHookToolCallId(toolUseId: string): string {
 export function emptyRun(): RunState {
   return {
     error: null,
+    requestId: null,
+    active: false,
+    blockers: new Map(),
+    terminal: null,
     turns: new Set(),
     activeTools: new Map(),
     knownQuestionToolIds: new Set(),
     questionHooksObserved: false,
     pendingPermissionIds: new Set(),
     startedToolIds: new Set(),
-    completed: false,
   };
 }
 
@@ -266,6 +275,64 @@ export interface ChatExecutionSnapshot {
   busy: boolean;
   blockers: Map<string, HumanInputBlocker>;
   terminal: 'complete' | 'cancelled' | 'failed' | null;
+  unknownWaitingResponsePartKinds: string[];
+}
+
+export type RequestOutcome = 'complete' | 'cancelled' | 'failed';
+export type HumanInputOutcome = 'resolved' | 'cancelled' | 'failed';
+
+export type NormalizedExecutionEvent =
+  | { type: 'request.started'; requestId: string }
+  | {
+      type: 'human-input.opened';
+      requestId: string;
+      blockerId: string;
+      kind: HumanInputBlockerKind;
+      responsePartKind?: string;
+      sourceId?: string;
+    }
+  | {
+      type: 'human-input.closed';
+      requestId: string;
+      blockerId: string;
+      outcome: HumanInputOutcome;
+    }
+  | { type: 'request.finished'; requestId: string; outcome: RequestOutcome };
+
+function runState(run: RunState): string {
+  if (run.error || run.terminal === 'failed') return 'error';
+  if (run.blockers.size > 0) return 'input';
+  if (run.active) return 'running';
+  if (run.terminal) return 'done';
+  return 'running';
+}
+
+export function reduceNormalizedEvent(run: RunState, event: NormalizedExecutionEvent): string {
+  if (event.type === 'request.started') {
+    if (run.requestId !== event.requestId) run.blockers.clear();
+    run.requestId = event.requestId;
+    run.active = true;
+    run.terminal = null;
+    run.error = null;
+  } else if (event.type === 'human-input.opened') {
+    if (run.requestId === event.requestId && run.active) {
+      run.blockers.set(event.blockerId, {
+        id: event.blockerId,
+        requestId: event.requestId,
+        responsePartKind: event.responsePartKind ?? String(event.kind),
+        sourceId: event.sourceId ?? event.blockerId,
+        kind: event.kind,
+      });
+    }
+  } else if (event.type === 'human-input.closed') {
+    if (run.requestId === event.requestId) run.blockers.delete(event.blockerId);
+  } else if (run.requestId === event.requestId) {
+    run.active = false;
+    run.blockers.clear();
+    run.terminal = event.outcome;
+    if (event.outcome === 'failed') run.error = 'request.failed';
+  }
+  return runState(run);
 }
 
 function objectAtPath(root: unknown, path: (string | number)[]): Record<string | number, unknown> | null {
@@ -383,6 +450,17 @@ export class NativeChatProjection {
         if (blocker) blockers.set(blocker.id, blocker);
       });
     }
+    const unknownWaitingResponsePartKinds =
+      latest?.modelState?.value === 4 && blockers.size === 0
+        ? [...new Set((Array.isArray(latest.response) ? latest.response : []).map((part) => {
+            if (!part || typeof part !== 'object') return 'unknown';
+            const kind = (part as NativeResponsePart).kind;
+            return typeof kind === 'string' ? kind : 'unknown';
+          }))]
+        : [];
+    if (latest?.modelState?.value === 4 && blockers.size === 0 && unknownWaitingResponsePartKinds.length === 0) {
+      unknownWaitingResponsePartKinds.push('unknown');
+    }
     const terminal = latest && blockers.size === 0 ? modelStateTerminal(latest) : null;
     const active = Boolean(latest) && terminal === null;
     return {
@@ -391,6 +469,7 @@ export class NativeChatProjection {
       busy: active && blockers.size === 0,
       blockers,
       terminal,
+      unknownWaitingResponsePartKinds,
     };
   }
 
@@ -471,13 +550,48 @@ export function reduceEvent(
 
   if (prompt) {
     run = emptyRun();
-    return { run, prompt: true, state: 'running' };
+    const requestId = data?.requestId ?? data?.turnId ?? data?.interactionId ?? event.timestamp ?? 'current-request';
+    const state = reduceNormalizedEvent(run, { type: 'request.started', requestId });
+    return { run, prompt: true, state };
   }
+
+  const ensureRequest = (): string => {
+    const requestId = run.requestId ?? data?.turnId ?? data?.interactionId ?? event.timestamp ?? 'current-request';
+    if (run.requestId === null) reduceNormalizedEvent(run, { type: 'request.started', requestId });
+    return requestId;
+  };
+  const openInput = (
+    sourceId: string,
+    kind: HumanInputBlockerKind,
+    responsePartKind: string
+  ): void => {
+    const requestId = ensureRequest();
+    reduceNormalizedEvent(run, {
+      type: 'human-input.opened',
+      requestId,
+      blockerId: blockerIdentity(requestId, responsePartKind, sourceId),
+      kind,
+      responsePartKind,
+      sourceId,
+    });
+  };
+  const closeInput = (sourceId: string, kind?: HumanInputBlockerKind): void => {
+    const requestId = ensureRequest();
+    for (const blocker of [...run.blockers.values()]) {
+      if (blocker.sourceId !== sourceId || (kind && blocker.kind !== kind)) continue;
+      reduceNormalizedEvent(run, {
+        type: 'human-input.closed',
+        requestId,
+        blockerId: blocker.id,
+        outcome: 'resolved',
+      });
+    }
+  };
 
   if (event?.type === 'assistant.turn_start') {
     const id = eventKey(data, 'turnId', 'interactionId');
     if (id) run.turns.add(id);
-    run.completed = false;
+    ensureRequest();
   } else if (event?.type === 'assistant.turn_end') {
     const id = eventKey(data, 'turnId', 'interactionId');
     if (id) run.turns.delete(id);
@@ -485,6 +599,7 @@ export function reduceEvent(
     for (const request of data?.toolRequests ?? []) {
       if (request.toolCallId && requestsPermission(request.arguments, cwd)) {
         run.pendingPermissionIds.add(request.toolCallId);
+        openInput(request.toolCallId, 'tool-confirmation', 'toolInvocation');
       }
     }
   } else if (event?.type === 'tool.execution_start') {
@@ -499,8 +614,11 @@ export function reduceEvent(
     if (
       id &&
       !(source === SOURCE_NATIVE && question && run.questionHooksObserved && !data?.fromHook)
-    ) run.activeTools.set(id, data?.toolName ?? '');
-    run.completed = false;
+    ) {
+      run.activeTools.set(id, data?.toolName ?? '');
+      if (question || data?.toolName === 'ask_user') openInput(id, 'question', 'questionCarousel');
+    }
+    ensureRequest();
   } else if (event?.type === 'tool.execution_complete') {
     if (data?.toolCallId) run.pendingPermissionIds.delete(data.toolCallId);
     const completedQuestion = data?.toolCallId ? run.knownQuestionToolIds.delete(data.toolCallId) : false;
@@ -510,25 +628,40 @@ export function reduceEvent(
       for (const [id, name] of run.activeTools) {
         if (name === 'vscode_askQuestions') run.activeTools.delete(id);
       }
+      for (const blocker of [...run.blockers.values()]) {
+        if (blocker.kind === 'question') closeInput(blocker.sourceId, 'question');
+      }
     }
     if (data?.toolCallId) {
+      closeInput(data.toolCallId);
       run.activeTools.delete(data.toolCallId);
     }
   } else if (event?.type === 'permission.requested') {
-    if (data?.requestId && !run.startedToolIds.has(data.requestId)) run.pendingPermissionIds.add(data.requestId);
+    if (data?.requestId) {
+      run.pendingPermissionIds.add(data.requestId);
+      openInput(data.requestId, 'tool-confirmation', 'toolInvocation');
+    }
   } else if (event?.type === 'permission.completed') {
-    if (data?.requestId) run.pendingPermissionIds.delete(data.requestId);
+    if (data?.requestId) {
+      run.pendingPermissionIds.delete(data.requestId);
+      closeInput(data.requestId);
+    }
+    if (data?.toolCallId) closeInput(data.toolCallId);
   } else if (event?.type === 'session.error' || event?.type === 'turn.error') {
     run.error = event.type;
+    const requestId = ensureRequest();
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId, outcome: 'failed' });
   } else if (source === SOURCE_NATIVE && event?.type === 'request.completed') {
-    run.completed = true;
+    const requestId = ensureRequest();
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId, outcome: 'complete' });
     run.turns.clear();
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
     run.pendingPermissionIds.clear();
     run.startedToolIds.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
-    run.completed = true;
+    const requestId = ensureRequest();
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId, outcome: 'complete' });
     run.turns.clear();
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
@@ -538,14 +671,7 @@ export function reduceEvent(
     return { run, prompt: false, state: null };
   }
 
-  let state = 'running';
-  if (run.error) state = 'error';
-  else if (
-    run.pendingPermissionIds.size ||
-    [...run.activeTools.values()].some((name) => name === 'ask_user' || name === 'vscode_askQuestions')
-  ) state = 'input';
-  else if (run.completed) state = 'done';
-  return { run, prompt: false, state };
+  return { run, prompt: false, state: runState(run) };
 }
 
 export function nativeSessionResource(sessionId: string): string {
@@ -653,7 +779,6 @@ interface Session {
   journalIdentity: string | null;
   nativeProjection: NativeChatProjection;
   nativeSnapshot: ChatExecutionSnapshot;
-  journalBlockers: Map<string, string>;
   nativeRequestCount: number;
   pendingNativePrompts: number;
   run: RunState;
@@ -804,7 +929,6 @@ export class VSCodeIntegration {
         journalIdentity: typeof raw.journalIdentity === 'string' ? raw.journalIdentity : null,
         nativeProjection,
         nativeSnapshot: nativeProjection.snapshot(),
-        journalBlockers: new Map(),
         nativeRequestCount: nativeProjection.requestCount(),
         pendingNativePrompts: 0,
         run: emptyRun(),
@@ -835,7 +959,6 @@ export class VSCodeIntegration {
           journalIdentity: null,
           nativeProjection,
           nativeSnapshot: nativeProjection.snapshot(),
-          journalBlockers: new Map(),
           nativeRequestCount: nativeProjection.requestCount(),
           pendingNativePrompts: 0,
           run: emptyRun(),
@@ -1073,7 +1196,6 @@ export class VSCodeIntegration {
               : null,
             nativeProjection,
             nativeSnapshot: nativeProjection.snapshot(),
-            journalBlockers: new Map(),
             nativeRequestCount: nativeProjection.requestCount(),
             pendingNativePrompts: 0,
             run: emptyRun(),
@@ -1261,38 +1383,80 @@ export class VSCodeIntegration {
       session.pendingNativePrompts--;
     }
     session.nativeRequestCount = requestCount;
-    const nextBlockers = new Map<string, string>();
-    for (const [blockerId, blocker] of current.blockers) {
-      nextBlockers.set(blockerId, blocker.sourceId);
-      if (!session.journalBlockers.has(blockerId)) {
-        await this.applyEvent(session, {
-          type: 'permission.requested',
-          data: { requestId: blocker.sourceId },
+    session.nativeSnapshot = current;
+
+    if (session.pendingNativePrompts > 0 || !current.requestId) return;
+
+    const normalized: NormalizedExecutionEvent[] = [];
+    if (session.run.requestId !== current.requestId) {
+      normalized.push({ type: 'request.started', requestId: current.requestId });
+    }
+    for (const blocker of session.run.blockers.values()) {
+      if (blocker.requestId === current.requestId && !current.blockers.has(blocker.id)) {
+        normalized.push({
+          type: 'human-input.closed',
+          requestId: current.requestId,
+          blockerId: blocker.id,
+          outcome: 'resolved',
         });
       }
     }
-    for (const [blockerId, sourceId] of session.journalBlockers) {
-      if (!nextBlockers.has(blockerId)) {
-        await this.applyEvent(session, { type: 'permission.completed', data: { requestId: sourceId } });
-      }
+    for (const blocker of current.blockers.values()) {
+      normalized.push({
+        type: 'human-input.opened',
+        requestId: current.requestId,
+        blockerId: blocker.id,
+        kind: blocker.kind,
+        responsePartKind: blocker.responsePartKind,
+        sourceId: blocker.sourceId,
+      });
     }
-    session.journalBlockers = nextBlockers;
-    session.nativeSnapshot = current;
+    const vscodeVersion = current.unknownWaitingResponsePartKinds.length > 0
+      ? exactOpenCompatibility().version ?? 'unknown'
+      : null;
+    for (const kind of current.unknownWaitingResponsePartKinds) {
+      this.log(
+        `Unknown VS Code waiting status session=${session.id} request=${current.requestId} responsePart=${kind} vscode=${vscodeVersion}`
+      );
+    }
 
     if (
       current.terminal &&
-      session.pendingNativePrompts === 0 &&
       (previous.requestId !== current.requestId || previous.terminal !== current.terminal)
     ) {
-      const completedAt = session.nativeProjection.completionTimestamp();
-      const timestamp = completedAt ? new Date(completedAt).toISOString() : new Date().toISOString();
-      await this.applyEvent(
-        session,
-        current.terminal === 'failed'
-          ? { type: 'turn.error', timestamp }
-          : { type: 'request.completed', timestamp }
-      );
+      normalized.push({
+        type: 'request.finished',
+        requestId: current.requestId,
+        outcome: current.terminal,
+      });
     }
+    if (normalized.length === 0) return;
+    const completedAt = session.nativeProjection.completionTimestamp();
+    const timestamp = completedAt && current.terminal
+      ? new Date(completedAt).toISOString()
+      : new Date().toISOString();
+    await this.applyNormalizedEvents(session, normalized, timestamp);
+  }
+
+  async applyNormalizedEvents(
+    session: Session,
+    events: NormalizedExecutionEvent[],
+    timestamp: string
+  ): Promise<void> {
+    let state = runState(session.run);
+    for (const event of events) state = reduceNormalizedEvent(session.run, event);
+    session.lastEventAt = timestamp;
+    if (session.boundSlot === null) return;
+    const slot = this.slots[session.boundSlot];
+    if (!slot) return;
+    const changed = slot.state !== state;
+    slot.state = state;
+    slot.lastEventAt = timestamp;
+    slot.eventOffset = session.offset;
+    slot.runError = session.run.error;
+    if (changed) slot.stateChangedAt = timestamp;
+    if (state === 'done' && changed) slot.doneAt = timestamp;
+    if (changed && !session.startupReplay) await this.onSlot({ ...slot });
   }
 
   allocate(session: Session, timestamp?: string | null): number | null {

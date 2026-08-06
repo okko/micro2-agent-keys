@@ -10,6 +10,7 @@ import {
   emptyRun,
   nativeSessionResource,
   reduceEvent,
+  reduceNormalizedEvent,
   workspaceMetadata,
 } from '../dist/vscode.js';
 
@@ -254,6 +255,57 @@ test('native chat projection gives parallel blockers stable compound identities'
   snapshot = projection.snapshot();
   assert.equal(snapshot.blockers.has('active-request:planReview:plan'), false);
   assert.equal(snapshot.blockers.has('active-request:elicitation2:position-6'), false);
+});
+
+test('normalized execution events scope parallel blockers to the latest request', () => {
+  const run = emptyRun();
+  assert.equal(reduceNormalizedEvent(run, { type: 'request.started', requestId: 'latest' }), 'running');
+  assert.equal(
+    reduceNormalizedEvent(run, {
+      type: 'human-input.opened',
+      requestId: 'latest',
+      blockerId: 'latest:toolInvocation:first',
+      kind: 'tool-confirmation',
+    }),
+    'input'
+  );
+  reduceNormalizedEvent(run, {
+    type: 'human-input.opened',
+    requestId: 'latest',
+    blockerId: 'latest:questionCarousel:second',
+    kind: 'question',
+  });
+  assert.equal(run.blockers.size, 2);
+
+  assert.equal(
+    reduceNormalizedEvent(run, {
+      type: 'human-input.closed',
+      requestId: 'latest',
+      blockerId: 'latest:toolInvocation:first',
+      outcome: 'resolved',
+    }),
+    'input'
+  );
+  assert.equal(
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId: 'older', outcome: 'complete' }),
+    'input'
+  );
+  assert.equal(run.blockers.size, 1);
+  assert.equal(
+    reduceNormalizedEvent(run, {
+      type: 'human-input.closed',
+      requestId: 'latest',
+      blockerId: 'latest:questionCarousel:second',
+      outcome: 'resolved',
+    }),
+    'running'
+  );
+  assert.equal(
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId: 'latest', outcome: 'complete' }),
+    'done'
+  );
+  assert.equal(reduceNormalizedEvent(run, { type: 'request.started', requestId: 'next' }), 'running');
+  assert.equal(run.blockers.size, 0);
 });
 
 test('parses quoted workspace metadata', () => {
@@ -505,6 +557,70 @@ test('native journal replacement rebuilds the latest request projection', async 
   assert.equal(integration.slots[0].state, 'running');
   assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.requestId, 'replacement-request');
   assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.blockers.size, 0);
+});
+
+test('native journal reconciles an optimistic question hook authoritatively', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  await integration.scan();
+  await integration.applyHook({
+    hookEventName: 'PreToolUse',
+    sessionId: IDS[0],
+    toolName: 'vscode_askQuestions',
+    toolUseId: 'optimistic-question',
+  });
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'authoritative-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(integration.sessions.get(IDS[0]).run.requestId, 'authoritative-request');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
+});
+
+test('logs unknown native waiting states without interaction content', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Private project name');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const logs = [];
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000, log: (...values) => logs.push(values.join(' ')) });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [
+      {
+        requestId: 'unknown-waiting-request',
+        response: [{ kind: 'futureHumanInput', state: { type: 999 } }],
+        modelState: { value: 4 },
+      },
+    ],
+  });
+  await integration.scan();
+
+  const diagnostic = logs.find((line) => line.startsWith('Unknown VS Code waiting status'));
+  assert.match(
+    diagnostic,
+    new RegExp(`session=${IDS[0]} request=unknown-waiting-request responsePart=futureHumanInput vscode=`)
+  );
+  assert.doesNotMatch(diagnostic, /Private project name/);
 });
 
 test('native journal ignores an old completion until the prompted request is inserted', async (t) => {

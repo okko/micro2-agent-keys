@@ -121,7 +121,7 @@ serialize or index a live pending response as cancelled, and some live tool stat
 intentionally not persisted. The unresolved response part or protocol state is the
 primary blocker evidence.
 
-## Phase 3: normalize all input sources
+## DONE: Phase 3: normalize all input sources
 
 Introduce source-independent reducer events rather than adding more tool-name branches:
 
