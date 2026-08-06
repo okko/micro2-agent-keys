@@ -192,6 +192,12 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
 - `AGENTKEYS_TEST_LAYER` picks which layer the agent keys replace (1-based, default `1`) in tests.
 
+## Logs
+
+```sh
+tail -f ~/.local/state/agentkeys/daemon.log
+```
+
 ## Notes
 
 - The daemon reconnects on its own if the keyboard is unplugged.

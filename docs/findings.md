@@ -115,8 +115,8 @@ The joystick counterpart is `v.oai.rad` when the layer joystick type is `VENDOR`
 `v.oai.rgbcfg` exposes `keys` and `ambient` zones.
 
 - The `keys` zone changes the base key-lighting zone and works on an ordinary layer.
-- The `ambient` zone accepted commands but produced no visible change on the tested
-  keyboard.
+- The `ambient` zone accepts commands but produces no visible change on the agentic layer,
+  the ambient zone is disabled on it.
 
 Both `v.oai.thstatus` and `v.oai.rgbcfg` return `{"ok":1}` for malformed payloads,
 including `null`. A successful RPC response therefore confirms receipt only; it does
@@ -179,4 +179,3 @@ file-based recovery after restarts.
 - The payload and physical direction mapping of `v.oai.rad`.
 - Whether the joystick also reports through the standard gamepad interface while vendor
   notifications are enabled.
-- Why the `ambient` zone has no visible effect on the tested unit.
