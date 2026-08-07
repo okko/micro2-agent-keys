@@ -235,6 +235,7 @@ export interface NativePatch {
 
 interface NativeResponsePart {
   kind?: unknown;
+  id?: unknown;
   toolCallId?: unknown;
   resolveId?: unknown;
   isConfirmed?: unknown;
@@ -374,7 +375,11 @@ function blockerForPart(
   const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : null;
   const stateType = (part.state as { type?: unknown } | null)?.type;
   let kind: HumanInputBlockerKind | null = null;
-  let sourceId = typeof part.resolveId === 'string' ? part.resolveId : `position-${index}`;
+  let sourceId = typeof part.resolveId === 'string'
+    ? part.resolveId
+    : typeof part.id === 'string'
+      ? part.id
+      : `position-${index}`;
 
   if (toolCallId) {
     sourceId = toolCallId;
@@ -479,6 +484,132 @@ export class NativeChatProjection {
 
   requestCount(): number {
     return Array.isArray(this.state?.requests) ? this.state.requests.length : 0;
+  }
+}
+
+interface AgentHostInputRequestPart {
+  kind?: unknown;
+  request?: {
+    id?: unknown;
+    purpose?: unknown;
+  };
+  response?: unknown;
+}
+
+interface AgentHostToolCallPart {
+  kind?: unknown;
+  toolCall?: {
+    toolCallId?: unknown;
+    status?: unknown;
+    _meta?: {
+      autoApproveBySetting?: unknown;
+    };
+  };
+}
+
+interface AgentHostTurn {
+  id?: unknown;
+  state?: unknown;
+  responseParts?: unknown;
+}
+
+interface AgentHostChatState {
+  activeTurn?: AgentHostTurn;
+  turns?: AgentHostTurn[];
+}
+
+function agentHostInputKind(purpose: unknown): HumanInputBlockerKind {
+  if (purpose === 'planReview') return 'plan-review';
+  if (purpose === 'elicitation') return 'elicitation';
+  return 'question';
+}
+
+function agentHostTerminal(turn: AgentHostTurn | undefined): ChatExecutionSnapshot['terminal'] {
+  if (!turn) return null;
+  if (turn.state === 'failed' || turn.state === 'error') return 'failed';
+  if (turn.state === 'cancelled' || turn.state === 'canceled') return 'cancelled';
+  return 'complete';
+}
+
+/** Projects the source-independent Agent Host chat protocol state. The protocol
+ * state is not currently present in session.db, so callers apply a complete
+ * snapshot whenever an authoritative protocol source becomes available. */
+export class AgentHostChatProjection {
+  private state: AgentHostChatState | null = null;
+
+  reset(): void {
+    this.state = null;
+  }
+
+  apply(state: unknown): void {
+    this.state = state && typeof state === 'object' ? state as AgentHostChatState : null;
+  }
+
+  snapshot(): ChatExecutionSnapshot {
+    const activeTurn = this.state?.activeTurn;
+    const latestTurn = activeTurn ?? this.state?.turns?.at(-1);
+    const requestId = typeof latestTurn?.id === 'string' ? latestTurn.id : null;
+    const blockers = new Map<string, HumanInputBlocker>();
+
+    if (activeTurn && requestId && Array.isArray(activeTurn.responseParts)) {
+      for (let index = 0; index < activeTurn.responseParts.length; index++) {
+        const part = activeTurn.responseParts[index];
+        if (!part || typeof part !== 'object') continue;
+        const partKind = (part as { kind?: unknown }).kind;
+        if (partKind === 'inputRequest') {
+          const input = part as AgentHostInputRequestPart;
+          if (input.response !== undefined) continue;
+          const sourceId = typeof input.request?.id === 'string'
+            ? input.request.id
+            : `position-${index}`;
+          const id = blockerIdentity(requestId, 'inputRequest', sourceId);
+          blockers.set(id, {
+            id,
+            requestId,
+            responsePartKind: 'inputRequest',
+            sourceId,
+            kind: agentHostInputKind(input.request?.purpose),
+          });
+          continue;
+        }
+        if (partKind !== 'toolCall') continue;
+        const toolCall = (part as AgentHostToolCallPart).toolCall;
+        const sourceId = typeof toolCall?.toolCallId === 'string'
+          ? toolCall.toolCallId
+          : `position-${index}`;
+        let kind: HumanInputBlockerKind | null = null;
+        if (
+          toolCall?.status === 'pending-confirmation' &&
+          toolCall._meta?.autoApproveBySetting !== true
+        ) {
+          kind = 'tool-confirmation';
+        } else if (toolCall?.status === 'pending-result-confirmation') {
+          kind = 'tool-result-confirmation';
+        } else if (toolCall?.status === 'auth-required') {
+          kind = 'tool-authentication';
+        }
+        if (!kind) continue;
+        const id = blockerIdentity(requestId, 'toolCall', sourceId);
+        blockers.set(id, {
+          id,
+          requestId,
+          responsePartKind: 'toolCall',
+          sourceId,
+          kind,
+        });
+      }
+    }
+
+    const terminal = activeTurn ? null : agentHostTerminal(latestTurn);
+    const active = Boolean(activeTurn);
+    return {
+      requestId,
+      active,
+      busy: active && blockers.size === 0,
+      blockers,
+      terminal,
+      unknownWaitingResponsePartKinds: [],
+    };
   }
 }
 

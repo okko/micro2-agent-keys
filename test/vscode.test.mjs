@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  AgentHostChatProjection,
   NativeChatProjection,
   VSCodeIntegration,
   buildSessionUrl,
@@ -255,6 +256,183 @@ test('native chat projection gives parallel blockers stable compound identities'
   snapshot = projection.snapshot();
   assert.equal(snapshot.blockers.has('active-request:planReview:plan'), false);
   assert.equal(snapshot.blockers.has('active-request:elicitation2:position-6'), false);
+});
+
+test('native chat projection covers every Phase 4 response lifecycle', () => {
+  const cases = [
+    {
+      name: 'pre-tool confirmation',
+      waiting: { kind: 'toolInvocation', toolCallId: 'pre-tool', state: { type: 1 } },
+      resolved: { kind: 'toolInvocation', toolCallId: 'pre-tool', state: { type: 2 } },
+      blockerKind: 'tool-confirmation',
+    },
+    {
+      name: 'post-tool confirmation',
+      waiting: { kind: 'toolInvocation', toolCallId: 'post-tool', state: { type: 3 } },
+      resolved: { kind: 'toolInvocation', toolCallId: 'post-tool', isComplete: true },
+      blockerKind: 'tool-result-confirmation',
+    },
+    {
+      name: 'tool authentication',
+      waiting: { kind: 'toolInvocation', toolCallId: 'auth-tool', state: { type: 6 } },
+      resolved: { kind: 'toolInvocation', toolCallId: 'auth-tool', state: { type: 2 } },
+      blockerKind: 'tool-authentication',
+    },
+    {
+      name: 'legacy confirmation',
+      waiting: { kind: 'confirmation', id: 'confirmation' },
+      resolved: { kind: 'confirmation', id: 'confirmation', isUsed: true },
+      blockerKind: 'confirmation',
+    },
+    {
+      name: 'question carousel',
+      waiting: { kind: 'questionCarousel', resolveId: 'questions' },
+      resolved: { kind: 'questionCarousel', resolveId: 'questions', isUsed: true },
+      blockerKind: 'question',
+    },
+    {
+      name: 'plan review',
+      waiting: { kind: 'planReview', resolveId: 'plan' },
+      resolved: { kind: 'planReview', resolveId: 'plan', isUsed: true },
+      blockerKind: 'plan-review',
+    },
+    {
+      name: 'elicitation accepted',
+      waiting: { kind: 'elicitation2', state: 'pending' },
+      resolved: { kind: 'elicitation2', state: 'accepted' },
+      blockerKind: 'elicitation',
+    },
+    {
+      name: 'elicitation rejected',
+      waiting: { kind: 'elicitation2', state: { value: 'pending' } },
+      resolved: { kind: 'elicitation2', state: { value: 'rejected' } },
+      blockerKind: 'elicitation',
+    },
+    {
+      name: 'modified-files review',
+      waiting: {
+        kind: 'toolInvocation',
+        toolCallId: 'modified-files',
+        state: { type: 1 },
+        toolSpecificData: { kind: 'modifiedFilesConfirmation' },
+      },
+      resolved: { kind: 'toolInvocation', toolCallId: 'modified-files', state: { type: 2 } },
+      blockerKind: 'tool-confirmation',
+    },
+    {
+      name: 'feedback review',
+      waiting: {
+        kind: 'toolInvocation',
+        toolCallId: 'feedback',
+        state: { type: 1 },
+        toolSpecificData: { kind: 'agentFeedbackReviewConfirmation' },
+      },
+      resolved: { kind: 'toolInvocation', toolCallId: 'feedback', state: { type: 2 } },
+      blockerKind: 'tool-confirmation',
+    },
+  ];
+
+  for (const { name, waiting, resolved, blockerKind } of cases) {
+    const projection = new NativeChatProjection();
+    projection.apply({
+      kind: 0,
+      v: { requests: [{ requestId: name, response: [waiting], modelState: { value: 4 } }] },
+    });
+    const waitingBlockers = [...projection.snapshot().blockers.values()];
+    assert.deepEqual(waitingBlockers.map(({ kind }) => kind), [blockerKind], name);
+    if (name === 'legacy confirmation') {
+      assert.equal(waitingBlockers[0].id, `${name}:confirmation:confirmation`);
+    }
+
+    projection.apply({ kind: 1, k: ['requests', 0, 'response', 0], v: resolved });
+    assert.equal(projection.snapshot().blockers.size, 0, name);
+    assert.equal(projection.snapshot().busy, true, name);
+  }
+});
+
+test('Agent Host chat projection handles protocol input and tool blocker states', () => {
+  const projection = new AgentHostChatProjection();
+  projection.apply({
+    activeTurn: {
+      id: 'protocol-turn',
+      responseParts: [
+        { kind: 'inputRequest', request: { id: 'ask', purpose: 'askUser' } },
+        { kind: 'inputRequest', request: { id: 'elicit', purpose: 'elicitation' } },
+        { kind: 'inputRequest', request: { id: 'plan', purpose: 'planReview' } },
+        { kind: 'inputRequest', request: { id: 'future', purpose: 'futurePurpose' } },
+        {
+          kind: 'toolCall',
+          toolCall: { toolCallId: 'pre-tool', status: 'pending-confirmation', _meta: { autoApproveBySetting: false } },
+        },
+        {
+          kind: 'toolCall',
+          toolCall: { toolCallId: 'auto-tool', status: 'pending-confirmation', _meta: { autoApproveBySetting: true } },
+        },
+        { kind: 'toolCall', toolCall: { toolCallId: 'post-tool', status: 'pending-result-confirmation' } },
+        { kind: 'toolCall', toolCall: { toolCallId: 'auth-tool', status: 'auth-required' } },
+        {
+          kind: 'toolCall',
+          toolCall: {
+            toolCallId: 'modified-files',
+            status: 'pending-confirmation',
+            confirmationKind: 'modifiedFilesConfirmation',
+          },
+        },
+        {
+          kind: 'toolCall',
+          toolCall: {
+            toolCallId: 'feedback',
+            status: 'pending-confirmation',
+            confirmationKind: 'agentFeedbackReviewConfirmation',
+          },
+        },
+      ],
+    },
+  });
+
+  let snapshot = projection.snapshot();
+  assert.equal(snapshot.requestId, 'protocol-turn');
+  assert.equal(snapshot.active, true);
+  assert.equal(snapshot.busy, false);
+  assert.deepEqual(
+    [...snapshot.blockers.values()].map(({ sourceId, kind }) => [sourceId, kind]),
+    [
+      ['ask', 'question'],
+      ['elicit', 'elicitation'],
+      ['plan', 'plan-review'],
+      ['future', 'question'],
+      ['pre-tool', 'tool-confirmation'],
+      ['post-tool', 'tool-result-confirmation'],
+      ['auth-tool', 'tool-authentication'],
+      ['modified-files', 'tool-confirmation'],
+      ['feedback', 'tool-confirmation'],
+    ]
+  );
+
+  projection.apply({
+    activeTurn: {
+      id: 'protocol-turn',
+      responseParts: [
+        { kind: 'inputRequest', request: { id: 'ask', purpose: 'askUser' }, response: { answers: [] } },
+        { kind: 'inputRequest', request: { id: 'elicit', purpose: 'elicitation' }, response: { accepted: true } },
+        { kind: 'inputRequest', request: { id: 'plan', purpose: 'planReview' }, response: { approved: true } },
+        { kind: 'inputRequest', request: { id: 'future', purpose: 'futurePurpose' }, response: { cancelled: true } },
+        { kind: 'toolCall', toolCall: { toolCallId: 'pre-tool', status: 'running' } },
+        { kind: 'toolCall', toolCall: { toolCallId: 'post-tool', status: 'completed' } },
+        { kind: 'toolCall', toolCall: { toolCallId: 'auth-tool', status: 'cancelled' } },
+      ],
+    },
+  });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.blockers.size, 0);
+  assert.equal(snapshot.busy, true);
+
+  projection.apply({
+    turns: [{ id: 'protocol-turn', state: 'failed', responseParts: [] }],
+  });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.active, false);
+  assert.equal(snapshot.terminal, 'failed');
 });
 
 test('normalized execution events scope parallel blockers to the latest request', () => {

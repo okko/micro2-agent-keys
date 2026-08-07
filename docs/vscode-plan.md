@@ -157,7 +157,7 @@ latest request failed             -> error
 An unknown waiting status must be logged with session ID, request ID, response-part kind,
 and VS Code version, without logging prompts, answers, command text, paths, or tokens.
 
-## Phase 4: close known coverage gaps
+## DONE: Phase 4: close known coverage gaps
 
 Implement and verify each adapter separately:
 
