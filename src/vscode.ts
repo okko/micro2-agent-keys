@@ -12,7 +12,8 @@ const SOURCE_COPILOT_CLI = 'copilot-cli' as const;
 const SOURCE_NATIVE = 'native' as const;
 type SessionSource = typeof SOURCE_COPILOT_CLI | typeof SOURCE_NATIVE;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SCAN_INTERVAL_MS = 1000;
+const MIN_SCAN_INTERVAL_MS = 100;
+const SCAN_INTERVAL_MS = 200;
 const SCHEMA_VERSION = 1;
 const SUPPORTED_PRODUCER = 'copilot-agent';
 const SUPPORTED_EVENT_VERSION = 1;
@@ -176,6 +177,18 @@ export function emptyRun(): RunState {
   };
 }
 
+function cloneRun(run: RunState): RunState {
+  return {
+    ...run,
+    blockers: new Map([...run.blockers].map(([id, blocker]) => [id, { ...blocker }])),
+    turns: new Set(run.turns),
+    activeTools: new Map(run.activeTools),
+    knownQuestionToolIds: new Set(run.knownQuestionToolIds),
+    pendingPermissionIds: new Set(run.pendingPermissionIds),
+    startedToolIds: new Set(run.startedToolIds),
+  };
+}
+
 export function emptyCompatibility(): Compatibility {
   return {
     producer: null,
@@ -275,6 +288,7 @@ export interface ChatExecutionSnapshot {
   active: boolean;
   busy: boolean;
   blockers: Map<string, HumanInputBlocker>;
+  observedToolCallIds: Set<string>;
   terminal: 'complete' | 'cancelled' | 'failed' | null;
   unknownWaitingResponsePartKinds: string[];
 }
@@ -443,9 +457,13 @@ export class NativeChatProjection {
     const latest = requests.at(-1);
     const requestId = typeof latest?.requestId === 'string' ? latest.requestId : null;
     const blockers = new Map<string, HumanInputBlocker>();
+    const observedToolCallIds = new Set<string>();
     if (latest && requestId && Array.isArray(latest.response)) {
       latest.response.forEach((part, index) => {
         if (!part || typeof part !== 'object') return;
+        if (typeof (part as NativeResponsePart).toolCallId === 'string') {
+          observedToolCallIds.add((part as NativeResponsePart).toolCallId as string);
+        }
         const blocker = blockerForPart(
           requestId,
           part as NativeResponsePart,
@@ -473,6 +491,7 @@ export class NativeChatProjection {
       active,
       busy: active && blockers.size === 0,
       blockers,
+      observedToolCallIds,
       terminal,
       unknownWaitingResponsePartKinds,
     };
@@ -550,6 +569,7 @@ export class AgentHostChatProjection {
     const latestTurn = activeTurn ?? this.state?.turns?.at(-1);
     const requestId = typeof latestTurn?.id === 'string' ? latestTurn.id : null;
     const blockers = new Map<string, HumanInputBlocker>();
+    const observedToolCallIds = new Set<string>();
 
     if (activeTurn && requestId && Array.isArray(activeTurn.responseParts)) {
       for (let index = 0; index < activeTurn.responseParts.length; index++) {
@@ -577,6 +597,7 @@ export class AgentHostChatProjection {
         const sourceId = typeof toolCall?.toolCallId === 'string'
           ? toolCall.toolCallId
           : `position-${index}`;
+        if (typeof toolCall?.toolCallId === 'string') observedToolCallIds.add(toolCall.toolCallId);
         let kind: HumanInputBlockerKind | null = null;
         if (
           toolCall?.status === 'pending-confirmation' &&
@@ -607,24 +628,47 @@ export class AgentHostChatProjection {
       active,
       busy: active && blockers.size === 0,
       blockers,
+      observedToolCallIds,
       terminal,
       unknownWaitingResponsePartKinds: [],
     };
   }
 }
 
+function applyNativeJournalPatches(
+  projection: NativeChatProjection,
+  patches: NativePatch[],
+  rebuild: boolean
+): void {
+  let startIndex = 0;
+  if (rebuild) {
+    projection.reset();
+    startIndex = -1;
+    for (let index = patches.length - 1; index >= 0; index--) {
+      if (patches[index].kind === 0) {
+        startIndex = index;
+        break;
+      }
+    }
+    if (startIndex < 0) return;
+  }
+  for (let index = startIndex; index < patches.length; index++) projection.apply(patches[index]);
+}
+
 function nativeProjectionFromFile(journalPath: string | null): NativeChatProjection {
   const projection = new NativeChatProjection();
   if (!journalPath) return projection;
   try {
+    const patches: NativePatch[] = [];
     for (const line of completeJsonlLines(fs.readFileSync(journalPath, 'utf8'))) {
       if (!line.trim()) continue;
       try {
-        projection.apply(JSON.parse(line) as NativePatch);
+        patches.push(JSON.parse(line) as NativePatch);
       } catch {
         // Ignore malformed records; the append reader reports them with their offsets.
       }
     }
+    applyNativeJournalPatches(projection, patches, true);
   } catch {
     // The normal scan path reports inaccessible session files.
   }
@@ -1019,7 +1063,10 @@ export class VSCodeIntegration {
     this.log = options.log ?? (() => {});
     this.launch = options.launch ?? launchUrl;
     this.nativeSessionActive = options.nativeSessionActive ?? nativeSessionActive;
-    this.scanIntervalMs = options.scanIntervalMs ?? SCAN_INTERVAL_MS;
+    const requestedScanInterval = options.scanIntervalMs ?? SCAN_INTERVAL_MS;
+    this.scanIntervalMs = Number.isFinite(requestedScanInterval)
+      ? Math.max(MIN_SCAN_INTERVAL_MS, requestedScanInterval)
+      : SCAN_INTERVAL_MS;
     this.slots = Array(INTEGRATION_SLOT_COUNT).fill(null);
     this.sessions = new Map();
     this.timer = null;
@@ -1107,6 +1154,9 @@ export class VSCodeIntegration {
       session.boundSlot = index;
       session.offset = 0;
       session.journalOffset = 0;
+      session.nativeProjection.reset();
+      session.nativeSnapshot = session.nativeProjection.snapshot();
+      session.nativeRequestCount = 0;
       session.run = emptyRun();
       this.sessions.set(session.id, session);
       this.slots[index] = {
@@ -1287,6 +1337,8 @@ export class VSCodeIntegration {
   async scan(initial = false): Promise<void> {
     if (this.scanning) return;
     this.scanning = true;
+    const previousSlots = this.slots.map((slot) => slot ? { ...slot } : null);
+    const startupSlots = new Set<number>();
     try {
       let ids: string[] = [];
       try {
@@ -1349,20 +1401,59 @@ export class VSCodeIntegration {
           }
         }
         session.missingScans = 0;
-        const startup = initial ? session.startupReplay : null;
+        const startup = session.startupReplay;
+        const checkpointSessionIds = new Set([
+          session.id,
+          ...this.slots.flatMap((slot) => slot?.sessionId ? [slot.sessionId] : []),
+        ]);
+        const checkpoint = {
+          offset: session.offset,
+          identity: session.identity,
+          journalOffset: session.journalOffset,
+          journalIdentity: session.journalIdentity,
+          pendingNativePrompts: session.pendingNativePrompts,
+          run: cloneRun(session.run),
+          compatibility: { ...session.compatibility },
+          lastEventAt: session.lastEventAt,
+          slots: this.slots.map((slot) => slot ? { ...slot } : null),
+          boundSlots: new Map([...checkpointSessionIds].map((sessionId) => [
+            sessionId,
+            this.sessions.get(sessionId)?.boundSlot ?? null,
+          ])),
+        };
         let changedWhileStopped = false;
-        if (startup && startup.eventOffset !== null) {
-          const stat = fs.statSync(session.eventsPath);
-          changedWhileStopped =
-            startup.eventIdentity !== `${stat.dev}:${stat.ino}` || startup.eventOffset !== stat.size;
+        try {
+          if (startup && startup.eventOffset !== null) {
+            const stat = fs.statSync(session.eventsPath);
+            changedWhileStopped =
+              startup.eventIdentity !== `${stat.dev}:${stat.ino}` || startup.eventOffset !== stat.size;
+          }
+          if (startup && startup.journalOffset !== null && session.journalPath) {
+            const stat = fs.statSync(session.journalPath);
+            changedWhileStopped ||=
+              startup.journalIdentity !== `${stat.dev}:${stat.ino}` || startup.journalOffset !== stat.size;
+          }
+          await this.readAppended(session);
+          if (session.journalPath) await this.readJournalAppended(session);
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (typeof code !== 'string') throw err;
+          session.offset = checkpoint.offset;
+          session.identity = checkpoint.identity;
+          session.journalOffset = checkpoint.journalOffset;
+          session.journalIdentity = checkpoint.journalIdentity;
+          session.pendingNativePrompts = checkpoint.pendingNativePrompts;
+          session.run = checkpoint.run;
+          session.compatibility = checkpoint.compatibility;
+          session.lastEventAt = checkpoint.lastEventAt;
+          this.slots = checkpoint.slots;
+          for (const [sessionId, boundSlot] of checkpoint.boundSlots) {
+            const tracked = this.sessions.get(sessionId);
+            if (tracked) tracked.boundSlot = boundSlot;
+          }
+          this.log(`VS Code stream read failed session=${session.id} source=${session.source} code=${code}`);
+          continue;
         }
-        if (startup && startup.journalOffset !== null && session.journalPath) {
-          const stat = fs.statSync(session.journalPath);
-          changedWhileStopped ||=
-            startup.journalIdentity !== `${stat.dev}:${stat.ino}` || startup.journalOffset !== stat.size;
-        }
-        await this.readAppended(session);
-        if (session.journalPath) await this.readJournalAppended(session);
         if (startup) {
           const slot = this.slots[startup.slot.slot];
           if (slot?.sessionId === session.id) {
@@ -1377,7 +1468,7 @@ export class VSCodeIntegration {
               }
             }
             session.startupReplay = null;
-            await this.onSlot({ ...slot });
+            startupSlots.add(slot.slot);
           } else {
             session.startupReplay = null;
           }
@@ -1390,7 +1481,6 @@ export class VSCodeIntegration {
         if (initial) {
           session.boundSlot = null;
           this.slots[slot.slot] = null;
-          await this.onSlot({ slot: slot.slot, state: 'idle', stateChangedAt: new Date().toISOString() });
           this.log(`Released stale VS Code slot ${slot.slot} for ${slot.sessionId.slice(0, 8)}`);
           continue;
         }
@@ -1399,7 +1489,20 @@ export class VSCodeIntegration {
         slot.state = 'error';
         slot.runError = 'event-stream-missing';
         slot.stateChangedAt = new Date().toISOString();
-        await this.onSlot({ ...slot });
+      }
+      for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
+        const previous = previousSlots[index];
+        const current = this.slots[index];
+        const changed =
+          previous?.sessionId !== current?.sessionId ||
+          previous?.state !== current?.state ||
+          previous?.runError !== current?.runError;
+        if (!changed && !startupSlots.has(index)) continue;
+        await this.onSlot(
+          current
+            ? { ...current }
+            : { slot: index, state: 'idle', stateChangedAt: new Date().toISOString() }
+        );
       }
       this.save();
     } finally {
@@ -1464,13 +1567,15 @@ export class VSCodeIntegration {
     const stat = fs.statSync(session.journalPath);
     const identity = `${stat.dev}:${stat.ino}`;
     const reset = Boolean(session.journalIdentity && session.journalIdentity !== identity) || stat.size < session.journalOffset;
-    if (reset) {
-      session.journalOffset = 0;
-      session.nativeProjection.reset();
-    }
+    if (reset) session.journalOffset = 0;
+    const rebuild = reset || Boolean(session.startupReplay && session.journalOffset === 0);
     session.journalIdentity = identity;
     if (stat.size === session.journalOffset) {
-      if (reset) await this.reconcileNativeSnapshot(session, session.nativeProjection.snapshot());
+      if (rebuild) session.nativeProjection.reset();
+      await this.reconcileNativeSnapshot(
+        session,
+        session.nativeProjection.snapshot(session.run.pendingPermissionIds)
+      );
       return;
     }
     const length = stat.size - session.journalOffset;
@@ -1484,12 +1589,12 @@ export class VSCodeIntegration {
     const lines = buffer.toString('utf8').split('\n');
     lines.pop();
     let offset = session.journalOffset;
+    const patches: NativePatch[] = [];
     for (const line of lines) {
       const bytes = Buffer.byteLength(line) + 1;
       if (line.trim()) {
         try {
-          const patch = JSON.parse(line) as NativePatch;
-          session.nativeProjection.apply(patch);
+          patches.push(JSON.parse(line) as NativePatch);
         } catch (err) {
           if (err instanceof SyntaxError) this.log(`Malformed VS Code journal at ${session.id.slice(0, 8)}:${offset}`);
           else throw err;
@@ -1498,6 +1603,7 @@ export class VSCodeIntegration {
       offset += bytes;
     }
     session.journalOffset = offset;
+    applyNativeJournalPatches(session.nativeProjection, patches, rebuild);
     await this.reconcileNativeSnapshot(
       session,
       session.nativeProjection.snapshot(session.run.pendingPermissionIds)
@@ -1524,6 +1630,13 @@ export class VSCodeIntegration {
     }
     for (const blocker of session.run.blockers.values()) {
       if (blocker.requestId === current.requestId && !current.blockers.has(blocker.id)) {
+        if (
+          session.run.pendingPermissionIds.has(blocker.sourceId) &&
+          !current.observedToolCallIds.has(blocker.sourceId)
+        ) {
+          continue;
+        }
+        session.run.pendingPermissionIds.delete(blocker.sourceId);
         normalized.push({
           type: 'human-input.closed',
           requestId: current.requestId,
@@ -1587,7 +1700,7 @@ export class VSCodeIntegration {
     slot.runError = session.run.error;
     if (changed) slot.stateChangedAt = timestamp;
     if (state === 'done' && changed) slot.doneAt = timestamp;
-    if (changed && !session.startupReplay) await this.onSlot({ ...slot });
+    if (changed && !session.startupReplay && !this.scanning) await this.onSlot({ ...slot });
   }
 
   allocate(session: Session, timestamp?: string | null): number | null {
@@ -1672,7 +1785,9 @@ export class VSCodeIntegration {
       slot.doneAt = null;
       slot.runError = null;
     }
-    if ((allocated || changed) && !session.startupReplay) await this.onSlot({ ...slot });
+    if ((allocated || changed) && !session.startupReplay && !this.scanning) {
+      await this.onSlot({ ...slot });
+    }
   }
 
   async applyHook(event: unknown): Promise<boolean> {

@@ -175,7 +175,7 @@ Implement and verify each adapter separately:
 8. Preserve the existing hook fallbacks only where fixtures prove that no authoritative
    live signal arrives soon enough.
 
-## Phase 5: recovery and reconciliation
+## DONE: Phase 5: recovery and reconciliation
 
 On startup and after log rotation, rebuild each bound session from the last full journal
 record plus following patches. Emit the color changes while reconstructing.

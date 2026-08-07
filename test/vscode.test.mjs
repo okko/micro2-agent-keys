@@ -737,6 +737,75 @@ test('native journal replacement rebuilds the latest request projection', async 
   assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.blockers.size, 0);
 });
 
+test('native journal survives partial lines, malformed records, and truncation', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const logs = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    log: (...values) => logs.push(values.join(' ')),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'active-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  const waiting = JSON.stringify({
+    kind: 1,
+    k: ['requests', 1, 'response'],
+    v: [{ kind: 'questionCarousel', resolveId: 'questions' }],
+  });
+  fs.appendFileSync(journalPath, waiting.slice(0, -1));
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  fs.appendFileSync(journalPath, `${waiting.slice(-1)}\n{not-json}\n`);
+  append(journalPath, { kind: 1, k: ['requests', 1, 'response', 0, 'isUsed'], v: true });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.ok(logs.some((line) => line.startsWith('Malformed VS Code journal')));
+
+  fs.writeFileSync(
+    journalPath,
+    [
+      JSON.stringify({
+        kind: 0,
+        v: {
+          requests: [
+            {
+              requestId: 'stale-full-record',
+              response: [{ kind: 'questionCarousel', resolveId: 'stale-questions' }],
+              modelState: { value: 4 },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        kind: 0,
+        v: {
+          requests: [{ requestId: 'latest-full-record', response: [], modelState: { value: 0 } }],
+        },
+      }),
+      '',
+    ].join('\n')
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.requestId, 'latest-full-record');
+  assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.blockers.size, 0);
+});
+
 test('native journal reconciles an optimistic question hook authoritatively', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
@@ -765,6 +834,38 @@ test('native journal reconciles an optimistic question hook authoritatively', as
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
   assert.equal(integration.sessions.get(IDS[0]).run.requestId, 'authoritative-request');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
+});
+
+test('native journal reconciles stale hook-only blockers without new journal bytes', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'authoritative-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  await integration.applyHook({
+    hookEventName: 'PreToolUse',
+    sessionId: IDS[0],
+    toolName: 'vscode_askQuestions',
+    toolUseId: 'optimistic-question',
+  });
+  assert.equal(integration.slots[0].state, 'input');
+
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
   assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
@@ -1099,6 +1200,56 @@ test('prefers Agent Host telemetry when VS Code mirrors the same session nativel
   assert.equal(integration.slots[0].state, 'running');
 });
 
+test('coalesces transcript and journal updates into one authoritative slot change', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot.state),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message'),
+    event('assistant.turn_start', { turnId: 'native-turn' }),
+    event('assistant.message', {
+      toolRequests: [
+        { toolCallId: 'optimistic-tool', arguments: { requestUnsandboxedExecution: true } },
+      ],
+    })
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'authoritative-request', response: [], modelState: { value: 0 } }],
+  });
+
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.deepEqual(observed, ['running']);
+});
+
+test('polling interval stays within the Phase 5 operating bounds', () => {
+  const files = fixture();
+  try {
+    const defaultIntegration = new VSCodeIntegration(files);
+    const clampedIntegration = new VSCodeIntegration({ ...files, scanIntervalMs: 20 });
+    const finiteIntegration = new VSCodeIntegration({ ...files, scanIntervalMs: Number.POSITIVE_INFINITY });
+    assert.ok(defaultIntegration.scanIntervalMs >= 100 && defaultIntegration.scanIntervalMs <= 300);
+    assert.equal(clampedIntegration.scanIntervalMs, 100);
+    assert.equal(finiteIntegration.scanIntervalMs, defaultIntegration.scanIntervalMs);
+  } finally {
+    fs.rmSync(files.directory, { recursive: true, force: true });
+  }
+});
+
 test('lifecycle hooks leave bound slots intact', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
@@ -1196,6 +1347,51 @@ test('restart replay reconstructs outstanding input for a bound session', async 
   );
   await second.scan();
   assert.equal(second.slots[0].state, 'done');
+});
+
+test('native restart reconstructs blocked and newly resolved journals', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [
+      {
+        requestId: 'native-request',
+        response: [{ kind: 'questionCarousel', resolveId: 'questions' }],
+        modelState: { value: 4 },
+      },
+    ],
+  });
+  await first.scan();
+  assert.equal(first.slots[0].state, 'input');
+  first.stop();
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  assert.equal(second.slots[0].state, 'input');
+  second.stop();
+
+  append(
+    journalPath,
+    { kind: 1, k: ['requests', 1, 'response', 0, 'isUsed'], v: true },
+    {
+      kind: 1,
+      k: ['requests', 1, 'modelState'],
+      v: { value: 1, completedAt: 1785616803000 },
+    }
+  );
+  const third = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await third.start();
+  t.after(() => third.stop());
+  assert.equal(third.slots[0].state, 'done');
+  assert.equal(third.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
 test('restart preserves an acknowledged completed session as idle', async (t) => {
@@ -1480,6 +1676,58 @@ test('marks a missing bound event stream as error after retries', async (t) => {
   await integration.scan();
   assert.equal(integration.slots[0].state, 'error');
   assert.equal(integration.slots[0].runError, 'event-stream-missing');
+});
+
+test('retains the last state and logs a sanitized transient read diagnostic', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const logs = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    log: (...values) => logs.push(values.join(' ')),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+  append(
+    eventsPath,
+    event('user.message'),
+    event('assistant.turn_start', { turnId: 'native-turn' })
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [
+      {
+        requestId: 'native-request',
+        response: [{ kind: 'questionCarousel', resolveId: 'questions' }],
+        modelState: { value: 4 },
+      },
+    ],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(eventsPath, event('request.completed'));
+  const readJournalAppended = integration.readJournalAppended;
+  integration.readJournalAppended = async () => {
+    const error = new Error('read failed for /private/secret/session.jsonl');
+    error.code = 'EIO';
+    throw error;
+  };
+  try {
+    await integration.scan();
+  } finally {
+    integration.readJournalAppended = readJournalAppended;
+  }
+
+  assert.equal(integration.slots[0].state, 'input');
+  const diagnostic = logs.find((line) => line.startsWith('VS Code stream read failed'));
+  assert.match(diagnostic, new RegExp(`session=${IDS[0]} source=native code=EIO`));
+  assert.doesNotMatch(diagnostic, /private|secret|session\.jsonl/);
 });
 
 test('does not acknowledge a slot that was rebound while opening', async (t) => {
