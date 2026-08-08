@@ -72,18 +72,21 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
     `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
     local command fingerprint. Persisted records support restart recovery.
 
-   An unrecognized native response form while VS Code reports `NeedsInput`, or an
-   unrecognized Agent Host `ToolCallStatus`, fails closed as `error` and turns the key
-   solid red. The slot records an `incompatible:*` run error, and the daemon logs only
-   the session ID, request ID, source, response-part kind, unknown state/status token,
-   and VS Code version. Prompt text, tool input, paths, and answers are not logged.
+   An unrecognized native response form while VS Code reports `NeedsInput`, an
+   unrecognized Agent Host `ToolCallStatus`, or Agent Host status `24` without a
+   recognized blocker fails closed as `error` and turns the key solid red. The slot
+   records an `incompatible:*` run error, and the daemon logs only the session ID,
+   request ID, source, response-part kind, unknown state/status token, and VS Code
+   version. Prompt text, tool input, paths, and answers are not logged.
    Agent Host sessions use the live Agent Host Protocol as their authoritative state source.
    After `initialize`, the daemon subscribes to the default `ahp-chat` channel derived from
    `copilotcli:/<session-id>`. The initial complete `ChatState` snapshot is applied directly.
    Later protocol actions are coalesced into fresh `subscribe` snapshots, avoiding a second
    implementation of VS Code's chat reducer. Endpoint closure or replacement drops ownership;
-   the normal bounded scan reconnects and obtains a new complete snapshot. `session.db` is not
-   used as a chat-state source.
+   an active bound session turns red with `agent-host-state-unavailable`, and the normal
+   bounded scan reconnects and obtains a new complete snapshot that restores its state.
+   Terminal sessions are not changed by source loss. `session.db` is not used as a chat-state
+   source.
 
    Polling is deliberately bounded to protect CPU use and battery life. No polling
    interval may be shorter than 100 ms, and periodic scans are configured so a
@@ -118,6 +121,7 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
   Opening a green `done` session acknowledges it by turning its key white, but keeps
   the session bound: pressing the white key reopens the same transcript repeatedly.
   The binding remains until a newly submitted session needs and reuses that slot.
-   Exact opening is currently enabled only for the verified VS Code `1.131.x` compatibility
-   boundary; `agentkeys doctor vscode` reports unsupported versions instead of opening a
-   generic or potentially incorrect chat.
+   Exact opening is enabled for every installed VS Code version that registers the
+   `vscode://` URL handler. `agentkeys doctor vscode` reports the observed version and
+   protocol registration; the version is diagnostic metadata rather than an opening gate.
+   Empirical blocker evidence remains versioned independently.

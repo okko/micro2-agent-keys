@@ -76,6 +76,7 @@ test('subscribes to live Agent Host chat state and refreshes after actions', asy
   const requests = [];
   let subscribeCount = 0;
   const states = [];
+  const unavailable = [];
 
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
@@ -135,7 +136,10 @@ test('subscribes to live Agent Host chat state and refreshes after actions', asy
     retryMs: 20,
     requestTimeoutMs: 1_000,
   });
-  source.start((sessionId, state) => states.push({ sessionId, state }));
+  source.start(
+    (sessionId, state) => states.push({ sessionId, state }),
+    (sessionIds) => unavailable.push(...sessionIds)
+  );
   source.setSessions([SESSION_ID]);
 
   await waitFor(() => states.length === 1, 'initial Agent Host snapshot was not delivered');
@@ -168,7 +172,8 @@ test('subscribes to live Agent Host chat state and refreshes after actions', asy
 
   for (const client of webSockets.clients) client.terminate();
   await waitFor(
-    () => requests.filter((request) => request.method === 'initialize').length === 2 && states.length === 3,
+    () => unavailable.includes(SESSION_ID) &&
+      requests.filter((request) => request.method === 'initialize').length === 2 && states.length === 3,
     'Agent Host transport closure did not produce a fresh snapshot after reconnect'
   );
   assert.equal(subscribeCount, 3);

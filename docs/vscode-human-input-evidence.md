@@ -14,6 +14,9 @@ Agent Host protocol surfaces. The manifest accounts for every inventory family a
 unexported interactions or those requiring unavailable providers, credentials, or
 servers as unsupported. Unsupported rows are not synthetic evidence; their known
 version-locked contract shapes remain unit-tested, and unknown waiting forms fail closed.
+The remaining capture work is specified in `docs/vscode-plan-gaps-todo.md`; runtime
+limits without current external signals are tracked in
+`docs/vscode-plan-residual-blind-spots.md`.
 
 The capture command is `npm run dev:capture:vscode-fixture -- ...`. Exact source
 lines can be selected independently, and `--agent-host-state-row-limit` bounds

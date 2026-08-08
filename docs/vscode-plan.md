@@ -2,12 +2,15 @@
 
 ## Status
 
-Done for the externally observable production surface of VS Code 1.131.x. The evidence
-manifest is the coverage authority: every inventory row is classified as observed or
-unsupported, real records are required for observed claims, and unrecognized waiting
-forms fail closed. Internal UI/model states that the supported build does not export,
-or interactions that require unavailable providers or credentials, are not claimed as
-empirically covered.
+Done for the externally observable production surface validated on VS Code 1.131.x.
+Runtime tracking and exact transcript opening support every installed VS Code version;
+fixture claims remain tied to the build that produced them. The evidence manifest is the
+coverage authority: every inventory row is classified as observed or unsupported, real
+records are required for observed claims, and detectable unrecognized waiting forms fail
+closed. Internal UI/model states that the evidence build does not export, or interactions
+that require unavailable providers or credentials, are not claimed as empirically
+covered. See `docs/vscode-plan-gaps-todo.md` for the capture backlog and
+`docs/vscode-plan-residual-blind-spots.md` for limits without current external signals.
 
 ## Goal
 
@@ -62,7 +65,7 @@ is not an execution blocker and must not turn the key orange.
 
 ## DONE: Phase 1: account for every external signal
 
-For every row below that can be induced through the installed build's supported
+For every row below that can be induced through the installed evidence build's
 production interfaces, collect sanitized before/waiting/resolved fixtures. Capture the
 native transcript, chat-session journal patches, live Agent Host protocol state, Agent
 Host persisted events, and hook payloads as available. Record which signal arrives first
@@ -261,7 +264,7 @@ This work is complete when:
 
 - the evidence manifest accounts for every inventory family and outcome as observed or
   unsupported, and every externally observable, reproducible waiting condition in the
-  supported build has a sanitized real fixture and automated test;
+  evidence build has a sanitized real fixture and automated test;
 - unsupported interactions are not represented by synthetic empirical fixtures;
   version-locked source-contract forms remain unit-tested and all unrecognized waiting
   response parts or tool statuses fail closed;
@@ -270,15 +273,15 @@ This work is complete when:
 - parallel blockers, restarts, queued requests, edits/resends, cancellation, and failure
   cannot leave a stale orange or blue key;
 - latest-request completion is correlated by identity rather than any request index;
-- an automated parity test exercises all captured states against the supported VS Code
+- an automated parity test exercises all captured states against their captured VS Code
   version;
-- compatibility checking fails closed, with an actionable diagnostic, when a newer VS
-  Code version introduces an unrecognized waiting response part or tool status.
+- compatibility checking fails closed, with an actionable diagnostic, when any VS Code
+  version introduces a detectably unrecognized waiting response part or tool status.
 
 ## Source anchors
 
-The implementation should be checked against these VS Code ownership points whenever the
-supported version changes:
+The implementation should be checked against these VS Code ownership points whenever a
+new VS Code version is added to the empirical evidence set:
 
 - `ChatResponseModel._pendingInfo`, `isInProgress`, and `isIncomplete` in
   `src/vs/workbench/contrib/chat/common/model/chatModel.ts`;

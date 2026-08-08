@@ -18,7 +18,6 @@ const SCAN_INTERVAL_MS = 200;
 const SCHEMA_VERSION = 1;
 const SUPPORTED_PRODUCER = 'copilot-agent';
 const SUPPORTED_EVENT_VERSION = 1;
-const SUPPORTED_VSCODE_VERSION = /^1\.131\./;
 const VSCODE_APP = '/Applications/Visual Studio Code.app';
 
 export interface WorkspaceMetadata {
@@ -308,6 +307,12 @@ export type ExecutionIncompatibility =
       source: 'agent-host';
       responsePartKind: 'toolCall';
       toolStatus: string;
+    }
+  | {
+      code: 'unknown-agent-host-response';
+      source: 'agent-host';
+      responsePartKind: string;
+      chatStatus: string;
     };
 
 export type NormalizedExecutionEvent =
@@ -398,6 +403,25 @@ function modelStateTerminal(request: NativeRequest): ChatExecutionSnapshot['term
 
 function blockerIdentity(requestId: string, partKind: string, sourceId: string): string {
   return `${requestId}:${partKind}:${sourceId}`;
+}
+
+const KNOWN_NATIVE_TOOL_STATE_TYPES = new Set([0, 1, 2, 3, 4, 5, 6]);
+const KNOWN_NATIVE_HUMAN_INPUT_PARTS = new Set([
+  'confirmation',
+  'questionCarousel',
+  'planReview',
+  'elicitation2',
+]);
+
+function isUnknownStateBearingNativePart(part: NativeResponsePart): boolean {
+  const partKind = typeof part.kind === 'string' ? part.kind : 'unknown';
+  const stateType = (part.state as { type?: unknown } | null)?.type;
+  if (typeof part.toolCallId === 'string') {
+    return stateType !== undefined &&
+      (typeof stateType !== 'number' || !KNOWN_NATIVE_TOOL_STATE_TYPES.has(stateType));
+  }
+  if (KNOWN_NATIVE_HUMAN_INPUT_PARTS.has(partKind)) return false;
+  return part.state !== undefined || part.isUsed === false;
 }
 
 function diagnosticToken(value: unknown): string {
@@ -522,9 +546,21 @@ export class NativeChatProjection {
     const hasResolvedHumanInputPart = Array.isArray(latest?.response) && latest.response.some(
       (part) => Boolean(part && typeof part === 'object' && isResolvedHumanInputPart(part as NativeResponsePart))
     );
+    const response = Array.isArray(latest?.response) ? latest.response : [];
+    const unknownStateBearingParts = response.filter(
+      (part): part is NativeResponsePart =>
+        Boolean(part && typeof part === 'object' && isUnknownStateBearingNativePart(part as NativeResponsePart))
+    );
+    const unexplainedWaitingParts = unknownStateBearingParts.length > 0
+      ? unknownStateBearingParts
+      : hasResolvedHumanInputPart
+        ? []
+        : response.length > 0
+          ? response
+          : [null];
     const incompatibilities: ExecutionIncompatibility[] =
-      latest?.modelState?.value === 4 && blockers.size === 0 && !hasResolvedHumanInputPart
-        ? (Array.isArray(latest.response) && latest.response.length > 0 ? latest.response : [null]).map((part) => {
+      latest?.modelState?.value === 4 && blockers.size === 0
+        ? unexplainedWaitingParts.map((part) => {
             const responsePart = part && typeof part === 'object' ? part as NativeResponsePart : null;
             const state = responsePart?.state;
             const stateType = state && typeof state === 'object'
@@ -588,6 +624,7 @@ interface AgentHostTurn {
 }
 
 interface AgentHostChatState {
+  status?: unknown;
   activeTurn?: AgentHostTurn;
   turns?: AgentHostTurn[];
 }
@@ -694,6 +731,28 @@ export class AgentHostChatProjection {
           kind,
         });
       }
+    }
+
+    const executionStatus = typeof this.state?.status === 'number'
+      ? this.state.status & 31
+      : null;
+    if (activeTurn && executionStatus === 24 && blockers.size === 0 && incompatibilities.length === 0) {
+      const responseParts = Array.isArray(activeTurn.responseParts) ? activeTurn.responseParts : [];
+      const unknownPart = responseParts.find((part) => {
+        if (!part || typeof part !== 'object') return true;
+        const kind = (part as { kind?: unknown }).kind;
+        return kind !== 'inputRequest' && kind !== 'toolCall';
+      });
+      incompatibilities.push({
+        code: 'unknown-agent-host-response',
+        source: 'agent-host',
+        responsePartKind: diagnosticToken(
+          unknownPart && typeof unknownPart === 'object'
+            ? (unknownPart as { kind?: unknown }).kind
+            : undefined
+        ),
+        chatStatus: diagnosticToken(this.state?.status),
+      });
     }
 
     const terminal = activeTurn ? null : agentHostTerminal(latestTurn);
@@ -967,6 +1026,13 @@ interface ExactOpenCompatibility {
   protocolRegistered: boolean;
 }
 
+export function exactOpenSupported(
+  _version: string | null,
+  protocolRegistered: boolean
+): boolean {
+  return protocolRegistered;
+}
+
 export function exactOpenCompatibility(): ExactOpenCompatibility {
   if (process.platform !== 'darwin' || !fs.existsSync(VSCODE_APP)) {
     return { available: false, version: null, protocolRegistered: false };
@@ -991,7 +1057,7 @@ export function exactOpenCompatibility(): ExactOpenCompatibility {
     return { available: false, version, protocolRegistered };
   }
   return {
-    available: SUPPORTED_VSCODE_VERSION.test(version ?? '') && protocolRegistered,
+    available: exactOpenSupported(version, protocolRegistered),
     version,
     protocolRegistered,
   };
@@ -1299,8 +1365,9 @@ export class VSCodeIntegration {
     const lifecycleVersion = ++this.lifecycleVersion;
     this.load();
     this.started = true;
-    this.agentHostSource?.start((sessionId, state) =>
-      this.applyAgentHostChatState(sessionId, state).then(() => undefined)
+    this.agentHostSource?.start(
+      (sessionId, state) => this.applyAgentHostChatState(sessionId, state).then(() => undefined),
+      (sessionIds) => this.markAgentHostStateUnavailable(sessionIds)
     );
     try {
       await this.scan(true);
@@ -1771,9 +1838,11 @@ export class VSCodeIntegration {
     for (const incompatibility of current.incompatibilities) {
       const error = `incompatible:${incompatibility.code}`;
       if (session.run.requestId !== current.requestId || session.run.error !== error) {
-        const detail = incompatibility.source === 'native'
+        const detail = incompatibility.code === 'unknown-native-response'
           ? `stateType=${incompatibility.stateType}`
-          : `toolStatus=${incompatibility.toolStatus}`;
+          : incompatibility.code === 'unknown-agent-host-tool-status'
+            ? `toolStatus=${incompatibility.toolStatus}`
+            : `chatStatus=${incompatibility.chatStatus}`;
         this.log(
           `Incompatible VS Code execution state session=${session.id} request=${current.requestId} ` +
           `source=${incompatibility.source} responsePart=${incompatibility.responsePartKind} ${detail} vscode=${vscodeVersion}`
@@ -1799,7 +1868,10 @@ export class VSCodeIntegration {
     if (!current.requestId) return false;
 
     const normalized: NormalizedExecutionEvent[] = [];
-    if (session.run.requestId !== current.requestId) {
+    if (
+      session.run.requestId !== current.requestId ||
+      session.run.error === 'agent-host-state-unavailable'
+    ) {
       normalized.push({ type: 'request.started', requestId: current.requestId });
     }
     for (const blocker of session.run.blockers.values()) {
@@ -1830,6 +1902,31 @@ export class VSCodeIntegration {
     await this.applyNormalizedEvents(session, normalized, new Date().toISOString());
     this.save();
     return true;
+  }
+
+  async markAgentHostStateUnavailable(sessionIds: readonly string[]): Promise<void> {
+    const timestamp = new Date().toISOString();
+    let changed = false;
+    for (const sessionId of sessionIds) {
+      const session = this.sessions.get(sessionId);
+      if (
+        !session ||
+        session.source !== SOURCE_COPILOT_CLI ||
+        session.boundSlot === null ||
+        !session.run.active
+      ) continue;
+      const slot = this.slots[session.boundSlot];
+      if (!slot || session.run.error === 'agent-host-state-unavailable') continue;
+      session.run.error = 'agent-host-state-unavailable';
+      slot.state = 'error';
+      slot.runError = session.run.error;
+      slot.lastEventAt = timestamp;
+      slot.stateChangedAt = timestamp;
+      this.log(`Agent Host protocol state unavailable session=${session.id}`);
+      await this.onSlot({ ...slot });
+      changed = true;
+    }
+    if (changed) this.save();
   }
 
   async applyNormalizedEvents(

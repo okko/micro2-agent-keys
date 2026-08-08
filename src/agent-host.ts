@@ -30,9 +30,10 @@ export interface LocalAgentHostEndpoint {
 }
 
 export type AgentHostStateHandler = (sessionId: string, state: unknown) => void | Promise<void>;
+export type AgentHostUnavailableHandler = (sessionIds: readonly string[]) => void | Promise<void>;
 
 export interface AgentHostStateSource {
-  start(handler: AgentHostStateHandler): void;
+  start(handler: AgentHostStateHandler, unavailableHandler?: AgentHostUnavailableHandler): void;
   setSessions(sessionIds: readonly string[]): void;
   stop(): void;
 }
@@ -412,6 +413,7 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
   private readonly owners = new Map<string, string>();
   private desiredSessions = new Set<string>();
   private handler: AgentHostStateHandler | null = null;
+  private unavailableHandler: AgentHostUnavailableHandler | null = null;
   private started = false;
 
   constructor(options: LocalAgentHostStateSourceOptions = {}) {
@@ -424,9 +426,10 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
     this.log = options.log ?? (() => {});
   }
 
-  start(handler: AgentHostStateHandler): void {
+  start(handler: AgentHostStateHandler, unavailableHandler?: AgentHostUnavailableHandler): void {
     if (this.started) return;
     this.handler = handler;
+    this.unavailableHandler = unavailableHandler ?? null;
     this.started = true;
     this.reconcileEndpoints();
   }
@@ -444,6 +447,7 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
   stop(): void {
     this.started = false;
     this.handler = null;
+    this.unavailableHandler = null;
     this.desiredSessions.clear();
     this.owners.clear();
     for (const connection of this.connections.values()) connection.stop();
@@ -457,7 +461,7 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
       if (liveKeys.has(key)) continue;
       connection.stop();
       this.connections.delete(key);
-      this.releaseOwners(key);
+      this.notifyUnavailable(this.releaseOwners(key));
     }
     for (const endpoint of endpoints) {
       if (this.connections.has(endpoint.key)) continue;
@@ -467,7 +471,7 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
         this.requestTimeoutMs,
         (endpointKey, sessionId, state) => this.handleState(endpointKey, sessionId, state),
         (endpointKey) => {
-          this.releaseOwners(endpointKey);
+          this.notifyUnavailable(this.releaseOwners(endpointKey));
           this.assignSessions();
         },
         this.log
@@ -497,9 +501,20 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
     await this.handler?.(sessionId, state);
   }
 
-  private releaseOwners(endpointKey: string): void {
+  private releaseOwners(endpointKey: string): string[] {
+    const released: string[] = [];
     for (const [sessionId, owner] of this.owners) {
-      if (owner === endpointKey) this.owners.delete(sessionId);
+      if (owner !== endpointKey) continue;
+      this.owners.delete(sessionId);
+      released.push(sessionId);
     }
+    return released;
+  }
+
+  private notifyUnavailable(sessionIds: readonly string[]): void {
+    if (sessionIds.length === 0 || !this.unavailableHandler) return;
+    void Promise.resolve(this.unavailableHandler(sessionIds)).catch((error) => {
+      this.log(`Agent Host unavailable handler failed ${errorDiagnostic(error)}`);
+    });
   }
 }
