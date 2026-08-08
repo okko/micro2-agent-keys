@@ -25,14 +25,13 @@
    WebSocket upgrade uses the registry bearer token over the published Unix socket; the token
    is never logged.
 
-   At the same time,
-   the VS Code's preview agent hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
-native Chat transcript's buffered writes. Generic `PostToolUse` or `PermissionDenied`
-events clear external-file approval state without forwarding tool input.
-Lifecycle hooks clear the VS Code integration slots (AG00..AG19) on session start/end,
-so stale yellow input state does not survive between local chat sessions. The
-`chat.useHooks` setting must be enabled; it defaults to enabled in the verified VS Code
-version.
+   At the same time, VS Code's preview agent hooks notify the daemon immediately before
+   and after `vscode_askQuestions`, avoiding the native Chat transcript's buffered writes.
+   Generic `PostToolUse` or `PermissionDenied` events clear external-file approval state
+   without forwarding tool input. Lifecycle hooks reconcile execution state without
+   releasing a bound slot; authoritative journal or protocol snapshots clear stale input
+   blockers. The `chat.useHooks` setting must be enabled; it defaults to enabled in the
+   verified VS Code version.
 
 For the evidence and rationale behind this hybrid file-plus-hook model, see
 [`docs/findings.md`](docs/findings.md), section "VS Code chat telemetry findings".
@@ -56,9 +55,10 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
 4. **Update the LED**
 
    - prompt or active work -> `running`
-    - permission request or outstanding `ask_user`/`vscode_askQuestions` -> `input`
+   - unresolved native response part, Agent Host `InputRequest`, or blocking Agent Host
+     tool status -> `input`
    - session or turn error -> `error`
-    - Agent Host `sessionEnd` or native Chat request `result` -> `done`
+   - Agent Host `sessionEnd` or native Chat request `result` -> `done`
 
     Native Chat's `vscode_askQuestions` transition comes from the installed
     `PreToolUse`/`PostToolUse` hooks. Transcript tool requests identify explicit network,

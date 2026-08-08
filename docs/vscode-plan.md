@@ -1,5 +1,14 @@
 # Reliable human-input state tracking
 
+## Status
+
+Done for the externally observable production surface of VS Code 1.131.x. The evidence
+manifest is the coverage authority: every inventory row is classified as observed or
+unsupported, real records are required for observed claims, and unrecognized waiting
+forms fail closed. Internal UI/model states that the supported build does not export,
+or interactions that require unavailable providers or credentials, are not claimed as
+empirically covered.
+
 ## Goal
 
 Make the `input` key color match VS Code whenever the latest chat request is active but
@@ -39,8 +48,8 @@ response forms:
 
 The Agent Host protocol expresses the same contract through:
 
-- `InputRequest` with no `response`, including `askUser`, `elicitation`, and
-  `planReview` purposes;
+- `InputRequest` with no `response`, including `askUser` and `elicitation` purposes and
+  the 1.131.x `planReview` payload property;
 - `ToolCall` with status `pending-confirmation`, unless it is positively identified as
   auto-approved;
 - `ToolCall` with status `pending-result-confirmation`;
@@ -51,12 +60,16 @@ confirmation, including tool-specific kinds `modifiedFilesConfirmation` and
 `agentFeedbackReviewConfirmation`. A chat editing session merely having modified files
 is not an execution blocker and must not turn the key orange.
 
-## DONE: Phase 1: capture every external signal
+## DONE: Phase 1: account for every external signal
 
-Before extending the reducer, collect sanitized before/waiting/resolved fixtures from the
-installed supported VS Code build for every row below. Capture the native transcript,
-chat-session journal patches, Agent Host persisted state, and hook payloads. Record which
-signal arrives first and whether it survives a window reload.
+For every row below that can be induced through the installed build's supported
+production interfaces, collect sanitized before/waiting/resolved fixtures. Capture the
+native transcript, chat-session journal patches, live Agent Host protocol state, Agent
+Host persisted events, and hook payloads as available. Record which signal arrives first
+and whether it survives a window reload. If a row is not exported or requires an
+unavailable provider, authentication setup, or server, record it as unsupported in the
+manifest instead of manufacturing a fixture. The table is the investigation inventory;
+the manifest records the empirical result.
 
 | Blocker | Enter fixture | Resolve fixtures |
 |---|---|---|
@@ -70,7 +83,9 @@ signal arrives first and whether it survives a window reload.
 | Modified-files review | tool confirmation carrying modified-file metadata | approve and reject |
 | Feedback review | tool confirmation carrying feedback-review metadata | approve and reject |
 
-For each capture, verify the UI truth table while recording:
+For each capture, verify this truth table against exported model/protocol state when it
+is available, otherwise against the visibly blocking UI and its resolution. Record when
+either form of truth is unavailable rather than inferring it from latency:
 
 ```text
 waiting:  hasActiveRequest=true, requestInProgress=false
@@ -78,9 +93,11 @@ resolved: hasActiveRequest=true, requestInProgress=true, unless the request term
 terminal: hasActiveRequest=false, requestInProgress=false
 ```
 
-Do not implement a guessed decoder for a state until at least one real waiting and one
-resolved fixture establish its on-disk or hook representation. Mark states that have no
-external signal as unsupported instead of silently reporting `running`.
+Do not claim empirical support for a state until at least one real waiting and one
+resolved fixture establish its production representation. Version-locked source-contract
+shapes may have unit coverage before they become externally reproducible, but remain
+unsupported in the evidence manifest. Unknown waiting forms must fail closed instead of
+silently reporting `running`.
 
 ## DONE: Phase 2: reconstruct native chat state
 
@@ -134,7 +151,7 @@ Introduce source-independent reducer events rather than adding more tool-name br
 
 Normalize these sources into that event set:
 
-- Agent Host protocol chat state, when its persisted state exposes `InputRequest` and
+- live Agent Host protocol `ChatState`, which exposes `InputRequest` and
   `ToolCallStatus` directly;
 - native chat-session journal projection;
 - Copilot transcript events;
@@ -242,8 +259,12 @@ exit. The acceptance matrix is:
 
 This work is complete when:
 
-- every current `ChatResponseModel` pending form and every Agent Host
-  `chatAwaitsUserInput` condition has a captured fixture and automated test;
+- the evidence manifest accounts for every inventory family and outcome as observed or
+  unsupported, and every externally observable, reproducible waiting condition in the
+  supported build has a sanitized real fixture and automated test;
+- unsupported interactions are not represented by synthetic empirical fixtures;
+  version-locked source-contract forms remain unit-tested and all unrecognized waiting
+  response parts or tool statuses fail closed;
 - every polling interval is at least 100 ms and persisted state changes normally reach
   the key within 100–300 ms;
 - parallel blockers, restarts, queued requests, edits/resends, cancellation, and failure

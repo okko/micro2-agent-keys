@@ -5,6 +5,11 @@
     "version": "1.131.0",
     "commit": "d0fd3324a737f695bd14f2aee3ca92accd28870f"
   },
+  "coveragePolicy": {
+    "scope": "externally-observable-production-states",
+    "unsupported": "documented-without-synthetic-evidence",
+    "unknown": "fail-closed"
+  },
   "fixtures": [
     {
       "file": "native-question.json",

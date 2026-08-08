@@ -8,6 +8,13 @@ pseudonyms so related records remain correlatable. Each selected record retains 
 source line and, when its source had a timestamp, a millisecond offset from the first
 timestamped record in that fixture.
 
+Coverage is exhaustive for externally observable states that were reproducible through
+the installed build's production transcript, journal, hook, persisted-event, and local
+Agent Host protocol surfaces. The manifest accounts for every inventory family and marks
+unexported interactions or those requiring unavailable providers, credentials, or
+servers as unsupported. Unsupported rows are not synthetic evidence; their known
+version-locked contract shapes remain unit-tested, and unknown waiting forms fail closed.
+
 The capture command is `npm run dev:capture:vscode-fixture -- ...`. Exact source
 lines can be selected independently, and `--agent-host-state-row-limit` bounds
 unrelated SQLite rows without changing their structure. The fixture tests reject
@@ -18,8 +25,9 @@ Live protocol captures are produced with
 `npm run dev:capture:vscode-ahp-lifecycle -- --output <jsonl> --scenario <name>`
 and supplied to the
 fixture command with `--agent-host-protocol <jsonl>`. The driver creates an isolated
-Agent Host session, invokes one real question, and resolves it with the protocol's
-cancel action without approving or executing another tool.
+Agent Host session and runs a question-cancel, external-file-deny, or plan-reject
+scenario. It resolves each blocker through the real protocol without allowing a denied
+tool or rejected plan to execute.
 
 ## Observed lifecycles
 

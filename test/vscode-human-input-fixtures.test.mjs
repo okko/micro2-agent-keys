@@ -57,6 +57,11 @@ test('accounts for every human-input blocker family', () => {
   assert.equal(manifest.formatVersion, 2);
   assert.equal(manifest.capturedFrom.version, '1.131.0');
   assert.match(manifest.capturedFrom.commit, /^[0-9a-f]{40}$/);
+  assert.deepEqual(manifest.coveragePolicy, {
+    scope: 'externally-observable-production-states',
+    unsupported: 'documented-without-synthetic-evidence',
+    unknown: 'fail-closed',
+  });
   assert.deepEqual(manifest.blockers.map(({ id }) => id), BLOCKER_FAMILIES);
 
   for (const blocker of manifest.blockers) {
