@@ -122,6 +122,14 @@ function event(type, data = {}, timestamp = '2026-08-01T10:00:00.000Z') {
   return { type, data, timestamp };
 }
 
+async function waitFor(predicate, message, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 class FakeAgentHostStateSource {
   handler = null;
   sessions = [];
@@ -570,6 +578,36 @@ test('wires bound Agent Host sessions to authoritative protocol state', async (t
   });
   assert.equal(integration.slots[0].state, 'done');
 
+  await source.emit(IDS[0], {
+    activeTurn: {
+      id: 'cancelled-turn',
+      responseParts: [
+        { kind: 'inputRequest', request: { id: 'question-2', purpose: 'askUser' } },
+      ],
+    },
+  });
+  assert.equal(integration.slots[0].state, 'input');
+  await source.emit(IDS[0], {
+    turns: [{ id: 'cancelled-turn', state: 'cancelled', responseParts: [] }],
+  });
+  assert.equal(integration.slots[0].state, 'done');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
+
+  await source.emit(IDS[0], {
+    activeTurn: {
+      id: 'failed-turn',
+      responseParts: [
+        { kind: 'toolCall', toolCall: { toolCallId: 'approval-1', status: 'pending-confirmation' } },
+      ],
+    },
+  });
+  assert.equal(integration.slots[0].state, 'input');
+  await source.emit(IDS[0], {
+    turns: [{ id: 'failed-turn', state: 'failed', responseParts: [] }],
+  });
+  assert.equal(integration.slots[0].state, 'error');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
+
   integration.stop();
   assert.equal(source.stopped, true);
 });
@@ -623,6 +661,116 @@ test('normalized execution events scope parallel blockers to the latest request'
   );
   assert.equal(reduceNormalizedEvent(run, { type: 'request.started', requestId: 'next' }), 'running');
   assert.equal(run.blockers.size, 0);
+});
+
+test('edit and resend request identities cannot retain stale blockers', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'original' });
+  assert.equal(
+    reduceNormalizedEvent(run, {
+      type: 'human-input.opened',
+      requestId: 'original',
+      blockerId: 'original:question',
+      kind: 'question',
+    }),
+    'input'
+  );
+
+  assert.equal(reduceNormalizedEvent(run, { type: 'request.started', requestId: 'edited' }), 'running');
+  assert.equal(run.requestId, 'edited');
+  assert.equal(run.blockers.size, 0);
+  assert.equal(
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId: 'original', outcome: 'complete' }),
+    'running'
+  );
+  assert.equal(
+    reduceNormalizedEvent(run, {
+      type: 'human-input.closed',
+      requestId: 'original',
+      blockerId: 'original:question',
+      outcome: 'resolved',
+    }),
+    'running'
+  );
+
+  reduceNormalizedEvent(run, {
+    type: 'human-input.opened',
+    requestId: 'edited',
+    blockerId: 'edited:plan',
+    kind: 'plan-review',
+  });
+  assert.equal(reduceNormalizedEvent(run, { type: 'request.started', requestId: 'resent' }), 'running');
+  assert.equal(run.requestId, 'resent');
+  assert.equal(run.blockers.size, 0);
+  assert.equal(
+    reduceNormalizedEvent(run, { type: 'request.finished', requestId: 'resent', outcome: 'complete' }),
+    'done'
+  );
+});
+
+test('every blocker family clears on resolution, completion, cancellation, and failure', () => {
+  const blockers = [
+    ['pre-tool approval', 'tool-confirmation'],
+    ['post-tool approval', 'tool-result-confirmation'],
+    ['authentication', 'tool-authentication'],
+    ['confirmation part', 'confirmation'],
+    ['questions', 'question'],
+    ['plan review', 'plan-review'],
+    ['elicitation', 'elicitation'],
+    ['modified-files review', 'tool-confirmation'],
+    ['feedback review', 'tool-confirmation'],
+  ];
+  const transitions = [
+    { name: 'resolved then completed', close: true, outcome: 'complete', expected: 'done' },
+    { name: 'completed while waiting', close: false, outcome: 'complete', expected: 'done' },
+    { name: 'cancelled while waiting', close: false, outcome: 'cancelled', expected: 'done' },
+    { name: 'failed while waiting', close: false, outcome: 'failed', expected: 'error' },
+  ];
+
+  for (const [blockerName, kind] of blockers) {
+    for (const transition of transitions) {
+      const label = `${blockerName}: ${transition.name}`;
+      const run = emptyRun();
+      assert.equal(
+        reduceNormalizedEvent(run, { type: 'request.started', requestId: label }),
+        'running',
+        label
+      );
+      assert.equal(
+        reduceNormalizedEvent(run, {
+          type: 'human-input.opened',
+          requestId: label,
+          blockerId: `${label}:blocker`,
+          kind,
+        }),
+        'input',
+        label
+      );
+      if (transition.close) {
+        assert.equal(
+          reduceNormalizedEvent(run, {
+            type: 'human-input.closed',
+            requestId: label,
+            blockerId: `${label}:blocker`,
+            outcome: 'resolved',
+          }),
+          'running',
+          label
+        );
+      }
+      assert.equal(
+        reduceNormalizedEvent(run, {
+          type: 'request.finished',
+          requestId: label,
+          outcome: transition.outcome,
+        }),
+        transition.expected,
+        label
+      );
+      assert.equal(run.blockers.size, 0, label);
+      assert.equal(run.active, false, label);
+    }
+  }
 });
 
 test('parses quoted workspace metadata', () => {
@@ -834,7 +982,7 @@ test('native journal tracks permission waits before transcript execution', async
   assert.equal(integration.slots[0].state, 'running');
 });
 
-test('native journal replacement rebuilds the latest request projection', async (t) => {
+test('native journal edit and resend replacements rebuild the latest request projection', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'Native project');
@@ -874,6 +1022,36 @@ test('native journal replacement rebuilds the latest request projection', async 
   assert.equal(integration.slots[0].state, 'running');
   assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.requestId, 'replacement-request');
   assert.equal(integration.sessions.get(IDS[0]).nativeSnapshot.blockers.size, 0);
+
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 0],
+    v: {
+      requestId: 'resent-request',
+      response: [{ kind: 'planReview', resolveId: 'resent-plan' }],
+      modelState: { value: 4 },
+    },
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.sessions.get(IDS[0]).run.requestId, 'resent-request');
+  assert.deepEqual(
+    [...integration.sessions.get(IDS[0]).run.blockers.values()].map(({ kind }) => kind),
+    ['plan-review']
+  );
+
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 0],
+    v: {
+      requestId: 'resent-request',
+      response: [{ kind: 'planReview', resolveId: 'resent-plan', isUsed: true }],
+      modelState: { value: 1, completedAt: 1785616803000 },
+    },
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
 test('native journal survives partial lines, malformed records, and truncation', async (t) => {
@@ -1393,6 +1571,52 @@ test('polling interval stays within the Phase 5 operating bounds', () => {
   } finally {
     fs.rmSync(files.directory, { recursive: true, force: true });
   }
+});
+
+test('persisted event writes reach the slot within 300 ms', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 100,
+    onSlot: (slot) => observed.push(slot.state),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  const measureWrite = async (write, expected) => {
+    const startedAt = Date.now();
+    write();
+    await waitFor(
+      () => integration.slots[0]?.state === expected,
+      `persisted state did not reach ${expected}`
+    );
+    const elapsedMs = Date.now() - startedAt;
+    assert.ok(elapsedMs <= 300, `${expected} propagation took ${elapsedMs} ms`);
+    return elapsedMs;
+  };
+
+  await measureWrite(
+    () => append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'turn-1' })),
+    'running'
+  );
+  await measureWrite(
+    () => append(eventsPath, event('permission.requested', { requestId: 'permission-1' })),
+    'input'
+  );
+  await measureWrite(
+    () => append(eventsPath, event('permission.completed', { requestId: 'permission-1' })),
+    'running'
+  );
+  await measureWrite(
+    () => append(eventsPath, event('hook.end', { hookType: 'sessionEnd' })),
+    'done'
+  );
+  assert.deepEqual(observed, ['running', 'input', 'running', 'done']);
 });
 
 test('lifecycle hooks leave bound slots intact', async (t) => {
