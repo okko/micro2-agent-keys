@@ -16,6 +16,7 @@
     "dev:capture:vscode-ahp-lifecycle": "npm run build --silent && node scripts/capture-agent-host-question.mjs",
     "dev:mcp-auth-evidence-server": "node scripts/mcp-auth-evidence-server.mjs",
     "dev:mcp-evidence-server": "node scripts/mcp-evidence-server.mjs",
+    "verify:vscode-update": "node scripts/dev/verify-vscode-update.mjs",
     "predaemon": "npm run build",
     "daemon": "node dist/daemon.js",
     "preprobe": "npm run build",
