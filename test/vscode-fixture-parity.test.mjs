@@ -94,8 +94,9 @@ test('VS Code 1.131.0 protocol fixtures match projection and reducer state', () 
     assert.ok(protocol, `${file}: protocol source`);
     assert.ok(protocol.records.length > 0, `${file}: protocol records`);
     const keyStates = new Set();
+    const expectedLifecycle = new Set(['input', 'done']);
 
-    for (const record of protocol.records) {
+    for (const record of protocol.records.filter(({ type }) => type === 'agent-host.snapshot')) {
       const label = `${file}: ${record.stage}`;
       assert.ok(record.truth, `${label}: captured truth`);
       projection.apply(record.state);
@@ -112,7 +113,8 @@ test('VS Code 1.131.0 protocol fixtures match projection and reducer state', () 
       const keyState = reduceSnapshot(run, snapshot, label);
       assert.equal(keyState, expectedKeyState(record.truth, label), `${label}: key state`);
       keyStates.add(keyState);
+      if (record.truth.requestInProgress) expectedLifecycle.add('running');
     }
-    assert.deepEqual(keyStates, new Set(['input', 'running', 'done']), `${file}: key lifecycle`);
+    assert.deepEqual(keyStates, expectedLifecycle, `${file}: key lifecycle`);
   }
 });

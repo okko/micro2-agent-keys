@@ -1,0 +1,1314 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:c3c4b875f764>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "session.start",
+          "data": {
+            "sessionId": "<id:ee6578cc0911>",
+            "version": 1,
+            "producer": "copilot-agent",
+            "copilotVersion": "<redacted>",
+            "startTime": "<redacted>",
+            "contextTier": null,
+            "context": {
+              "cwd": "<redacted>",
+              "gitRoot": "<redacted>",
+              "repository": "<redacted>",
+              "hostType": "<redacted>",
+              "repositoryHost": "<redacted>",
+              "branch": "<redacted>",
+              "headCommit": "<redacted>",
+              "baseCommit": "<redacted>"
+            },
+            "alreadyInUse": false,
+            "remoteSteerable": true
+          },
+          "id": "<id:21625ce1576a>",
+          "timestamp": "<timestamp>",
+          "parentId": null,
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "session.mode_changed",
+          "data": {
+            "previousMode": "<redacted>",
+            "newMode": "<redacted>"
+          },
+          "id": "<id:1ac067264eb0>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:21625ce1576a>",
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 68
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:dfed10c92b5b>",
+            "hookType": "userPromptSubmitted",
+            "input": {
+              "prompt": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:e16d2b792b97>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:1ac067264eb0>",
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 77
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:dfed10c92b5b>",
+            "hookType": "userPromptSubmitted",
+            "success": true
+          },
+          "id": "<id:3e3b8df4236a>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e16d2b792b97>",
+          "_capture": {
+            "sourceLine": 4,
+            "offsetMs": 78
+          }
+        },
+        {
+          "type": "session.model_change",
+          "data": {
+            "newModel": "<redacted>"
+          },
+          "id": "<id:ce734afa1c01>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3e3b8df4236a>",
+          "_capture": {
+            "sourceLine": 5,
+            "offsetMs": 82
+          }
+        },
+        {
+          "type": "system.message",
+          "data": {
+            "role": "<redacted>",
+            "content": "<redacted>"
+          },
+          "id": "<id:35685e8ea9f0>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ce734afa1c01>",
+          "_capture": {
+            "sourceLine": 6,
+            "offsetMs": 179
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:15241ada6a85>",
+            "hookType": "userPromptTransformed",
+            "input": {
+              "prompt": "<redacted>",
+              "transformedPrompt": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:6d2439506e5e>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:35685e8ea9f0>",
+          "_capture": {
+            "sourceLine": 7,
+            "offsetMs": 185
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:15241ada6a85>",
+            "hookType": "userPromptTransformed",
+            "success": true
+          },
+          "id": "<id:9dcc31ae2469>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:6d2439506e5e>",
+          "_capture": {
+            "sourceLine": 8,
+            "offsetMs": 185
+          }
+        },
+        {
+          "type": "user.message",
+          "data": {
+            "content": "<redacted>",
+            "transformedContent": "<redacted>",
+            "attachments": [],
+            "supportedNativeDocumentMimeTypes": [],
+            "agentMode": "<redacted>",
+            "delivery": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>",
+            "parentAgentTaskId": "<id:66e2260dd456>"
+          },
+          "id": "<id:e161e32f7c59>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:9dcc31ae2469>",
+          "_capture": {
+            "sourceLine": 9,
+            "offsetMs": 185
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:5b1eedcfd61e>",
+            "hookType": "sessionStart",
+            "input": {
+              "source": "new",
+              "initialPrompt": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:ce0bf2cf42c9>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e161e32f7c59>",
+          "_capture": {
+            "sourceLine": 10,
+            "offsetMs": 191
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:5b1eedcfd61e>",
+            "hookType": "sessionStart",
+            "success": true
+          },
+          "id": "<id:f6c76f439154>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ce0bf2cf42c9>",
+          "_capture": {
+            "sourceLine": 11,
+            "offsetMs": 278
+          }
+        },
+        {
+          "type": "assistant.turn_start",
+          "data": {
+            "turnId": "<id:e2aa35481da4>",
+            "model": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>"
+          },
+          "id": "<id:e16cf46ddf8a>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f6c76f439154>",
+          "_capture": {
+            "sourceLine": 12,
+            "offsetMs": 308
+          }
+        },
+        {
+          "type": "session.info",
+          "data": {
+            "infoType": "<redacted>",
+            "message": "<redacted>",
+            "url": "<redacted>"
+          },
+          "id": "<id:5c60889b0237>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e16cf46ddf8a>",
+          "_capture": {
+            "sourceLine": 13,
+            "offsetMs": 817
+          }
+        },
+        {
+          "type": "session.remote_steerable_changed",
+          "data": {
+            "remoteSteerable": true
+          },
+          "id": "<id:b0511c819d24>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:5c60889b0237>",
+          "_capture": {
+            "sourceLine": 14,
+            "offsetMs": 819
+          }
+        },
+        {
+          "type": "assistant.message",
+          "data": {
+            "messageId": "<id:260e2923619c>",
+            "model": "<redacted>",
+            "content": "<redacted>",
+            "toolRequests": [
+              {
+                "toolCallId": "<id:56999655e38e>",
+                "name": "<redacted>",
+                "arguments": {
+                  "summary": "<redacted>"
+                },
+                "type": "function",
+                "toolTitle": "<redacted>",
+                "intentionSummary": "<redacted>"
+              }
+            ],
+            "interactionId": "<id:fd7a7acb66d8>",
+            "turnId": "<id:e2aa35481da4>",
+            "reasoningOpaque": "<redacted>",
+            "outputTokens": "<redacted>",
+            "requestId": "<id:3cf1b8c310f1>",
+            "clientRequestId": "<id:43381384e12c>",
+            "serviceRequestId": "<id:70941a2b3429>",
+            "apiCallId": "<id:6006111304bf>"
+          },
+          "id": "<id:3d090fa3e851>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b0511c819d24>",
+          "_capture": {
+            "sourceLine": 15,
+            "offsetMs": 2342
+          }
+        },
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:56999655e38e>",
+            "toolName": "exit_plan_mode",
+            "arguments": {
+              "summary": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:e2aa35481da4>"
+          },
+          "id": "<id:7dc77c999ae7>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3d090fa3e851>",
+          "_capture": {
+            "sourceLine": 16,
+            "offsetMs": 2343
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:57c11d5038ed>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:ee6578cc0911>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:56999655e38e>",
+                  "name": "<redacted>",
+                  "args": {
+                    "summary": "<redacted>"
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:be90ae4e089c>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:7dc77c999ae7>",
+          "_capture": {
+            "sourceLine": 17,
+            "offsetMs": 2344
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:57c11d5038ed>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:0bc3aee0384d>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:be90ae4e089c>",
+          "_capture": {
+            "sourceLine": 18,
+            "offsetMs": 2436
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:6f311b4fc00f>",
+            "hookType": "postToolUse",
+            "input": {
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>",
+              "toolName": "exit_plan_mode",
+              "toolArgs": {
+                "summary": "<redacted>"
+              },
+              "toolResult": {
+                "textResultForLlm": "<redacted>",
+                "resultType": "<redacted>",
+                "sessionLog": "<redacted>"
+              }
+            }
+          },
+          "id": "<id:4f16a262bef6>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:0bc3aee0384d>",
+          "_capture": {
+            "sourceLine": 19,
+            "offsetMs": 2442
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:6f311b4fc00f>",
+            "hookType": "postToolUse",
+            "success": true
+          },
+          "id": "<id:ae3b058201d8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:4f16a262bef6>",
+          "_capture": {
+            "sourceLine": 20,
+            "offsetMs": 2526
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:56999655e38e>",
+            "model": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>",
+            "turnId": "<id:e2aa35481da4>",
+            "success": true,
+            "result": {
+              "content": "<redacted>",
+              "detailedContent": "<redacted>"
+            }
+          },
+          "id": "<id:dcda46790291>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ae3b058201d8>",
+          "_capture": {
+            "sourceLine": 21,
+            "offsetMs": 2526
+          }
+        },
+        {
+          "type": "assistant.turn_end",
+          "data": {
+            "turnId": "<id:e2aa35481da4>",
+            "model": "<redacted>"
+          },
+          "id": "<id:2b8caeb36eb0>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:dcda46790291>",
+          "_capture": {
+            "sourceLine": 22,
+            "offsetMs": 2528
+          }
+        },
+        {
+          "type": "assistant.turn_start",
+          "data": {
+            "turnId": "<id:a26e7bb8f793>",
+            "model": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>"
+          },
+          "id": "<id:fcae062b3628>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:2b8caeb36eb0>",
+          "_capture": {
+            "sourceLine": 23,
+            "offsetMs": 2530
+          }
+        },
+        {
+          "type": "assistant.message",
+          "data": {
+            "messageId": "<id:6165a9e01d32>",
+            "model": "<redacted>",
+            "content": "<redacted>",
+            "toolRequests": [
+              {
+                "toolCallId": "<id:68f81034031e>",
+                "name": "<redacted>",
+                "arguments": {
+                  "summary": "<redacted>"
+                },
+                "type": "function",
+                "toolTitle": "<redacted>",
+                "intentionSummary": "<redacted>"
+              }
+            ],
+            "interactionId": "<id:fd7a7acb66d8>",
+            "turnId": "<id:a26e7bb8f793>",
+            "outputTokens": "<redacted>",
+            "requestId": "<id:963ba6b2e6b0>",
+            "clientRequestId": "<id:24c90ae3cd51>",
+            "serviceRequestId": "<id:34843bddae20>",
+            "apiCallId": "<id:6f2f2f024400>"
+          },
+          "id": "<id:500e7aa1fcc2>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:fcae062b3628>",
+          "_capture": {
+            "sourceLine": 24,
+            "offsetMs": 5099
+          }
+        },
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:68f81034031e>",
+            "toolName": "exit_plan_mode",
+            "arguments": {
+              "summary": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:a26e7bb8f793>"
+          },
+          "id": "<id:82be716f0ef5>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:500e7aa1fcc2>",
+          "_capture": {
+            "sourceLine": 25,
+            "offsetMs": 5100
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:d22692fcf41f>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:ee6578cc0911>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:68f81034031e>",
+                  "name": "<redacted>",
+                  "args": {
+                    "summary": "<redacted>"
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:c5aa035045ad>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:82be716f0ef5>",
+          "_capture": {
+            "sourceLine": 26,
+            "offsetMs": 5102
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:d22692fcf41f>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:360fd9727665>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:c5aa035045ad>",
+          "_capture": {
+            "sourceLine": 27,
+            "offsetMs": 5193
+          }
+        },
+        {
+          "type": "session.mode_changed",
+          "data": {
+            "previousMode": "<redacted>",
+            "newMode": "<redacted>"
+          },
+          "id": "<id:f1ac2aa7b5a8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:360fd9727665>",
+          "_capture": {
+            "sourceLine": 28,
+            "offsetMs": 622013
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:2a925949f6ac>",
+            "hookType": "postToolUse",
+            "input": {
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>",
+              "toolName": "exit_plan_mode",
+              "toolArgs": {
+                "summary": "<redacted>"
+              },
+              "toolResult": {
+                "textResultForLlm": "<redacted>",
+                "resultType": "<redacted>",
+                "sessionLog": "<redacted>"
+              }
+            }
+          },
+          "id": "<id:ff0eabfdca0f>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f1ac2aa7b5a8>",
+          "_capture": {
+            "sourceLine": 29,
+            "offsetMs": 622014
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:2a925949f6ac>",
+            "hookType": "postToolUse",
+            "success": true
+          },
+          "id": "<id:7a086aeb16a0>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ff0eabfdca0f>",
+          "_capture": {
+            "sourceLine": 30,
+            "offsetMs": 622091
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:68f81034031e>",
+            "model": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>",
+            "turnId": "<id:a26e7bb8f793>",
+            "success": true,
+            "result": {
+              "content": "<redacted>",
+              "detailedContent": "<redacted>"
+            }
+          },
+          "id": "<id:397100a6d6b4>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:7a086aeb16a0>",
+          "_capture": {
+            "sourceLine": 31,
+            "offsetMs": 622092
+          }
+        },
+        {
+          "type": "system.message",
+          "data": {
+            "role": "<redacted>",
+            "content": "<redacted>"
+          },
+          "id": "<id:c3fb1de26b99>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:397100a6d6b4>",
+          "_capture": {
+            "sourceLine": 32,
+            "offsetMs": 622133
+          }
+        },
+        {
+          "type": "assistant.turn_end",
+          "data": {
+            "turnId": "<id:a26e7bb8f793>",
+            "model": "<redacted>"
+          },
+          "id": "<id:42f53cb15248>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:c3fb1de26b99>",
+          "_capture": {
+            "sourceLine": 33,
+            "offsetMs": 622150
+          }
+        },
+        {
+          "type": "assistant.turn_start",
+          "data": {
+            "turnId": "<id:6b35bdab9355>",
+            "model": "<redacted>",
+            "interactionId": "<id:fd7a7acb66d8>"
+          },
+          "id": "<id:269f894a8501>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:42f53cb15248>",
+          "_capture": {
+            "sourceLine": 34,
+            "offsetMs": 622151
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:68921019081a>",
+            "hookType": "errorOccurred",
+            "input": {
+              "error": {
+                "name": "<redacted>",
+                "message": "<redacted>",
+                "stack": "<redacted>"
+              },
+              "errorContext": "<redacted>",
+              "recoverable": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:93a88ec83443>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:269f894a8501>",
+          "_capture": {
+            "sourceLine": 35,
+            "offsetMs": 622761
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:68921019081a>",
+            "hookType": "errorOccurred",
+            "success": true
+          },
+          "id": "<id:3cccb3ad98c8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:93a88ec83443>",
+          "_capture": {
+            "sourceLine": 36,
+            "offsetMs": 622762
+          }
+        },
+        {
+          "type": "assistant.message",
+          "data": {
+            "messageId": "<id:9fcc5250c1e2>",
+            "model": "<redacted>",
+            "content": "<redacted>",
+            "toolRequests": [],
+            "interactionId": "<id:fd7a7acb66d8>",
+            "turnId": "<id:6b35bdab9355>",
+            "reasoningOpaque": "<redacted>",
+            "outputTokens": "<redacted>",
+            "requestId": "<id:3dbe2b651690>",
+            "clientRequestId": "<id:f4c9f4766ea4>",
+            "serviceRequestId": "<id:ebcad6509761>",
+            "apiCallId": "<id:b409188be709>"
+          },
+          "id": "<id:5877a0b8e482>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3cccb3ad98c8>",
+          "_capture": {
+            "sourceLine": 37,
+            "offsetMs": 626527
+          }
+        },
+        {
+          "type": "assistant.turn_end",
+          "data": {
+            "turnId": "<id:6b35bdab9355>",
+            "model": "<redacted>"
+          },
+          "id": "<id:0909f3402c65>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:5877a0b8e482>",
+          "_capture": {
+            "sourceLine": 38,
+            "offsetMs": 626529
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:45ff522c08e2>",
+            "hookType": "agentStop",
+            "input": {
+              "transcriptPath": "<redacted>",
+              "stopReason": "<redacted>",
+              "stop_hook_active": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:01e5a8031d71>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:0909f3402c65>",
+          "_capture": {
+            "sourceLine": 39,
+            "offsetMs": 626545
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:45ff522c08e2>",
+            "hookType": "agentStop",
+            "success": true
+          },
+          "id": "<id:345e90984951>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:01e5a8031d71>",
+          "_capture": {
+            "sourceLine": 40,
+            "offsetMs": 626546
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:6c3bfdde39d4>",
+            "hookType": "sessionEnd",
+            "input": {
+              "reason": "<redacted>",
+              "sessionId": "<id:ee6578cc0911>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:3a03492483ae>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:345e90984951>",
+          "_capture": {
+            "sourceLine": 41,
+            "offsetMs": 626546
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:6c3bfdde39d4>",
+            "hookType": "sessionEnd",
+            "success": true
+          },
+          "id": "<id:cff2ccf0dd66>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3a03492483ae>",
+          "_capture": {
+            "sourceLine": 42,
+            "offsetMs": 626629
+          }
+        },
+        {
+          "type": "session.usage_checkpoint",
+          "data": {
+            "totalNanoAiu": "<redacted>",
+            "totalPremiumRequests": "<redacted>",
+            "modelCacheState": [
+              {
+                "modelId": "<id:f1ec72cc6533>",
+                "cacheExpiresAt": "<redacted>",
+                "cacheTtlSeconds": "<redacted>"
+              }
+            ]
+          },
+          "id": "<id:cb6cac75da5f>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:cff2ccf0dd66>",
+          "_capture": {
+            "sourceLine": 43,
+            "offsetMs": 626630
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        }
+      ]
+    },
+    {
+      "source": "agent-host-protocol",
+      "records": [
+        {
+          "type": "agent-host.snapshot",
+          "stage": "waiting",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": false,
+            "awaitsUserInput": true
+          },
+          "state": {
+            "status": 24,
+            "activeTurn": {
+              "id": "<id:b0c424fc17ae>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:56999655e38e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:d6733a55d72e>",
+                    "planReview": true
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 2439
+          }
+        },
+        {
+          "type": "agent-host.action",
+          "stage": "resolution-action",
+          "timestamp": "<timestamp>",
+          "action": {
+            "type": "chat/inputCompleted",
+            "requestId": "<id:d6733a55d72e>",
+            "responseKind": "accept",
+            "answerCount": 1,
+            "answers": [
+              {
+                "state": "submitted",
+                "valueKind": "selected",
+                "hasFreeformValues": true
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 2441
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "resolved",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": true,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 8,
+            "activeTurn": {
+              "id": "<id:b0c424fc17ae>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:56999655e38e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:d6733a55d72e>",
+                    "planReview": true
+                  },
+                  "response": {
+                    "kind": "accept"
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 2445
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "waiting",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": false,
+            "awaitsUserInput": true
+          },
+          "state": {
+            "status": 24,
+            "activeTurn": {
+              "id": "<id:b0c424fc17ae>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:56999655e38e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "completed",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:d6733a55d72e>",
+                    "planReview": true
+                  },
+                  "response": {
+                    "kind": "accept"
+                  }
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:68f81034031e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:c0e6839ef349>",
+                    "planReview": true
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 4,
+            "offsetMs": 622006
+          }
+        },
+        {
+          "type": "agent-host.action",
+          "stage": "resolution-action",
+          "timestamp": "<timestamp>",
+          "action": {
+            "type": "chat/inputCompleted",
+            "requestId": "<id:c0e6839ef349>",
+            "responseKind": "accept",
+            "answerCount": 1,
+            "answers": [
+              {
+                "state": "submitted",
+                "valueKind": "selected",
+                "hasFreeformValues": false
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 5,
+            "offsetMs": 622013
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "resolved",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": true,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 8,
+            "activeTurn": {
+              "id": "<id:b0c424fc17ae>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:56999655e38e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "completed",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:d6733a55d72e>",
+                    "planReview": true
+                  },
+                  "response": {
+                    "kind": "accept"
+                  }
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:68f81034031e>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:c0e6839ef349>",
+                    "planReview": true
+                  },
+                  "response": {
+                    "kind": "accept"
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 6,
+            "offsetMs": 622014
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "terminal",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": false,
+            "requestInProgress": false,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 1,
+            "turns": [
+              {
+                "id": "<id:b0c424fc17ae>",
+                "state": "complete",
+                "responseParts": [
+                  {
+                    "kind": "markdown"
+                  },
+                  {
+                    "kind": "toolCall",
+                    "toolCall": {
+                      "toolCallId": "<id:56999655e38e>",
+                      "toolName": "exit_plan_mode",
+                      "status": "completed",
+                      "_meta": {}
+                    }
+                  },
+                  {
+                    "kind": "inputRequest",
+                    "request": {
+                      "id": "<id:d6733a55d72e>",
+                      "planReview": true
+                    },
+                    "response": {
+                      "kind": "accept"
+                    }
+                  },
+                  {
+                    "kind": "toolCall",
+                    "toolCall": {
+                      "toolCallId": "<id:68f81034031e>",
+                      "toolName": "exit_plan_mode",
+                      "status": "completed",
+                      "_meta": {}
+                    }
+                  },
+                  {
+                    "kind": "inputRequest",
+                    "request": {
+                      "id": "<id:c0e6839ef349>",
+                      "planReview": true
+                    },
+                    "response": {
+                      "kind": "accept"
+                    }
+                  },
+                  {
+                    "kind": "markdown"
+                  }
+                ]
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 7,
+            "offsetMs": 626642
+          }
+        }
+      ]
+    }
+  ]
+}

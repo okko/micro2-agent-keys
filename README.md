@@ -208,7 +208,7 @@ tail -f ~/.local/state/agentkeys/daemon.log
 ## Docs for development in this repository
 
 - [How the VS Code integration works](docs/vscode-integration-details.md)
-- [VS Code evidence gap backlog](docs/vscode-plan-gaps-todo.md)
+- [VS Code evidence completion ledger](docs/archive-do-not-edit/vscode-plan-gaps-todo.md)
 - [VS Code residual blind spots](docs/vscode-plan-residual-blind-spots.md)
 - [How the daemon deployment is verified](docs/daemon-deployment.md)
 - [docs/hardware-safety.md](docs/hardware-safety.md) — **read before writing to the

@@ -58,7 +58,8 @@ Agent Host protocol exports that blocker, AgentKeys cannot observe it and theref
 cannot turn red. Timing is not an acceptable substitute because auto-approved and
 human-delayed permission events share persisted shapes.
 
-The evidence backlog in `docs/vscode-plan-gaps-todo.md` requires each such case to remain
+The archived evidence completion ledger at
+`docs/archive-do-not-edit/vscode-plan-gaps-todo.md` requires each such case to remain
 unsupported until a production signal exists. The correct upstream fix is to export an
 unresolved blocker identity or authoritative `awaitsUserInput` state.
 

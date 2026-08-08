@@ -1,142 +1,123 @@
 # VS Code human-input evidence
 
-This records the Phase 1 evidence captured from Visual Studio Code 1.131.0,
+This records sanitized production evidence captured from Visual Studio Code 1.131.0,
 commit `d0fd3324a737f695bd14f2aee3ca92accd28870f`. The fixtures under
-`test/fixtures/vscode-human-input/` contain real records with prompts, answers,
-commands, paths, absolute timestamps, and opaque content redacted. IDs are stable
-pseudonyms so related records remain correlatable. Each selected record retains its
-source line and, when its source had a timestamp, a millisecond offset from the first
-timestamped record in that fixture.
+`test/fixtures/vscode-human-input/` retain only structural states, enum outcomes,
+relative timing, and stable pseudonyms needed for correlation. Prompts, answers,
+commands, URLs, paths, credentials, tokens, account names, private content, and
+absolute timestamps are redacted.
 
-Coverage is exhaustive for externally observable states that were reproducible through
-the installed build's production transcript, journal, hook, persisted-event, and local
-Agent Host protocol surfaces. The manifest accounts for every inventory family and marks
-unexported interactions or those requiring unavailable providers, credentials, or
-servers as unsupported. Unsupported rows are not synthetic evidence; their known
-version-locked contract shapes remain unit-tested, and unknown waiting forms fail closed.
-The remaining capture work is specified in `docs/vscode-plan-gaps-todo.md`; runtime
-limits without current external signals are tracked in
-`docs/vscode-plan-residual-blind-spots.md`.
+Coverage is exhaustive for externally observable outcomes available from this build's
+native transcript and journal, Agent Host event and state files, and live Agent Host
+protocol. Every outcome not backed by a real fixture has a build-locked upstream or
+provider limitation in the archived completion ledger at
+`docs/archive-do-not-edit/vscode-plan-gaps-todo.md`. No unsupported state is synthesized.
+Unknown waiting forms continue to fail closed.
 
-The capture command is `npm run dev:capture:vscode-fixture -- ...`. Exact source
-lines can be selected independently, and `--agent-host-state-row-limit` bounds
-unrelated SQLite rows without changing their structure. The fixture tests reject
-home paths, raw UUIDs, file URIs, long opaque tokens, and files over 100 KB.
-The manifest identifies exact start and end records for every measured lifecycle;
-the fixture tests recompute each duration rather than trusting this document.
-Live protocol captures are produced with
-`npm run dev:capture:vscode-ahp-lifecycle -- --output <jsonl> --scenario <name>`
-and supplied to the
-fixture command with `--agent-host-protocol <jsonl>`. The driver creates an isolated
-Agent Host session and runs a question-cancel, external-file-deny, or plan-reject
-scenario. It resolves each blocker through the real protocol without allowing a denied
-tool or rejected plan to execute.
+## Capture and validation
+
+Create sanitized fixtures with:
+
+```sh
+npm run dev:capture:vscode-fixture -- ...
+```
+
+Capture live Agent Host lifecycles with:
+
+```sh
+npm run dev:capture:vscode-ahp-lifecycle -- \
+  --output "$TMPDIR/agentkeys-lifecycle.jsonl" \
+  --scenario <name>
+```
+
+The lifecycle recorder supports isolated scenarios and passive `--session` attachment.
+It preserves only safe blocker structure, correlates UI actions by request, turn, or tool
+ID, and treats terminal state as authoritative when cancellation leaves an unresolved-
+looking historical response part.
+
+The fixture tests reject home paths, file URIs, raw UUIDs, long opaque tokens, absolute
+timestamps, and files over 100 KB. Manifest measurements identify exact source records;
+tests recompute every duration rather than trusting prose.
 
 ## Observed lifecycles
 
-| Case | Ordered evidence | Measured wait | Resolution |
-|---|---|---:|---|
-| Native question | transcript `assistant.message` -> `tool.execution_start` -> `tool.execution_complete`; journal `questionCarousel` -> same `resolveId` with `isUsed: true` | 47,379 ms | submitted |
-| Agent Host question | raw chat status `24` with unresolved `inputRequest` -> status `8` with its response present -> terminal status `1` | 5 ms to resume; 2,620 ms to terminal | protocol cancel |
-| Agent Host external-file denial | raw status `24` with `pending-confirmation` -> status `8` with the same tool call `cancelled` -> terminal status `1`; event log records the same tool and request IDs | 5 ms to resume; 2,562 ms to terminal | `denied-interactively-by-user` |
-| Agent Host plan review | raw status `24` with unresolved `inputRequest.request.planReview` -> status `8` with its response present -> terminal status `1` | 2 ms to resume; 1,722 ms to terminal | protocol reject/cancel |
-| Agent Host terminal | `tool.execution_start` -> `preToolUse` start/end -> `permission.requested(shell)` | 1,160,824 ms | `permission.completed(approved)` |
-| Agent Host network | tool and `preToolUse` events -> `permission.requested(url)` | 5,008 ms | `permission.completed(approved)` |
-| Agent Host external file | `permission.requested(read)` for a path outside the session working directory | 196,716 ms | `permission.completed(approved)` |
-| Agent Host contributed tool | `preToolUse` start/end -> two `permission.requested(custom-tool)` records | 16,984 ms for the human-delayed request; 27 ms for the immediate control | both `approved` |
-| Agent Host URL immediate control | `permission.requested(url)` -> `permission.completed(approved)` | 1 ms | approved; approval cause not persisted |
-| Native tool outcomes | final `toolInvocationSerialized.isConfirmed.type` values 4, 0, and 1 | not persisted | explicit approve, deny, and confirmation-not-needed |
-| Legacy confirmation | final `confirmation` with `isUsed: true` | not persisted | button identity not persisted |
-| Elicitation | final `elicitationSerialized.state` values | not persisted | `accepted` and `rejected` |
+| Family | Real production evidence | Outcome |
+|---|---|---|
+| Native questions | unresolved and used `questionCarousel` records correlated with tool start/completion | submit and Skip |
+| Agent Host questions | status `24` unresolved input -> action -> status `8` or terminal `1` | submit and turn cancel |
+| Plan review | status `24` `request.planReview` -> correlated input response -> status `8` -> terminal `1` | reject, approve, and feedback followed by replacement approval |
+| Pre-tool approval | terminal, network, external-file, and contributed-tool permission requests; live pending confirmation for denial | approve, deny, confirmation-not-needed, and immediate controls |
+| Modified-files review | `modifiedFilesConfirmation` with status `24` -> correlated confirmation -> status `8` -> terminal `1` | approve and reject |
+| Feedback review | `agentFeedbackReviewConfirmation` with status `24` -> correlated confirmation -> status `8` -> terminal `1` | approve and reject |
+| Form elicitation | unresolved Agent Host input request -> `decline` response -> status `8` -> terminal `1` | decline |
+| URL elicitation | unresolved redacted URL request -> correlated response or turn cancellation | decline and cancel |
+| Native elicitation | final `elicitationSerialized.state` | accepted and rejected |
+| Authentication | status `24` tool with `auth-required`, reason `expired` -> correlated turn cancellation -> terminal `1` | expired-auth cancel |
+| Legacy confirmation | final native `confirmation` with `isUsed: true` | generic resolution only |
 
-The installed bundle and the corresponding public source define native confirmation
-types as follows: 0 denied, 1 confirmation not needed, 2 setting, 3 per-tool scoped
-approval, 4 explicit user action, and 5 skipped. Types 0 and 5 cancel; the other
-types proceed.
+Agent Host execution bits are interpreted independently of AgentKeys: `24` means waiting
+for input, `8` means an active running turn, and `1` means terminal/inactive. Waiting also
+requires the expected unresolved input request, non-auto-approved pending confirmation,
+pending result confirmation, or auth-required tool. Timing and tool names alone never
+establish a blocker.
 
-## Source ordering
+## Measured waits
 
-The Agent Host event log has timestamps and a total order. The fixtures retain that
-order as source lines and relative offsets without retaining dates or time of day.
-`preToolUse` finishes
-before `permission.requested` for the captured terminal and contributed-tool
-requests. The hook only identifies a tool boundary; `permission.requested` is the
-first event that identifies a permission gate. It is not sufficient evidence of
-a human blocker because the same event also appears in the 1 ms URL and 27 ms
-contributed-tool immediate controls. Their latency proves that no human wait occurred,
-but it does not identify the mechanism that approved them.
+Human-delayed captures include native question submit (47,379 ms), native question Skip
+(39,866 ms), URL elicitation decline (72,700 ms), URL elicitation cancellation
+(26,512 ms), and expired-auth cancellation (187,070 ms). Permission waits include
+terminal (1,160,824 ms), external-file read (196,716 ms), contributed tool (16,984 ms),
+and network (5,008 ms).
 
-The native journal has no per-record timestamp. For the question lifecycle it
-contains the authoritative unresolved and used `questionCarousel` snapshots,
-while the transcript contains timestamped tool start and completion records.
-Their cross-file first-arrival order cannot be established from persisted data.
+The 1 ms URL and 27 ms contributed-tool permission pairs are immediate controls, not
+human waits. Recorder-driven protocol actions complete in 1-8 ms and are classified as
+immediate protocol controls. Their timing verifies ordering, not human behavior.
 
-The live Agent Host question, plan-review, and tool-denial captures are independently
-grounded in VS Code's reduced chat `status`, not in the AgentKeys projection:
-execution bits `24` mean waiting for input, `8` mean an active running turn, and `1`
-means terminal/inactive. The same turn and blocker pseudonyms correlate each set of
-three snapshots. Their automated cancel, reject, and deny actions are immediate
-protocol controls, not measured human reaction times. VS Code 1.131.0 identifies
-the captured plan review by the presence of `InputRequest.request.planReview`, not a
-`purpose: planReview` field.
+## Ordering and persistence
 
-Agent Host `session.db` was also captured. The fixtures preserve its table and column
-inventory while bounding and sanitizing rows. Its three tables (`inbox_entries`,
-`todo_deps`, and `todos`) contain inbox and todo state, not chat blockers. The
-permission lifecycle is durable only in
-`events.jsonl` among the inspected Agent Host files. Captured `preToolUse` and
-`preMcpToolCall` hook payloads are useful ordering hints but expose no independent
-open/closed blocker state.
+Agent Host `events.jsonl` has timestamps and total order. Captured `preToolUse` and
+`preMcpToolCall` hooks establish boundaries, while `permission.requested` first identifies
+the permission gate. The same event can be immediately approved, so it is not sufficient
+waiting evidence by itself.
 
-## Reload persistence
+The native journal has no per-record timestamp. Native question records establish
+unresolved/used structure, while the transcript supplies tool start/completion timing;
+cross-file first-arrival order cannot be reconstructed.
 
-The native question's unresolved and resolved snapshots both survive a fresh file
-read, and the transcript retains tool start and completion. Completed native tool
-calls survive as `toolInvocationSerialized`; their live waiting state does not.
-No window reload occurred during the captured question wait, so restoration of the
-live waiting UI is not directly established.
+Agent Host `session.db` contains inbox and todo state, not chat blockers. Permission
+history persists in `events.jsonl`; unresolved input requests and authoritative status
+transitions come from the live protocol. Captured lifecycles were not held open across a
+window reload, so restoration of a waiting UI is not claimed.
 
-Agent Host permission requests and completions survive later session resumes in
-the event log. No captured permission remained open across a reload, and the
-SQLite state has no corresponding blocker row. Event history therefore proves
-durability, not that an unresolved request can be reconstructed after reload from
-these files alone.
-
-The Agent Host question's start and completion survive in `events.jsonl`, but its
-unresolved `inputRequest` and status transitions were available only from the live
-protocol. The external-file denial additionally persists correlated
-`permission.requested` and `permission.completed(denied-interactively-by-user)`
-records. The plan review's tool start and completion persist, but its unresolved
-request is likewise live-protocol-only. No reload was performed while any of these
-requests waited.
+Turn cancellation may transition directly from status `24` to terminal status `1`.
+Historical input parts can remain unresolved-looking after cancellation. The correlated
+`chat/turnCancelled` action and terminal turn/tool state are authoritative in that case.
 
 ## Support matrix
 
-| Blocker family | Real evidence | Unsupported from available external signals |
+| Blocker family | Real evidence | Remaining build-locked limitation |
 |---|---|---|
-| Pre-tool approval | terminal, network, external-file, and contributed-tool entry; approve, native and Agent Host deny, native confirmation-not-needed, and Agent Host immediate controls; live Agent Host waiting/resume/terminal model truth for external-file denial | edit-and-approve; Agent Host edit outcome; cause of immediate approvals |
-| Post-tool approval | none | pending result review, approve, reject |
-| Authentication | none | missing-auth and insufficient-scope waits, authenticate, cancel |
-| Confirmation part | final used response | waiting state, selected button, cancel |
-| Questions | native `vscode_askQuestions` waiting/submit; Agent Host `askUser` waiting/cancel/resume/terminal | native skip/cancel; Agent Host submit/skip |
-| Plan review | Agent Host waiting/reject/resume/terminal, identified by `request.planReview` | approve, feedback |
-| Elicitation | final accepted and rejected states | pending form/URL requests; decline versus cancel |
-| Modified-files review | none | waiting, approve, reject |
-| Feedback review | none | waiting, approve, reject |
+| Pre-tool approval | waiting, approve, deny, confirmation-not-needed, immediate controls | edit-and-approve has reducer support but no installed producer or distinct persisted outcome |
+| Post-tool approval | none | reducer contract exists, but no installed provider emits `requiresResultConfirmation` or a result-review action |
+| Authentication | expired-auth waiting and cancel | missing-auth, insufficient-scope, and authenticate are blocked by Agent Host/server authentication-state divergence |
+| Confirmation part | final generic resolution | no triggerable installed producer for waiting; selected button and cancel are not persisted distinctly |
+| Questions | native waiting/submit/Skip; Agent Host waiting/submit/cancel | native cancel is not persisted distinctly; Agent Host has no Skip producer or response kind |
+| Plan review | waiting, reject, approve, feedback, replacement review | none |
+| Elicitation | native accepted/rejected; Agent Host pending form/URL, decline, and cancel | none |
+| Modified-files review | waiting, approve, reject | none |
+| Feedback review | waiting, approve, reject | none |
 
-The Agent Host protocol defines unresolved `InputRequest`, non-auto-approved
-`pending-confirmation`, `pending-result-confirmation`, and `auth-required` as the
-authoritative blockers. None of the unavailable protocol states above is
-synthesized in this corpus.
+The expired authentication fixture proves only the observed `expired` reason and
+cancellation. It does not prove missing credentials, insufficient scope, token refresh,
+or successful authentication.
 
 ## UI truth limits
 
-The human-delayed records were captured from visibly blocking interactions, and
-their completion records establish the transition out of the wait. The persisted
-formats do not contain `ChatModel.hasActiveRequest` or
-`ChatModel.requestInProgress`, so the exact native model truth table cannot be
-replayed from those historical files. The Agent Host question, plan-review, and
-tool-denial fixtures do retain the corresponding authoritative live model status
-and verify their complete waiting/resumed/terminal truth tables. Their visual
-rendering was not separately screen-captured. Unsupported rows must remain visible
-diagnostics rather than being decoded from timing or tool names.
+The human-delayed records were captured from visibly blocking production interactions,
+and completion or terminal records establish exit from the wait. Native persisted formats
+do not expose `ChatModel.hasActiveRequest` or `requestInProgress`; exact native model truth
+cannot be replayed from history. Agent Host fixtures retain live status and blocker
+structure, but their visual rendering was not separately screen-captured.
+
+Unsupported outcomes remain explicit diagnostics. They must not be inferred from elapsed
+time, labels, tool names, reducer capability, or a neighboring outcome.

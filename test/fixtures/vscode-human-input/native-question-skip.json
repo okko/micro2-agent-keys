@@ -1,0 +1,134 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:25be48445cb6>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "native-transcript",
+      "records": [
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:2b593d2d31ba>",
+            "toolName": "vscode_askQuestions",
+            "arguments": {
+              "questions": [
+                {
+                  "header": "<redacted>",
+                  "question": "<redacted>",
+                  "allowFreeformInput": "<redacted>",
+                  "message": "<redacted>",
+                  "options": [
+                    {
+                      "label": "<redacted>",
+                      "description": "<redacted>"
+                    },
+                    {
+                      "label": "<redacted>",
+                      "description": "<redacted>"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "id": "<id:c93bb57c144d>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:5eaa0c995180>",
+          "_capture": {
+            "sourceLine": 655,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:2b593d2d31ba>",
+            "success": true
+          },
+          "id": "<id:aeef6a08d87d>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:c93bb57c144d>",
+          "_capture": {
+            "sourceLine": 656,
+            "offsetMs": 39866
+          }
+        }
+      ]
+    },
+    {
+      "source": "native-journal",
+      "records": [
+        {
+          "kind": 2,
+          "k": [
+            "requests",
+            0,
+            "response"
+          ],
+          "v": [
+            {
+              "kind": "toolInvocationSerialized",
+              "invocationMessage": {
+                "value": "<redacted>",
+                "isTrusted": "<redacted>",
+                "supportThemeIcons": "<redacted>",
+                "supportHtml": "<redacted>",
+                "supportAlertSyntax": "<redacted>"
+              },
+              "pastTenseMessage": "<redacted>",
+              "isConfirmed": {
+                "type": 1
+              },
+              "isComplete": true,
+              "source": {
+                "type": "internal",
+                "label": "<redacted>"
+              },
+              "toolCallId": "<id:2b593d2d31ba>",
+              "toolId": "<id:cbfb59e4b833>"
+            },
+            {
+              "kind": "questionCarousel",
+              "questions": [
+                {
+                  "id": "<id:02b8192685d6>",
+                  "type": "singleSelect",
+                  "title": "<redacted>",
+                  "message": "<redacted>",
+                  "detailedMessage": "<redacted>",
+                  "options": [
+                    {
+                      "id": "<id:49a28690b6a5>",
+                      "label": "<redacted>",
+                      "value": "<redacted>"
+                    },
+                    {
+                      "id": "<id:36eefc0413e1>",
+                      "label": "<redacted>",
+                      "value": "<redacted>"
+                    }
+                  ],
+                  "allowFreeformInput": "<redacted>"
+                }
+              ],
+              "allowSkip": true,
+              "resolveId": "<id:2b593d2d31ba>",
+              "data": {},
+              "isUsed": true
+            }
+          ],
+          "i": "<redacted>",
+          "_capture": {
+            "sourceLine": 204
+          }
+        }
+      ]
+    }
+  ]
+}

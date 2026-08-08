@@ -23,6 +23,17 @@
       ]
     },
     {
+      "file": "native-question-skip.json",
+      "sources": [
+        "native-transcript",
+        "native-journal"
+      ],
+      "observed": [
+        "questions.native.waiting",
+        "questions.native.skip"
+      ]
+    },
+    {
       "file": "native-outcomes.json",
       "sources": [
         "native-journal"
@@ -120,6 +131,160 @@
         "plan-review.agent-host.resumed",
         "plan-review.agent-host.terminal"
       ]
+    },
+    {
+      "file": "agent-host-question-submit.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "questions.agent-host.waiting",
+        "questions.agent-host.submit",
+        "questions.agent-host.resumed",
+        "questions.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-plan-approve.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "plan-review.agent-host.waiting",
+        "plan-review.agent-host.approve",
+        "plan-review.agent-host.resumed",
+        "plan-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-plan-feedback.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "plan-review.agent-host.waiting",
+        "plan-review.agent-host.feedback",
+        "plan-review.agent-host.replacement-waiting",
+        "plan-review.agent-host.replacement-approve",
+        "plan-review.agent-host.resumed",
+        "plan-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-modified-files-deny.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "modified-files-review.agent-host.waiting",
+        "modified-files-review.agent-host.reject",
+        "modified-files-review.agent-host.resumed",
+        "modified-files-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-modified-files-approve.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "modified-files-review.agent-host.waiting",
+        "modified-files-review.agent-host.approve",
+        "modified-files-review.agent-host.resumed",
+        "modified-files-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-feedback-review-deny.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "feedback-review.agent-host.waiting",
+        "feedback-review.agent-host.reject",
+        "feedback-review.agent-host.resumed",
+        "feedback-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-feedback-review-approve.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "feedback-review.agent-host.waiting",
+        "feedback-review.agent-host.approve",
+        "feedback-review.agent-host.resumed",
+        "feedback-review.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-elicitation-form-decline.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "elicitation.agent-host.form.waiting",
+        "elicitation.agent-host.form.decline",
+        "elicitation.agent-host.form.resumed",
+        "elicitation.agent-host.form.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-elicitation-url-decline.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "elicitation.agent-host.url.waiting",
+        "elicitation.agent-host.url.decline",
+        "elicitation.agent-host.url.resumed",
+        "elicitation.agent-host.url.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-elicitation-url-cancel.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "elicitation.agent-host.url.waiting",
+        "elicitation.agent-host.url.cancel",
+        "elicitation.agent-host.url.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-auth-expired-cancel.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "authentication.agent-host.expired.waiting",
+        "authentication.agent-host.cancel",
+        "authentication.agent-host.terminal"
+      ]
     }
   ],
   "blockers": [
@@ -154,13 +319,15 @@
     },
     {
       "id": "authentication",
-      "status": "unsupported",
-      "observed": [],
+      "status": "partial",
+      "observed": [
+        "expired-auth",
+        "agent-host-cancel"
+      ],
       "unsupported": [
         "missing-auth",
         "insufficient-scope",
-        "authenticate",
-        "cancel"
+        "authenticate"
       ]
     },
     {
@@ -181,13 +348,14 @@
       "observed": [
         "native-waiting",
         "native-submit",
+        "native-skip",
         "agent-host-waiting",
-        "agent-host-cancel"
+        "agent-host-cancel",
+        "agent-host-submit"
       ],
       "unsupported": [
-        "native-skip",
         "native-cancel",
-        "agent-host-submit-or-skip"
+        "agent-host-skip"
       ]
     },
     {
@@ -195,45 +363,45 @@
       "status": "partial",
       "observed": [
         "agent-host-waiting",
-        "agent-host-reject"
+        "agent-host-reject",
+        "agent-host-approve",
+        "agent-host-feedback",
+        "replacement-review"
       ],
-      "unsupported": [
-        "approve",
-        "feedback"
-      ]
+      "unsupported": []
     },
     {
       "id": "elicitation",
       "status": "partial",
       "observed": [
         "accepted",
-        "rejected"
-      ],
-      "unsupported": [
+        "rejected",
         "pending-form",
         "pending-url",
-        "decline-versus-cancel"
-      ]
+        "decline",
+        "cancel"
+      ],
+      "unsupported": []
     },
     {
       "id": "modified-files-review",
-      "status": "unsupported",
-      "observed": [],
-      "unsupported": [
+      "status": "partial",
+      "observed": [
         "waiting",
         "approve",
         "reject"
-      ]
+      ],
+      "unsupported": []
     },
     {
       "id": "feedback-review",
-      "status": "unsupported",
-      "observed": [],
-      "unsupported": [
+      "status": "partial",
+      "observed": [
         "waiting",
         "approve",
         "reject"
-      ]
+      ],
+      "unsupported": []
     }
   ],
   "measurements": [
@@ -252,6 +420,23 @@
       },
       "correlationPath": "data.toolCallId",
       "elapsedMs": 47379,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "questions.native.skip",
+      "fixture": "native-question-skip.json",
+      "start": {
+        "source": "native-transcript",
+        "sourceLine": 655,
+        "type": "tool.execution_start"
+      },
+      "end": {
+        "source": "native-transcript",
+        "sourceLine": 656,
+        "type": "tool.execution_complete"
+      },
+      "correlationPath": "data.toolCallId",
+      "elapsedMs": 39866,
       "classification": "observed-human-wait"
     },
     {
@@ -423,6 +608,222 @@
       "correlationPath": "state.activeTurn.id",
       "elapsedMs": 2,
       "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "questions.agent-host.submit",
+      "fixture": "agent-host-question-submit.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 5,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "plan-review.agent-host.approve",
+      "fixture": "agent-host-plan-approve.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 2,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "plan-review.agent-host.feedback",
+      "fixture": "agent-host-plan-feedback.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 2,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "plan-review.agent-host.replacement-approve",
+      "fixture": "agent-host-plan-feedback.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 4,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 5,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.4.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 7,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "modified-files-review.agent-host.reject",
+      "fixture": "agent-host-modified-files-deny.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.0.toolCall.toolCallId",
+      "endCorrelationPath": "action.toolCallId",
+      "elapsedMs": 1,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "modified-files-review.agent-host.approve",
+      "fixture": "agent-host-modified-files-approve.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.0.toolCall.toolCallId",
+      "endCorrelationPath": "action.toolCallId",
+      "elapsedMs": 1,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "feedback-review.agent-host.reject",
+      "fixture": "agent-host-feedback-review-deny.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.1.toolCall.toolCallId",
+      "endCorrelationPath": "action.toolCallId",
+      "elapsedMs": 5,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "feedback-review.agent-host.approve",
+      "fixture": "agent-host-feedback-review-approve.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.1.toolCall.toolCallId",
+      "endCorrelationPath": "action.toolCallId",
+      "elapsedMs": 2,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "elicitation.agent-host.form.decline",
+      "fixture": "agent-host-elicitation-form-decline.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 5,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "elicitation.agent-host.url.decline",
+      "fixture": "agent-host-elicitation-url-decline.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 72700,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "elicitation.agent-host.url.cancel",
+      "fixture": "agent-host-elicitation-url-cancel.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 3,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.responseParts.2.request.id",
+      "endCorrelationPath": "action.requestId",
+      "elapsedMs": 26512,
+      "classification": "observed-human-wait"
+    },
+    {
+      "id": "authentication.agent-host.cancel",
+      "fixture": "agent-host-auth-expired-cancel.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.action"
+      },
+      "startCorrelationPath": "state.activeTurn.id",
+      "endCorrelationPath": "action.turnId",
+      "elapsedMs": 187070,
+      "classification": "observed-human-wait"
     }
   ],
   "derivedFacts": [

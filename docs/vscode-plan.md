@@ -9,8 +9,9 @@ coverage authority: every inventory row is classified as observed or unsupported
 records are required for observed claims, and detectable unrecognized waiting forms fail
 closed. Internal UI/model states that the evidence build does not export, or interactions
 that require unavailable providers or credentials, are not claimed as empirically
-covered. See `docs/vscode-plan-gaps-todo.md` for the capture backlog and
-`docs/vscode-plan-residual-blind-spots.md` for limits without current external signals.
+covered. See `docs/archive-do-not-edit/vscode-plan-gaps-todo.md` for the archived
+completion ledger and `docs/vscode-plan-residual-blind-spots.md` for limits without
+current external signals.
 
 ## Goal
 

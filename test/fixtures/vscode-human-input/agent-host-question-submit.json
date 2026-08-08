@@ -1,0 +1,910 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:b2a244a2e045>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "session.start",
+          "data": {
+            "sessionId": "<id:dcd12ee25fc1>",
+            "version": 1,
+            "producer": "copilot-agent",
+            "copilotVersion": "<redacted>",
+            "startTime": "<redacted>",
+            "contextTier": null,
+            "context": {
+              "cwd": "<redacted>",
+              "gitRoot": "<redacted>",
+              "repository": "<redacted>",
+              "hostType": "<redacted>",
+              "repositoryHost": "<redacted>",
+              "branch": "<redacted>",
+              "headCommit": "<redacted>",
+              "baseCommit": "<redacted>"
+            },
+            "alreadyInUse": false,
+            "remoteSteerable": true
+          },
+          "id": "<id:de1947eb87b9>",
+          "timestamp": "<timestamp>",
+          "parentId": null,
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:341fc1cd64b7>",
+            "hookType": "userPromptSubmitted",
+            "input": {
+              "prompt": "<redacted>",
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:5c84f32892af>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:de1947eb87b9>",
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 75
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:341fc1cd64b7>",
+            "hookType": "userPromptSubmitted",
+            "success": true
+          },
+          "id": "<id:f2f75ba5d465>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:5c84f32892af>",
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 78
+          }
+        },
+        {
+          "type": "session.model_change",
+          "data": {
+            "newModel": "<redacted>"
+          },
+          "id": "<id:a13cdc05f3f1>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f2f75ba5d465>",
+          "_capture": {
+            "sourceLine": 4,
+            "offsetMs": 82
+          }
+        },
+        {
+          "type": "system.message",
+          "data": {
+            "role": "<redacted>",
+            "content": "<redacted>"
+          },
+          "id": "<id:90611dad1593>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:a13cdc05f3f1>",
+          "_capture": {
+            "sourceLine": 5,
+            "offsetMs": 164
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:12d2c6471a64>",
+            "hookType": "userPromptTransformed",
+            "input": {
+              "prompt": "<redacted>",
+              "transformedPrompt": "<redacted>",
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:013215a531e5>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:90611dad1593>",
+          "_capture": {
+            "sourceLine": 6,
+            "offsetMs": 181
+          }
+        },
+        {
+          "type": "user.message",
+          "data": {
+            "content": "<redacted>",
+            "transformedContent": "<redacted>",
+            "attachments": [],
+            "supportedNativeDocumentMimeTypes": [],
+            "delivery": "<redacted>",
+            "interactionId": "<id:6f4f822d56ca>",
+            "parentAgentTaskId": "<id:dd7c6ad145c6>"
+          },
+          "id": "<id:624729479916>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:013215a531e5>",
+          "_capture": {
+            "sourceLine": 7,
+            "offsetMs": 182
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:12d2c6471a64>",
+            "hookType": "userPromptTransformed",
+            "success": true
+          },
+          "id": "<id:99c9c3eb149a>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:624729479916>",
+          "_capture": {
+            "sourceLine": 8,
+            "offsetMs": 183
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:c1bbe97de5e2>",
+            "hookType": "sessionStart",
+            "input": {
+              "source": "new",
+              "initialPrompt": "<redacted>",
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:4f621cd8568d>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:99c9c3eb149a>",
+          "_capture": {
+            "sourceLine": 9,
+            "offsetMs": 187
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:c1bbe97de5e2>",
+            "hookType": "sessionStart",
+            "success": true
+          },
+          "id": "<id:852be4b7bbbb>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:4f621cd8568d>",
+          "_capture": {
+            "sourceLine": 10,
+            "offsetMs": 273
+          }
+        },
+        {
+          "type": "assistant.turn_start",
+          "data": {
+            "turnId": "<id:e2aa35481da4>",
+            "model": "<redacted>",
+            "interactionId": "<id:6f4f822d56ca>"
+          },
+          "id": "<id:219cf80bc04e>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:852be4b7bbbb>",
+          "_capture": {
+            "sourceLine": 11,
+            "offsetMs": 300
+          }
+        },
+        {
+          "type": "session.info",
+          "data": {
+            "infoType": "<redacted>",
+            "message": "<redacted>",
+            "url": "<redacted>"
+          },
+          "id": "<id:576677d233f4>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:219cf80bc04e>",
+          "_capture": {
+            "sourceLine": 12,
+            "offsetMs": 832
+          }
+        },
+        {
+          "type": "session.remote_steerable_changed",
+          "data": {
+            "remoteSteerable": true
+          },
+          "id": "<id:e4d9db8ba850>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:576677d233f4>",
+          "_capture": {
+            "sourceLine": 13,
+            "offsetMs": 834
+          }
+        },
+        {
+          "type": "assistant.message",
+          "data": {
+            "messageId": "<id:af5fac6daa6b>",
+            "model": "<redacted>",
+            "content": "<redacted>",
+            "toolRequests": [
+              {
+                "toolCallId": "<id:c722cb2f315a>",
+                "name": "<redacted>",
+                "arguments": {
+                  "question": "<redacted>",
+                  "choices": [
+                    "<redacted>"
+                  ]
+                },
+                "type": "function",
+                "toolTitle": "<redacted>",
+                "intentionSummary": "<redacted>"
+              }
+            ],
+            "interactionId": "<id:6f4f822d56ca>",
+            "turnId": "<id:e2aa35481da4>",
+            "outputTokens": "<redacted>",
+            "requestId": "<id:12c363232d88>",
+            "clientRequestId": "<id:afc2bd259269>",
+            "serviceRequestId": "<id:4357dd3f9f3a>",
+            "apiCallId": "<id:7dac186d38df>"
+          },
+          "id": "<id:577cb866787e>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e4d9db8ba850>",
+          "_capture": {
+            "sourceLine": 14,
+            "offsetMs": 1893
+          }
+        },
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:c722cb2f315a>",
+            "toolName": "ask_user",
+            "arguments": {
+              "question": "<redacted>",
+              "choices": [
+                "<redacted>"
+              ]
+            },
+            "model": "<redacted>",
+            "turnId": "<id:e2aa35481da4>"
+          },
+          "id": "<id:3a0ceaa78ae8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:577cb866787e>",
+          "_capture": {
+            "sourceLine": 15,
+            "offsetMs": 1894
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:d52bd7cf6601>",
+            "hookType": "preToolUse",
+            "input": {
+              "sessionId": "<id:dcd12ee25fc1>",
+              "cwd": "<redacted>",
+              "toolCalls": [
+                {
+                  "id": "<id:c722cb2f315a>",
+                  "name": "<redacted>",
+                  "args": {
+                    "question": "<redacted>",
+                    "choices": [
+                      "<redacted>"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "id": "<id:e82b2258d0e6>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:3a0ceaa78ae8>",
+          "_capture": {
+            "sourceLine": 16,
+            "offsetMs": 1895
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:d52bd7cf6601>",
+            "hookType": "preToolUse",
+            "success": true
+          },
+          "id": "<id:75fd237204f8>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:e82b2258d0e6>",
+          "_capture": {
+            "sourceLine": 17,
+            "offsetMs": 1978
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:281753b9a725>",
+            "hookType": "postToolUse",
+            "input": {
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>",
+              "toolName": "ask_user",
+              "toolArgs": {
+                "question": "<redacted>",
+                "choices": [
+                  "<redacted>"
+                ]
+              },
+              "toolResult": {
+                "textResultForLlm": "<redacted>",
+                "resultType": "<redacted>",
+                "toolTelemetry": {
+                  "properties": {
+                    "outcome": "<redacted>",
+                    "had_choices": "<redacted>",
+                    "was_freeform": "<redacted>"
+                  },
+                  "restrictedProperties": {
+                    "question": "<redacted>",
+                    "choices": [
+                      "<redacted>"
+                    ],
+                    "answer": "<redacted>"
+                  }
+                }
+              }
+            }
+          },
+          "id": "<id:df19879b0475>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:75fd237204f8>",
+          "_capture": {
+            "sourceLine": 18,
+            "offsetMs": 1986
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:281753b9a725>",
+            "hookType": "postToolUse",
+            "success": true
+          },
+          "id": "<id:743a08a518f5>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:df19879b0475>",
+          "_capture": {
+            "sourceLine": 19,
+            "offsetMs": 2065
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:c722cb2f315a>",
+            "model": "<redacted>",
+            "interactionId": "<id:6f4f822d56ca>",
+            "turnId": "<id:e2aa35481da4>",
+            "success": true,
+            "result": {
+              "content": "<redacted>",
+              "detailedContent": "<redacted>"
+            },
+            "toolTelemetry": {
+              "properties": {
+                "outcome": "<redacted>",
+                "had_choices": "<redacted>",
+                "was_freeform": "<redacted>"
+              },
+              "restrictedProperties": {
+                "question": "<redacted>",
+                "choices": [
+                  "<redacted>"
+                ],
+                "answer": "<redacted>"
+              }
+            }
+          },
+          "id": "<id:ab639be21404>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:743a08a518f5>",
+          "_capture": {
+            "sourceLine": 20,
+            "offsetMs": 2066
+          }
+        },
+        {
+          "type": "assistant.turn_end",
+          "data": {
+            "turnId": "<id:e2aa35481da4>",
+            "model": "<redacted>"
+          },
+          "id": "<id:01cf3299217a>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:ab639be21404>",
+          "_capture": {
+            "sourceLine": 21,
+            "offsetMs": 2068
+          }
+        },
+        {
+          "type": "assistant.turn_start",
+          "data": {
+            "turnId": "<id:a26e7bb8f793>",
+            "model": "<redacted>",
+            "interactionId": "<id:6f4f822d56ca>"
+          },
+          "id": "<id:1bfe3f7c8947>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:01cf3299217a>",
+          "_capture": {
+            "sourceLine": 22,
+            "offsetMs": 2070
+          }
+        },
+        {
+          "type": "assistant.message",
+          "data": {
+            "messageId": "<id:8cdbcdc58e8d>",
+            "model": "<redacted>",
+            "content": "<redacted>",
+            "toolRequests": [],
+            "interactionId": "<id:6f4f822d56ca>",
+            "turnId": "<id:a26e7bb8f793>",
+            "outputTokens": "<redacted>",
+            "requestId": "<id:b42b15ef83a8>",
+            "clientRequestId": "<id:c58fe9c977bb>",
+            "serviceRequestId": "<id:9ec1b8cf010b>",
+            "apiCallId": "<id:ae1792bd8295>"
+          },
+          "id": "<id:0ed6abb8aeae>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:1bfe3f7c8947>",
+          "_capture": {
+            "sourceLine": 23,
+            "offsetMs": 3319
+          }
+        },
+        {
+          "type": "assistant.turn_end",
+          "data": {
+            "turnId": "<id:a26e7bb8f793>",
+            "model": "<redacted>"
+          },
+          "id": "<id:a1c175fa0ea4>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:0ed6abb8aeae>",
+          "_capture": {
+            "sourceLine": 24,
+            "offsetMs": 3320
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:26ac842ea596>",
+            "hookType": "agentStop",
+            "input": {
+              "transcriptPath": "<redacted>",
+              "stopReason": "<redacted>",
+              "stop_hook_active": "<redacted>",
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:26428fb8eea2>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:a1c175fa0ea4>",
+          "_capture": {
+            "sourceLine": 25,
+            "offsetMs": 3331
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:26ac842ea596>",
+            "hookType": "agentStop",
+            "success": true
+          },
+          "id": "<id:41c8d82b2711>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:26428fb8eea2>",
+          "_capture": {
+            "sourceLine": 26,
+            "offsetMs": 3332
+          }
+        },
+        {
+          "type": "hook.start",
+          "data": {
+            "hookInvocationId": "<id:52ab42419204>",
+            "hookType": "sessionEnd",
+            "input": {
+              "reason": "<redacted>",
+              "sessionId": "<id:dcd12ee25fc1>",
+              "timestamp": "<timestamp>",
+              "cwd": "<redacted>"
+            }
+          },
+          "id": "<id:b4d289b5d707>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:41c8d82b2711>",
+          "_capture": {
+            "sourceLine": 27,
+            "offsetMs": 3332
+          }
+        },
+        {
+          "type": "hook.end",
+          "data": {
+            "hookInvocationId": "<id:52ab42419204>",
+            "hookType": "sessionEnd",
+            "success": true
+          },
+          "id": "<id:4ac30cb1b04c>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:b4d289b5d707>",
+          "_capture": {
+            "sourceLine": 28,
+            "offsetMs": 3418
+          }
+        },
+        {
+          "type": "session.usage_checkpoint",
+          "data": {
+            "totalNanoAiu": "<redacted>",
+            "totalPremiumRequests": "<redacted>",
+            "modelCacheState": [
+              {
+                "modelId": "<id:f1ec72cc6533>",
+                "cacheExpiresAt": "<redacted>",
+                "cacheTtlSeconds": "<redacted>"
+              }
+            ]
+          },
+          "id": "<id:a5537443f752>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:4ac30cb1b04c>",
+          "_capture": {
+            "sourceLine": 29,
+            "offsetMs": 3420
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        }
+      ]
+    },
+    {
+      "source": "agent-host-protocol",
+      "records": [
+        {
+          "type": "agent-host.snapshot",
+          "stage": "waiting",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": false,
+            "awaitsUserInput": true
+          },
+          "state": {
+            "status": 24,
+            "activeTurn": {
+              "id": "<id:60df64e370fd>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:c722cb2f315a>",
+                    "toolName": "ask_user",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:a5dec0837498>"
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 1980
+          }
+        },
+        {
+          "type": "agent-host.action",
+          "stage": "resolution-action",
+          "timestamp": "<timestamp>",
+          "action": {
+            "type": "chat/inputCompleted",
+            "requestId": "<id:a5dec0837498>",
+            "responseKind": "accept",
+            "answerCount": 1,
+            "answers": [
+              {
+                "state": "submitted",
+                "valueKind": "selected",
+                "hasFreeformValues": false
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 1985
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "resolved",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": true,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 8,
+            "activeTurn": {
+              "id": "<id:60df64e370fd>",
+              "responseParts": [
+                {
+                  "kind": "markdown"
+                },
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:c722cb2f315a>",
+                    "toolName": "ask_user",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:a5dec0837498>"
+                  },
+                  "response": {
+                    "kind": "accept"
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 1986
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "terminal",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": false,
+            "requestInProgress": false,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 1,
+            "turns": [
+              {
+                "id": "<id:60df64e370fd>",
+                "state": "complete",
+                "responseParts": [
+                  {
+                    "kind": "markdown"
+                  },
+                  {
+                    "kind": "toolCall",
+                    "toolCall": {
+                      "toolCallId": "<id:c722cb2f315a>",
+                      "toolName": "ask_user",
+                      "status": "completed",
+                      "_meta": {}
+                    }
+                  },
+                  {
+                    "kind": "inputRequest",
+                    "request": {
+                      "id": "<id:a5dec0837498>"
+                    },
+                    "response": {
+                      "kind": "accept"
+                    }
+                  },
+                  {
+                    "kind": "markdown"
+                  }
+                ]
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 4,
+            "offsetMs": 3430
+          }
+        }
+      ]
+    }
+  ]
+}

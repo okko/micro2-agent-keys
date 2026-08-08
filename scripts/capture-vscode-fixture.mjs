@@ -9,12 +9,16 @@ const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const ENUM_KEYS = new Set([
   'clientName',
   'client_name',
+  'confirmationKind',
+  'contributorKind',
   'hookEventName',
   'hookType',
   'hook_event_name',
   'kind',
   'producer',
   'purpose',
+  'responseKind',
+  'reasonKind',
   'source',
   'stage',
   'state',
@@ -23,20 +27,26 @@ const ENUM_KEYS = new Set([
   'toolName',
   'tool_name',
   'type',
+  'valueKind',
 ]);
 const SAFE_SCALAR_KEYS = new Set([
+  'answerCount',
+  'approved',
   'allowSkip',
   'alreadyInUse',
   'awaitsUserInput',
   'formatVersion',
   'fromHook',
   'hasActiveRequest',
+  'hasEditedToolInput',
+  'hasFreeformValues',
   'isComplete',
   'isConfirmed',
   'isUsed',
   'kind',
   'planReview',
   'remoteSteerable',
+  'requiredScopeCount',
   'requestInProgress',
   'schemaVersion',
   'status',
@@ -73,6 +83,8 @@ Options:
   --agent-host-protocol <path>  Optional live Agent Host snapshot JSONL
   --native-transcript-lines N  Comma-separated lines/ranges, for example 4,8-10
   --native-journal-lines N     Comma-separated lines/ranges
+  --native-journal-response-id ID
+                                 Keep only response parts correlated with this ID
   --agent-host-lines N         Comma-separated lines/ranges
   --agent-host-protocol-lines N
                                  Comma-separated lines/ranges
@@ -126,7 +138,7 @@ export function sanitizeCapture(value, key = '') {
       // Preserve the normal string redaction below.
     }
   }
-  if (ID_KEY.test(key)) return pseudonym(key, value);
+  if (ID_KEY.test(key)) return pseudonym('id', value);
   if (ENUM_KEYS.has(key)) return value;
   return '<redacted>';
 }
@@ -138,7 +150,7 @@ function timestampMs(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function readJsonLines(file, selectedLines = null, annotate = null) {
+function readJsonLines(file, selectedLines = null, annotate = null, filter = null) {
   const records = [];
   let lineNumber = 0;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
@@ -147,7 +159,9 @@ function readJsonLines(file, selectedLines = null, annotate = null) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
-      const record = sanitizeCapture(parsed);
+      const selected = filter?.(parsed) ?? parsed;
+      if (selected === null) continue;
+      const record = sanitizeCapture(selected);
       record._capture = { sourceLine: lineNumber, ...(annotate?.(parsed) ?? {}) };
       Object.defineProperty(record, CAPTURE_TIMESTAMP, { value: timestampMs(parsed.timestamp) });
       records.push(record);
@@ -246,7 +260,16 @@ function classifyAgentHostRecord(record, cwd) {
   return { pathScope: outside ? 'outside-working-directory' : 'inside-working-directory' };
 }
 
-function findNativeFiles(workspaceStorage, sessionId, lineSelections) {
+function filterJournalResponse(record, responseId) {
+  if (!responseId) return record;
+  if (!Array.isArray(record?.v)) return null;
+  const responseParts = record.v.filter((part) =>
+    part?.resolveId === responseId || part?.toolCallId === responseId
+  );
+  return responseParts.length > 0 ? { ...record, v: responseParts } : null;
+}
+
+function findNativeFiles(workspaceStorage, sessionId, lineSelections, nativeJournalResponseId) {
   const sources = [];
   let directories = [];
   try {
@@ -263,7 +286,17 @@ function findNativeFiles(workspaceStorage, sessionId, lineSelections) {
     ];
     for (const [source, file] of candidates) {
       if (fs.existsSync(file)) {
-        sources.push({ source, records: readJsonLines(file, lineSelections[source]) });
+        sources.push({
+          source,
+          records: readJsonLines(
+            file,
+            lineSelections[source],
+            null,
+            source === 'native-journal'
+              ? (record) => filterJournalResponse(record, nativeJournalResponseId)
+              : null
+          ),
+        });
       }
     }
   }
@@ -288,9 +321,15 @@ export function captureFixture({
   vscodePackage = DEFAULT_VSCODE_PACKAGE,
   lineSelections = {},
   agentHostStateRowLimit = null,
+  nativeJournalResponseId = null,
 }) {
   if (!SESSION_ID.test(sessionId)) throw new Error('session must be a UUID');
-  const sources = findNativeFiles(workspaceStorage, sessionId, lineSelections);
+  const sources = findNativeFiles(
+    workspaceStorage,
+    sessionId,
+    lineSelections,
+    nativeJournalResponseId
+  );
   const agentHostDirectory = path.join(copilotHome, 'session-state', sessionId);
   const agentHostEvents = path.join(agentHostDirectory, 'events.jsonl');
   const agentHostDatabase = path.join(agentHostDirectory, 'session.db');
@@ -399,6 +438,7 @@ function main() {
     agentHostProtocolPath: options['agent-host-protocol'] ?? null,
     vscodePackage: options['vscode-package'] ?? DEFAULT_VSCODE_PACKAGE,
     agentHostStateRowLimit: parseRowLimit(options['agent-host-state-row-limit']),
+    nativeJournalResponseId: options['native-journal-response-id'] ?? null,
     lineSelections: {
       'native-transcript': parseLineSelection(options['native-transcript-lines']),
       'native-journal': parseLineSelection(options['native-journal-lines']),

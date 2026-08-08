@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { captureFixture } from '../scripts/capture-vscode-fixture.mjs';
+import { captureFixture, sanitizeCapture } from '../scripts/capture-vscode-fixture.mjs';
 
 const SESSION_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -131,6 +131,35 @@ test('redacts non-structural scalar answers', (t) => {
   assert.equal(part.accepted, '<redacted>');
 });
 
+test('keeps IDs correlatable across structural field names', () => {
+  const sanitized = sanitizeCapture({
+    id: 'shared-id',
+    requestId: 'shared-id',
+    toolCallId: 'shared-id',
+  });
+
+  assert.match(sanitized.id, /^<id:[0-9a-f]{12}>$/);
+  assert.equal(sanitized.id, sanitized.requestId);
+  assert.equal(sanitized.id, sanitized.toolCallId);
+});
+
+test('preserves verified confirmation kind enums', () => {
+  assert.deepEqual(
+    sanitizeCapture({
+      confirmationKind: 'modifiedFilesConfirmation',
+      contributorKind: 'mcp',
+      reasonKind: 'insufficientScope',
+      requiredScopeCount: 2,
+    }),
+    {
+      confirmationKind: 'modifiedFilesConfirmation',
+      contributorKind: 'mcp',
+      reasonKind: 'insufficientScope',
+      requiredScopeCount: 2,
+    }
+  );
+});
+
 test('selects exact source lines', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-capture-lines-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -155,6 +184,40 @@ test('selects exact source lines', (t) => {
 
   assert.equal(fixture.sources[0].records.length, 1);
   assert.equal(fixture.sources[0].records[0].v.kind, 'questionCarousel');
+});
+
+test('filters native journal response parts by correlated ID', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-capture-response-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const journalDirectory = path.join(directory, 'chatSessions');
+  fs.mkdirSync(journalDirectory);
+  fs.writeFileSync(
+    path.join(journalDirectory, `${SESSION_ID}.jsonl`),
+    `${JSON.stringify({
+      kind: 2,
+      k: ['requests', 0, 'response'],
+      v: [
+        { kind: 'toolInvocationSerialized', toolCallId: 'target-id', isComplete: true },
+        { kind: 'questionCarousel', resolveId: 'target-id', allowSkip: true, data: {}, isUsed: true },
+        { kind: 'thinking', id: 'unrelated-id', value: 'private content' },
+      ],
+    })}\n`
+  );
+
+  const fixture = captureFixture({
+    sessionId: SESSION_ID,
+    workspaceStorage: directory,
+    copilotHome: path.join(directory, 'copilot'),
+    nativeJournalResponseId: 'target-id',
+  });
+  const responseParts = fixture.sources[0].records[0].v;
+
+  assert.deepEqual(responseParts.map(({ kind }) => kind), [
+    'toolInvocationSerialized',
+    'questionCarousel',
+  ]);
+  assert.equal(responseParts[0].toolCallId, responseParts[1].resolveId);
+  assert.doesNotMatch(JSON.stringify(fixture), /private content|unrelated-id/);
 });
 
 test('captures sanitized live Agent Host protocol snapshots', (t) => {

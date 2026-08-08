@@ -31,10 +31,27 @@ const REQUIRED_OBSERVATIONS = [
   'pre-tool-approval.confirmation-not-needed',
   'questions.native.waiting',
   'questions.native.submit',
+  'questions.native.skip',
   'questions.agent-host.waiting',
   'questions.agent-host.cancel',
+  'questions.agent-host.submit',
   'plan-review.agent-host.waiting',
   'plan-review.agent-host.reject',
+  'plan-review.agent-host.approve',
+  'plan-review.agent-host.feedback',
+  'modified-files-review.agent-host.waiting',
+  'modified-files-review.agent-host.approve',
+  'modified-files-review.agent-host.reject',
+  'feedback-review.agent-host.waiting',
+  'feedback-review.agent-host.approve',
+  'feedback-review.agent-host.reject',
+  'elicitation.agent-host.form.waiting',
+  'elicitation.agent-host.form.decline',
+  'elicitation.agent-host.url.waiting',
+  'elicitation.agent-host.url.decline',
+  'elicitation.agent-host.url.cancel',
+  'authentication.agent-host.expired.waiting',
+  'authentication.agent-host.cancel',
   'confirmation-part.resolved',
   'elicitation.accepted',
   'elicitation.rejected',
@@ -119,8 +136,8 @@ test('recomputes every documented lifecycle measurement', () => {
     assert.equal(start.type, measurement.start.type, `${measurement.id}: start type`);
     assert.equal(end.type, measurement.end.type, `${measurement.id}: end type`);
     assert.equal(
-      readPath(start, measurement.correlationPath),
-      readPath(end, measurement.correlationPath),
+      readPath(start, measurement.startCorrelationPath ?? measurement.correlationPath),
+      readPath(end, measurement.endCorrelationPath ?? measurement.correlationPath),
       `${measurement.id}: correlation`
     );
     assert.equal(
@@ -172,6 +189,25 @@ test('retains authoritative Agent Host question model truth', () => {
   assert.equal('response' in waitingInput, false);
   assert.equal('response' in resolvedInput, true);
   assert.equal('response' in terminalInput, true);
+});
+
+test('retains a correlated native question skip', () => {
+  const fixture = readFixture('native-question-skip.json');
+  const transcript = fixture.sources.find(({ source }) => source === 'native-transcript');
+  const journal = fixture.sources.find(({ source }) => source === 'native-journal');
+  const [started, completed] = transcript.records;
+  const [tool, question] = journal.records[0].v;
+
+  assert.equal(started.type, 'tool.execution_start');
+  assert.equal(completed.type, 'tool.execution_complete');
+  assert.equal(started.data.toolName, 'vscode_askQuestions');
+  assert.equal(started.data.toolCallId, completed.data.toolCallId);
+  assert.equal(started.data.toolCallId, tool.toolCallId);
+  assert.equal(tool.toolCallId, question.resolveId);
+  assert.equal(question.kind, 'questionCarousel');
+  assert.equal(question.allowSkip, true);
+  assert.equal(question.isUsed, true);
+  assert.deepEqual(question.data, {});
 });
 
 test('correlates authoritative Agent Host tool denial with persisted events', () => {
@@ -233,6 +269,260 @@ test('retains authoritative Agent Host plan-review model truth', () => {
   assert.equal('response' in waitingInput, false);
   assert.equal('response' in resolvedInput, true);
   assert.equal('response' in terminalInput, true);
+});
+
+test('retains correlated Agent Host question submit structure', () => {
+  const fixture = readFixture('agent-host-question-submit.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, action, resolved, terminal] = protocol.records;
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+
+  assert.deepEqual(protocol.records.map(({ type }) => type), [
+    'agent-host.snapshot',
+    'agent-host.action',
+    'agent-host.snapshot',
+    'agent-host.snapshot',
+  ]);
+  assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+  assert.equal(action.action.type, 'chat/inputCompleted');
+  assert.equal(action.action.requestId, waitingInput.request.id);
+  assert.equal(action.action.responseKind, 'accept');
+  assert.equal(action.action.answerCount, 1);
+  assert.deepEqual(action.action.answers, [{
+    state: 'submitted',
+    valueKind: 'selected',
+    hasFreeformValues: false,
+  }]);
+});
+
+test('retains correlated Agent Host plan approval structure', () => {
+  const fixture = readFixture('agent-host-plan-approve.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, action, resolved, terminal] = protocol.records;
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+
+  assert.equal(waitingInput.request.planReview, true);
+  assert.equal(action.action.requestId, waitingInput.request.id);
+  assert.equal(action.action.responseKind, 'accept');
+  assert.deepEqual(action.action.answers, [{
+    state: 'submitted',
+    valueKind: 'selected',
+    hasFreeformValues: false,
+  }]);
+  assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+});
+
+test('retains plan feedback and its replacement review', () => {
+  const fixture = readFixture('agent-host-plan-feedback.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, feedback, resolved, replacement, approve, replacementResolved, terminal] =
+    protocol.records;
+  const firstInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const unresolvedInputs = replacement.state.activeTurn.responseParts.filter(({ kind, response }) =>
+    kind === 'inputRequest' && response === undefined
+  );
+  const secondInput = unresolvedInputs[0];
+
+  assert.equal(feedback.action.requestId, firstInput.request.id);
+  assert.equal(feedback.action.answers[0].hasFreeformValues, true);
+  assert.equal(approve.action.requestId, secondInput.request.id);
+  assert.equal(approve.action.answers[0].hasFreeformValues, false);
+  assert.notEqual(firstInput.request.id, secondInput.request.id);
+  assert.equal(waiting.state.activeTurn.id, replacement.state.activeTurn.id);
+  assert.deepEqual(
+    [waiting, resolved, replacement, replacementResolved, terminal].map(({ state }) => state.status),
+    [24, 8, 24, 8, 1]
+  );
+});
+
+test('retains authoritative modified-files review outcomes', () => {
+  const cases = [
+    ['agent-host-modified-files-deny.json', false, 'cancelled', 'cancelled'],
+    ['agent-host-modified-files-approve.json', true, 'running', 'completed'],
+  ];
+
+  for (const [file, approved, resolvedStatus, terminalStatus] of cases) {
+    const fixture = readFixture(file);
+    const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+    const [waiting, action, resolved, terminal] = protocol.records;
+    const waitingTool = waiting.state.activeTurn.responseParts.find(({ toolCall }) =>
+      toolCall?.confirmationKind === 'modifiedFilesConfirmation'
+    ).toolCall;
+    const resolvedTool = resolved.state.activeTurn.responseParts.find(({ toolCall }) =>
+      toolCall?.toolCallId === waitingTool.toolCallId
+    ).toolCall;
+    const terminalTool = terminal.state.turns[0].responseParts.find(({ toolCall }) =>
+      toolCall?.toolCallId === waitingTool.toolCallId
+    ).toolCall;
+
+    assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+    assert.equal(action.action.type, 'chat/toolCallConfirmed');
+    assert.equal(action.action.toolCallId, waitingTool.toolCallId);
+    assert.equal(action.action.approved, approved);
+    assert.equal(action.action.hasEditedToolInput, false);
+    assert.equal(resolvedTool.status, resolvedStatus);
+    assert.equal(terminalTool.status, terminalStatus);
+  }
+});
+
+test('retains authoritative feedback review outcomes', () => {
+  const cases = [
+    ['agent-host-feedback-review-deny.json', false, 'cancelled', 'cancelled'],
+    ['agent-host-feedback-review-approve.json', true, 'running', 'completed'],
+  ];
+
+  for (const [file, approved, resolvedStatus, terminalStatus] of cases) {
+    const fixture = readFixture(file);
+    const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+    const [waiting, action, resolved, terminal] = protocol.records;
+    const waitingTool = waiting.state.activeTurn.responseParts.find(({ toolCall }) =>
+      toolCall?.confirmationKind === 'agentFeedbackReviewConfirmation'
+    ).toolCall;
+    const resolvedTool = resolved.state.activeTurn.responseParts.find(({ toolCall }) =>
+      toolCall?.toolCallId === waitingTool.toolCallId
+    ).toolCall;
+    const terminalTool = terminal.state.turns[0].responseParts.find(({ toolCall }) =>
+      toolCall?.toolCallId === waitingTool.toolCallId
+    ).toolCall;
+
+    assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+    assert.equal(waitingTool.toolName, 'viewUnreviewedComments');
+    assert.equal(action.action.type, 'chat/toolCallConfirmed');
+    assert.equal(action.action.toolCallId, waitingTool.toolCallId);
+    assert.equal(action.action.approved, approved);
+    assert.equal(action.action.hasEditedToolInput, false);
+    assert.equal(resolvedTool.status, resolvedStatus);
+    assert.equal(terminalTool.status, terminalStatus);
+  }
+});
+
+test('retains authoritative Agent Host form elicitation decline', () => {
+  const fixture = readFixture('agent-host-elicitation-form-decline.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, action, resolved, terminal] = protocol.records;
+  const waitingTool = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'toolCall'
+  ).toolCall;
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const resolvedInput = resolved.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const terminalParts = terminal.state.turns[0].responseParts;
+  const terminalTool = terminalParts.find(({ kind }) => kind === 'toolCall').toolCall;
+  const terminalInput = terminalParts.find(({ kind }) => kind === 'inputRequest');
+
+  assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+  assert.equal(waitingTool.status, 'running');
+  assert.equal(waitingTool.contributorKind, 'mcp');
+  assert.equal(action.action.type, 'chat/inputCompleted');
+  assert.equal(action.action.requestId, waitingInput.request.id);
+  assert.equal(action.action.responseKind, 'decline');
+  assert.equal(action.action.answerCount, 0);
+  assert.equal(resolvedInput.request.id, waitingInput.request.id);
+  assert.equal(resolvedInput.response.kind, 'decline');
+  assert.equal(terminalInput.request.id, waitingInput.request.id);
+  assert.equal(terminalInput.response.kind, 'decline');
+  assert.equal(terminalTool.toolCallId, waitingTool.toolCallId);
+  assert.equal(terminalTool.status, 'completed');
+});
+
+test('retains authoritative and redacted Agent Host URL elicitation decline', () => {
+  const fixture = readFixture('agent-host-elicitation-url-decline.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, action, resolved, terminal] = protocol.records;
+  const waitingTool = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'toolCall'
+  ).toolCall;
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const resolvedInput = resolved.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const terminalParts = terminal.state.turns[0].responseParts;
+  const terminalTool = terminalParts.find(({ kind }) => kind === 'toolCall').toolCall;
+  const terminalInput = terminalParts.find(({ kind }) => kind === 'inputRequest');
+
+  assert.deepEqual([waiting.state.status, resolved.state.status, terminal.state.status], [24, 8, 1]);
+  assert.equal(waitingTool.status, 'running');
+  assert.equal(waitingTool.contributorKind, 'mcp');
+  assert.equal(waitingInput.request.url, '<redacted>');
+  assert.equal(action.action.type, 'chat/inputCompleted');
+  assert.equal(action.action.requestId, waitingInput.request.id);
+  assert.equal(action.action.responseKind, 'decline');
+  assert.equal(action.action.answerCount, 0);
+  assert.equal(resolvedInput.request.id, waitingInput.request.id);
+  assert.equal(resolvedInput.response.kind, 'decline');
+  assert.equal(terminalInput.request.id, waitingInput.request.id);
+  assert.equal(terminalInput.response.kind, 'decline');
+  assert.equal(terminalTool.toolCallId, waitingTool.toolCallId);
+  assert.equal(terminalTool.status, 'completed');
+});
+
+test('retains authoritative Agent Host URL elicitation turn cancellation', () => {
+  const fixture = readFixture('agent-host-elicitation-url-cancel.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, turnCancelled, inputCancelled, terminal] = protocol.records;
+  const waitingTool = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'toolCall'
+  ).toolCall;
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'inputRequest'
+  );
+  const terminalParts = terminal.state.turns[0].responseParts;
+  const terminalTool = terminalParts.find(({ kind }) => kind === 'toolCall').toolCall;
+  const terminalInput = terminalParts.find(({ kind }) => kind === 'inputRequest');
+
+  assert.deepEqual([waiting.state.status, terminal.state.status], [24, 1]);
+  assert.equal(waitingInput.request.url, '<redacted>');
+  assert.equal(waitingTool.status, 'running');
+  assert.equal(waitingTool.contributorKind, 'mcp');
+  assert.equal(turnCancelled.action.type, 'chat/turnCancelled');
+  assert.equal(turnCancelled.action.turnId, waiting.state.activeTurn.id);
+  assert.equal(inputCancelled.action.type, 'chat/inputCompleted');
+  assert.equal(inputCancelled.action.requestId, waitingInput.request.id);
+  assert.equal(inputCancelled.action.responseKind, 'cancel');
+  assert.equal(inputCancelled.action.answerCount, 0);
+  assert.equal(terminal.state.turns[0].state, 'cancelled');
+  assert.equal(terminalInput.request.id, waitingInput.request.id);
+  assert.equal('response' in terminalInput, false);
+  assert.equal(terminalTool.toolCallId, waitingTool.toolCallId);
+  assert.equal(terminalTool.status, 'cancelled');
+});
+
+test('retains authoritative expired-auth turn cancellation', () => {
+  const fixture = readFixture('agent-host-auth-expired-cancel.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, turnCancelled, terminal] = protocol.records;
+  const waitingTool = waiting.state.activeTurn.responseParts.find(({ kind }) =>
+    kind === 'toolCall'
+  ).toolCall;
+  const terminalTool = terminal.state.turns[0].responseParts.find(({ kind }) =>
+    kind === 'toolCall'
+  ).toolCall;
+
+  assert.deepEqual([waiting.state.status, terminal.state.status], [24, 1]);
+  assert.equal(waitingTool.status, 'auth-required');
+  assert.equal(waitingTool.contributorKind, 'mcp');
+  assert.deepEqual(waitingTool.auth, {
+    reasonKind: 'expired',
+    requiredScopeCount: 0,
+  });
+  assert.equal(turnCancelled.action.type, 'chat/turnCancelled');
+  assert.equal(turnCancelled.action.turnId, waiting.state.activeTurn.id);
+  assert.equal(terminal.state.turns[0].id, waiting.state.activeTurn.id);
+  assert.equal(terminal.state.turns[0].state, 'cancelled');
+  assert.equal(terminalTool.toolCallId, waitingTool.toolCallId);
+  assert.equal(terminalTool.status, 'cancelled');
+  assert.equal('auth' in terminalTool, false);
 });
 
 test('retains privacy-safe evidence for derived facts', () => {
