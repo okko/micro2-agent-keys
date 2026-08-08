@@ -157,6 +157,48 @@ test('selects exact source lines', (t) => {
   assert.equal(fixture.sources[0].records[0].v.kind, 'questionCarousel');
 });
 
+test('captures sanitized live Agent Host protocol snapshots', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-capture-protocol-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const protocolPath = path.join(directory, 'agent-host-protocol.jsonl');
+  fs.writeFileSync(protocolPath, `${JSON.stringify({
+    timestamp: '2026-08-06T12:00:00.000Z',
+    stage: 'waiting',
+    truth: { hasActiveRequest: true, requestInProgress: false, awaitsUserInput: true },
+    state: {
+      status: 24,
+      activeTurn: {
+        id: 'private-turn-id',
+        state: 'in-progress',
+        responseParts: [{
+          kind: 'inputRequest',
+          request: { id: 'private-request-id', purpose: 'askUser', prompt: 'private prompt' },
+        }],
+      },
+    },
+  })}\n`);
+
+  const fixture = captureFixture({
+    sessionId: SESSION_ID,
+    workspaceStorage: directory,
+    copilotHome: path.join(directory, 'copilot'),
+    agentHostProtocolPath: protocolPath,
+  });
+  const source = fixture.sources.find(({ source: name }) => name === 'agent-host-protocol');
+  const serialized = JSON.stringify(source);
+
+  assert.equal(source.records[0].truth.hasActiveRequest, true);
+  assert.equal(source.records[0].truth.requestInProgress, false);
+  assert.equal(source.records[0].truth.awaitsUserInput, true);
+  assert.equal(source.records[0].stage, 'waiting');
+  assert.equal(source.records[0].state.status, 24);
+  assert.equal(source.records[0].state.activeTurn.state, 'in-progress');
+  assert.equal(source.records[0].state.activeTurn.responseParts[0].kind, 'inputRequest');
+  assert.equal(source.records[0].state.activeTurn.responseParts[0].request.purpose, 'askUser');
+  assert.match(serialized, /<id:[0-9a-f]{12}>/);
+  assert.doesNotMatch(serialized, /private-turn-id|private-request-id|private prompt|2026-08-06/);
+});
+
 test('limits captured rows from each Agent Host state table', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-capture-state-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));

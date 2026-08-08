@@ -1,0 +1,374 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:0f92398e93f7>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:255f0e967d08>",
+            "toolName": "view",
+            "arguments": {
+              "path": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:8a5d51064276>"
+          },
+          "id": "<id:4b3784250601>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:661d2984f131>",
+          "_capture": {
+            "sourceLine": 21,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "permission.requested",
+          "data": {
+            "requestId": "<id:697f610fd5c8>",
+            "permissionRequest": {
+              "kind": "read",
+              "toolCallId": "<id:255f0e967d08>",
+              "intention": "<redacted>",
+              "path": "<redacted>"
+            },
+            "promptRequest": {
+              "kind": "path",
+              "accessKind": "<redacted>",
+              "paths": [
+                "<redacted>"
+              ],
+              "toolCallId": "<id:255f0e967d08>"
+            }
+          },
+          "id": "<id:af6dd464d9cc>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:a6d1c26c822d>",
+          "_capture": {
+            "sourceLine": 24,
+            "pathScope": "outside-working-directory",
+            "offsetMs": 86
+          }
+        },
+        {
+          "type": "permission.completed",
+          "data": {
+            "requestId": "<id:697f610fd5c8>",
+            "toolCallId": "<id:255f0e967d08>",
+            "result": {
+              "kind": "denied-interactively-by-user"
+            }
+          },
+          "id": "<id:af3166c27b03>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:d3732929fa81>",
+          "_capture": {
+            "sourceLine": 25,
+            "offsetMs": 94
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:255f0e967d08>",
+            "model": "<redacted>",
+            "interactionId": "<id:3959ddd6a64d>",
+            "turnId": "<id:8a5d51064276>",
+            "success": false,
+            "error": {
+              "message": "<redacted>",
+              "code": "<redacted>"
+            },
+            "toolTelemetry": {
+              "properties": {
+                "command": "<redacted>",
+                "options": {
+                  "truncateBasedOn": "<redacted>",
+                  "truncateStyle": "<redacted>"
+                },
+                "inputs": [
+                  "<redacted>",
+                  "<redacted>"
+                ],
+                "resolvedPathAgainstCwd": "<redacted>",
+                "fileExtension": [
+                  "<redacted>"
+                ]
+              },
+              "metrics": {
+                "resultLength": "<redacted>",
+                "resultForLlmLength": "<redacted>",
+                "responseTokenLimit": "<redacted>"
+              },
+              "restrictedProperties": {}
+            }
+          },
+          "id": "<id:94767dd871dd>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:f423c95892c3>",
+          "_capture": {
+            "sourceLine": 28,
+            "offsetMs": 97
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        }
+      ]
+    },
+    {
+      "source": "agent-host-protocol",
+      "records": [
+        {
+          "type": "agent-host.snapshot",
+          "stage": "waiting",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": false,
+            "awaitsUserInput": true
+          },
+          "state": {
+            "status": 24,
+            "activeTurn": {
+              "id": "<id:96c47c4a19d5>",
+              "responseParts": [
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:255f0e967d08>",
+                    "status": "pending-confirmation",
+                    "_meta": {}
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 89
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "resolved",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": true,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 8,
+            "activeTurn": {
+              "id": "<id:96c47c4a19d5>",
+              "responseParts": [
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:255f0e967d08>",
+                    "status": "cancelled",
+                    "_meta": {}
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 94
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "terminal",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": false,
+            "requestInProgress": false,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 1,
+            "turns": [
+              {
+                "id": "<id:96c47c4a19d5>",
+                "state": "complete",
+                "responseParts": [
+                  {
+                    "kind": "toolCall",
+                    "toolCall": {
+                      "toolCallId": "<id:255f0e967d08>",
+                      "status": "cancelled",
+                      "_meta": {}
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 2651
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -73,6 +73,48 @@
         "hooks.pre-tool-use.order",
         "hooks.pre-mcp-tool-call.order"
       ]
+    },
+    {
+      "file": "agent-host-question.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "questions.agent-host.waiting",
+        "questions.agent-host.cancel",
+        "questions.agent-host.resumed",
+        "questions.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-tool-deny.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "pre-tool-approval.external-file.waiting-model-truth",
+        "pre-tool-approval.agent-host.deny",
+        "pre-tool-approval.agent-host.resumed",
+        "pre-tool-approval.agent-host.terminal"
+      ]
+    },
+    {
+      "file": "agent-host-plan-reject.json",
+      "sources": [
+        "agent-host-events",
+        "agent-host-state",
+        "agent-host-protocol"
+      ],
+      "observed": [
+        "plan-review.agent-host.waiting",
+        "plan-review.agent-host.reject",
+        "plan-review.agent-host.resumed",
+        "plan-review.agent-host.terminal"
+      ]
     }
   ],
   "blockers": [
@@ -86,12 +128,13 @@
         "generic-contributed-tool",
         "approve",
         "deny",
+        "agent-host-deny",
         "confirmation-not-needed",
         "immediate-approval-controls"
       ],
       "unsupported": [
         "edit-and-approve",
-        "agent-host-deny-or-edit-outcome"
+        "agent-host-edit-outcome"
       ]
     },
     {
@@ -132,22 +175,25 @@
       "status": "partial",
       "observed": [
         "native-waiting",
-        "native-submit"
+        "native-submit",
+        "agent-host-waiting",
+        "agent-host-cancel"
       ],
       "unsupported": [
         "native-skip",
         "native-cancel",
-        "protocol-ask-user"
+        "agent-host-submit-or-skip"
       ]
     },
     {
       "id": "plan-review",
-      "status": "unsupported",
-      "observed": [],
+      "status": "partial",
+      "observed": [
+        "agent-host-waiting",
+        "agent-host-reject"
+      ],
       "unsupported": [
-        "waiting",
         "approve",
-        "reject",
         "feedback"
       ]
     },
@@ -304,6 +350,74 @@
       "correlationPath": "data.requestId",
       "elapsedMs": 1,
       "classification": "immediate-approval-control"
+    },
+    {
+      "id": "questions.agent-host.cancel",
+      "fixture": "agent-host-question.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.snapshot"
+      },
+      "correlationPath": "state.activeTurn.id",
+      "elapsedMs": 5,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "pre-tool-approval.agent-host.deny",
+      "fixture": "agent-host-tool-deny.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.snapshot"
+      },
+      "correlationPath": "state.activeTurn.id",
+      "elapsedMs": 5,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "pre-tool-approval.agent-host.permission-event-deny",
+      "fixture": "agent-host-tool-deny.json",
+      "start": {
+        "source": "agent-host-events",
+        "sourceLine": 24,
+        "type": "permission.requested"
+      },
+      "end": {
+        "source": "agent-host-events",
+        "sourceLine": 25,
+        "type": "permission.completed"
+      },
+      "correlationPath": "data.requestId",
+      "elapsedMs": 8,
+      "classification": "immediate-protocol-control"
+    },
+    {
+      "id": "plan-review.agent-host.reject",
+      "fixture": "agent-host-plan-reject.json",
+      "start": {
+        "source": "agent-host-protocol",
+        "sourceLine": 1,
+        "type": "agent-host.snapshot"
+      },
+      "end": {
+        "source": "agent-host-protocol",
+        "sourceLine": 2,
+        "type": "agent-host.snapshot"
+      },
+      "correlationPath": "state.activeTurn.id",
+      "elapsedMs": 2,
+      "classification": "immediate-protocol-control"
     }
   ],
   "derivedFacts": [

@@ -13,6 +13,7 @@
     "postbuild": "node scripts/write-build-id.mjs && chmod 755 dist/cli.js",
     "check": "tsc --noEmit",
     "dev:capture:vscode-fixture": "node scripts/capture-vscode-fixture.mjs",
+    "dev:capture:vscode-ahp-lifecycle": "npm run build --silent && node scripts/capture-agent-host-question.mjs",
     "predaemon": "npm run build",
     "daemon": "node dist/daemon.js",
     "preprobe": "npm run build",

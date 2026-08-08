@@ -31,6 +31,10 @@ const REQUIRED_OBSERVATIONS = [
   'pre-tool-approval.confirmation-not-needed',
   'questions.native.waiting',
   'questions.native.submit',
+  'questions.agent-host.waiting',
+  'questions.agent-host.cancel',
+  'plan-review.agent-host.waiting',
+  'plan-review.agent-host.reject',
   'confirmation-part.resolved',
   'elicitation.accepted',
   'elicitation.rejected',
@@ -120,10 +124,110 @@ test('recomputes every documented lifecycle measurement', () => {
       `${measurement.id}: elapsed`
     );
     assert.ok(
-      ['observed-human-wait', 'immediate-approval-control'].includes(measurement.classification),
+      [
+        'observed-human-wait',
+        'immediate-approval-control',
+        'immediate-protocol-control',
+      ].includes(measurement.classification),
       `${measurement.id}: classification`
     );
   }
+});
+
+test('retains authoritative Agent Host question model truth', () => {
+  const fixture = readFixture('agent-host-question.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, resolved, terminal] = protocol.records;
+
+  assert.deepEqual(protocol.records.map(({ stage }) => stage), ['waiting', 'resolved', 'terminal']);
+  assert.deepEqual(protocol.records.map(({ state }) => state.status), [24, 8, 1]);
+  assert.deepEqual(waiting.truth, {
+    hasActiveRequest: true,
+    requestInProgress: false,
+    awaitsUserInput: true,
+  });
+  assert.deepEqual(resolved.truth, {
+    hasActiveRequest: true,
+    requestInProgress: true,
+    awaitsUserInput: false,
+  });
+  assert.deepEqual(terminal.truth, {
+    hasActiveRequest: false,
+    requestInProgress: false,
+    awaitsUserInput: false,
+  });
+
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) => kind === 'inputRequest');
+  const resolvedInput = resolved.state.activeTurn.responseParts.find(({ kind }) => kind === 'inputRequest');
+  const terminalInput = terminal.state.turns[0].responseParts.find(({ kind }) => kind === 'inputRequest');
+  assert.equal(waiting.state.activeTurn.id, resolved.state.activeTurn.id);
+  assert.equal(waiting.state.activeTurn.id, terminal.state.turns[0].id);
+  assert.equal(waitingInput.request.id, resolvedInput.request.id);
+  assert.equal(waitingInput.request.id, terminalInput.request.id);
+  assert.equal('response' in waitingInput, false);
+  assert.equal('response' in resolvedInput, true);
+  assert.equal('response' in terminalInput, true);
+});
+
+test('correlates authoritative Agent Host tool denial with persisted events', () => {
+  const fixture = readFixture('agent-host-tool-deny.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const events = fixture.sources.find(({ source }) => source === 'agent-host-events');
+  const [waiting, resolved, terminal] = protocol.records;
+
+  assert.deepEqual(protocol.records.map(({ stage }) => stage), ['waiting', 'resolved', 'terminal']);
+  assert.deepEqual(protocol.records.map(({ state }) => state.status), [24, 8, 1]);
+  assert.deepEqual(protocol.records.map(({ truth }) => truth), [
+    { hasActiveRequest: true, requestInProgress: false, awaitsUserInput: true },
+    { hasActiveRequest: true, requestInProgress: true, awaitsUserInput: false },
+    { hasActiveRequest: false, requestInProgress: false, awaitsUserInput: false },
+  ]);
+
+  const waitingTool = waiting.state.activeTurn.responseParts[0].toolCall;
+  const resolvedTool = resolved.state.activeTurn.responseParts[0].toolCall;
+  const terminalTool = terminal.state.turns[0].responseParts[0].toolCall;
+  assert.equal(waiting.state.activeTurn.id, resolved.state.activeTurn.id);
+  assert.equal(waiting.state.activeTurn.id, terminal.state.turns[0].id);
+  assert.equal(waitingTool.toolCallId, resolvedTool.toolCallId);
+  assert.equal(waitingTool.toolCallId, terminalTool.toolCallId);
+  assert.deepEqual(
+    [waitingTool.status, resolvedTool.status, terminalTool.status],
+    ['pending-confirmation', 'cancelled', 'cancelled']
+  );
+
+  const requested = events.records.find(({ type }) => type === 'permission.requested');
+  const completed = events.records.find(({ type }) => type === 'permission.completed');
+  assert.equal(requested.data.permissionRequest.toolCallId, waitingTool.toolCallId);
+  assert.equal(completed.data.toolCallId, waitingTool.toolCallId);
+  assert.equal(requested.data.requestId, completed.data.requestId);
+  assert.equal(completed.data.result.kind, 'denied-interactively-by-user');
+  assert.equal(requested._capture.pathScope, 'outside-working-directory');
+});
+
+test('retains authoritative Agent Host plan-review model truth', () => {
+  const fixture = readFixture('agent-host-plan-reject.json');
+  const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
+  const [waiting, resolved, terminal] = protocol.records;
+
+  assert.deepEqual(protocol.records.map(({ stage }) => stage), ['waiting', 'resolved', 'terminal']);
+  assert.deepEqual(protocol.records.map(({ state }) => state.status), [24, 8, 1]);
+  assert.deepEqual(protocol.records.map(({ truth }) => truth), [
+    { hasActiveRequest: true, requestInProgress: false, awaitsUserInput: true },
+    { hasActiveRequest: true, requestInProgress: true, awaitsUserInput: false },
+    { hasActiveRequest: false, requestInProgress: false, awaitsUserInput: false },
+  ]);
+
+  const waitingInput = waiting.state.activeTurn.responseParts.find(({ kind }) => kind === 'inputRequest');
+  const resolvedInput = resolved.state.activeTurn.responseParts.find(({ kind }) => kind === 'inputRequest');
+  const terminalInput = terminal.state.turns[0].responseParts.find(({ kind }) => kind === 'inputRequest');
+  const waitingTool = waiting.state.activeTurn.responseParts.find(({ kind }) => kind === 'toolCall');
+  assert.equal(waitingTool.toolCall.toolName, 'exit_plan_mode');
+  assert.equal(waitingInput.request.planReview, true);
+  assert.equal(waitingInput.request.id, resolvedInput.request.id);
+  assert.equal(waitingInput.request.id, terminalInput.request.id);
+  assert.equal('response' in waitingInput, false);
+  assert.equal('response' in resolvedInput, true);
+  assert.equal('response' in terminalInput, true);
 });
 
 test('retains privacy-safe evidence for derived facts', () => {

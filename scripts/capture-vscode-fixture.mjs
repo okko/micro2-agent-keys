@@ -16,6 +16,7 @@ const ENUM_KEYS = new Set([
   'producer',
   'purpose',
   'source',
+  'stage',
   'state',
   'status',
   'toolId',
@@ -26,14 +27,19 @@ const ENUM_KEYS = new Set([
 const SAFE_SCALAR_KEYS = new Set([
   'allowSkip',
   'alreadyInUse',
+  'awaitsUserInput',
   'formatVersion',
   'fromHook',
+  'hasActiveRequest',
   'isComplete',
   'isConfirmed',
   'isUsed',
   'kind',
+  'planReview',
   'remoteSteerable',
+  'requestInProgress',
   'schemaVersion',
+  'status',
   'success',
   'type',
   'version',
@@ -64,9 +70,12 @@ Options:
   --workspace-storage <path>    VS Code workspaceStorage root
   --copilot-home <path>         Copilot home containing session-state
   --hooks <path>                Optional hook payload JSONL
+  --agent-host-protocol <path>  Optional live Agent Host snapshot JSONL
   --native-transcript-lines N  Comma-separated lines/ranges, for example 4,8-10
   --native-journal-lines N     Comma-separated lines/ranges
   --agent-host-lines N         Comma-separated lines/ranges
+  --agent-host-protocol-lines N
+                                 Comma-separated lines/ranges
   --agent-host-state-row-limit N
                                  Maximum rows captured from each SQLite table
   --hook-lines N               Comma-separated lines/ranges
@@ -275,6 +284,7 @@ export function captureFixture({
   workspaceStorage,
   copilotHome,
   hooksPath = null,
+  agentHostProtocolPath = null,
   vscodePackage = DEFAULT_VSCODE_PACKAGE,
   lineSelections = {},
   agentHostStateRowLimit = null,
@@ -308,6 +318,15 @@ export function captureFixture({
         reason: sanitizeCapture(error instanceof Error ? error.message : String(error), 'reason'),
       });
     }
+  }
+  if (agentHostProtocolPath && fs.existsSync(agentHostProtocolPath)) {
+    sources.push({
+      source: 'agent-host-protocol',
+      records: readJsonLines(
+        agentHostProtocolPath,
+        lineSelections['agent-host-protocol']
+      ),
+    });
   }
   if (hooksPath && fs.existsSync(hooksPath)) {
     sources.push({ source: 'hooks', records: readJsonLines(hooksPath, lineSelections.hooks) });
@@ -377,12 +396,14 @@ function main() {
       path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'workspaceStorage'),
     copilotHome: options['copilot-home'] ?? path.join(os.homedir(), '.copilot'),
     hooksPath: options.hooks ?? null,
+    agentHostProtocolPath: options['agent-host-protocol'] ?? null,
     vscodePackage: options['vscode-package'] ?? DEFAULT_VSCODE_PACKAGE,
     agentHostStateRowLimit: parseRowLimit(options['agent-host-state-row-limit']),
     lineSelections: {
       'native-transcript': parseLineSelection(options['native-transcript-lines']),
       'native-journal': parseLineSelection(options['native-journal-lines']),
       'agent-host-events': parseLineSelection(options['agent-host-lines']),
+      'agent-host-protocol': parseLineSelection(options['agent-host-protocol-lines']),
       hooks: parseLineSelection(options['hook-lines']),
     },
   });

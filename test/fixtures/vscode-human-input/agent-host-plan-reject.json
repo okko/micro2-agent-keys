@@ -1,0 +1,332 @@
+{
+  "formatVersion": 2,
+  "vscodeVersion": "1.131.0",
+  "sessionId": "<id:0d6a12baf232>",
+  "label": "lifecycle",
+  "timing": {
+    "basis": "relative-to-first-captured-event",
+    "unit": "ms"
+  },
+  "sources": [
+    {
+      "source": "agent-host-events",
+      "records": [
+        {
+          "type": "tool.execution_start",
+          "data": {
+            "toolCallId": "<id:522ab1c1f68c>",
+            "toolName": "exit_plan_mode",
+            "arguments": {
+              "summary": "<redacted>"
+            },
+            "model": "<redacted>",
+            "turnId": "<id:8a5d51064276>"
+          },
+          "id": "<id:33b22d21ffe9>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:7aa66b0467e1>",
+          "_capture": {
+            "sourceLine": 18,
+            "offsetMs": 0
+          }
+        },
+        {
+          "type": "tool.execution_complete",
+          "data": {
+            "toolCallId": "<id:522ab1c1f68c>",
+            "model": "<redacted>",
+            "interactionId": "<id:c9c46b747a81>",
+            "turnId": "<id:8a5d51064276>",
+            "success": true,
+            "result": {
+              "content": "<redacted>",
+              "detailedContent": "<redacted>"
+            }
+          },
+          "id": "<id:37d0e8cff559>",
+          "timestamp": "<timestamp>",
+          "parentId": "<id:62e502617ba6>",
+          "_capture": {
+            "sourceLine": 23,
+            "offsetMs": 171
+          }
+        }
+      ]
+    },
+    {
+      "source": "agent-host-state",
+      "tables": [
+        {
+          "name": "inbox_entries",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "recipient_session_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_name",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sender_type",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "interaction_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sequence",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "summary",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "content",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "unread",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "sent_at",
+              "type": "INTEGER",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "read_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "notified_at",
+              "type": "INTEGER",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todo_deps",
+          "columns": [
+            {
+              "name": "todo_id",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            },
+            {
+              "name": "depends_on",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": true
+            }
+          ],
+          "rows": []
+        },
+        {
+          "name": "todos",
+          "columns": [
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": true
+            },
+            {
+              "name": "title",
+              "type": "TEXT",
+              "notNull": true,
+              "primaryKey": false
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "created_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            },
+            {
+              "name": "updated_at",
+              "type": "TEXT",
+              "notNull": false,
+              "primaryKey": false
+            }
+          ],
+          "rows": []
+        }
+      ]
+    },
+    {
+      "source": "agent-host-protocol",
+      "records": [
+        {
+          "type": "agent-host.snapshot",
+          "stage": "waiting",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": false,
+            "awaitsUserInput": true
+          },
+          "state": {
+            "status": 24,
+            "activeTurn": {
+              "id": "<id:ad59be0d4338>",
+              "responseParts": [
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:522ab1c1f68c>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:58aac3d98347>",
+                    "planReview": true
+                  }
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 1,
+            "offsetMs": 87
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "resolved",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": true,
+            "requestInProgress": true,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 8,
+            "activeTurn": {
+              "id": "<id:ad59be0d4338>",
+              "responseParts": [
+                {
+                  "kind": "toolCall",
+                  "toolCall": {
+                    "toolCallId": "<id:522ab1c1f68c>",
+                    "toolName": "exit_plan_mode",
+                    "status": "running",
+                    "_meta": {}
+                  }
+                },
+                {
+                  "kind": "inputRequest",
+                  "request": {
+                    "id": "<id:58aac3d98347>",
+                    "planReview": true
+                  },
+                  "response": {}
+                }
+              ]
+            },
+            "turns": []
+          },
+          "_capture": {
+            "sourceLine": 2,
+            "offsetMs": 89
+          }
+        },
+        {
+          "type": "agent-host.snapshot",
+          "stage": "terminal",
+          "timestamp": "<timestamp>",
+          "truth": {
+            "hasActiveRequest": false,
+            "requestInProgress": false,
+            "awaitsUserInput": false
+          },
+          "state": {
+            "status": 1,
+            "turns": [
+              {
+                "id": "<id:ad59be0d4338>",
+                "state": "complete",
+                "responseParts": [
+                  {
+                    "kind": "toolCall",
+                    "toolCall": {
+                      "toolCallId": "<id:522ab1c1f68c>",
+                      "toolName": "exit_plan_mode",
+                      "status": "completed",
+                      "_meta": {}
+                    }
+                  },
+                  {
+                    "kind": "inputRequest",
+                    "request": {
+                      "id": "<id:58aac3d98347>",
+                      "planReview": true
+                    },
+                    "response": {}
+                  }
+                ]
+              }
+            ]
+          },
+          "_capture": {
+            "sourceLine": 3,
+            "offsetMs": 1809
+          }
+        }
+      ]
+    }
+  ]
+}
