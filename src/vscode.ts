@@ -564,6 +564,7 @@ interface AgentHostInputRequestPart {
   kind?: unknown;
   request?: {
     id?: unknown;
+    planReview?: unknown;
     purpose?: unknown;
   };
   response?: unknown;
@@ -601,9 +602,10 @@ const KNOWN_AGENT_HOST_TOOL_STATUSES = new Set([
   'cancelled',
 ]);
 
-function agentHostInputKind(purpose: unknown): HumanInputBlockerKind {
-  if (purpose === 'planReview') return 'plan-review';
-  if (purpose === 'elicitation') return 'elicitation';
+function agentHostInputKind(request: AgentHostInputRequestPart['request']): HumanInputBlockerKind {
+  if (request && 'planReview' in request) return 'plan-review';
+  if (request?.purpose === 'planReview') return 'plan-review';
+  if (request?.purpose === 'elicitation') return 'elicitation';
   return 'question';
 }
 
@@ -653,7 +655,7 @@ export class AgentHostChatProjection {
             requestId,
             responsePartKind: 'inputRequest',
             sourceId,
-            kind: agentHostInputKind(input.request?.purpose),
+            kind: agentHostInputKind(input.request),
           });
           continue;
         }

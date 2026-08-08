@@ -382,7 +382,7 @@ test('Agent Host chat projection handles protocol input and tool blocker states'
         { kind: 'toolCall', toolCall: { toolCallId: 'streaming-tool', status: 'streaming' } },
         { kind: 'inputRequest', request: { id: 'ask', purpose: 'askUser' } },
         { kind: 'inputRequest', request: { id: 'elicit', purpose: 'elicitation' } },
-        { kind: 'inputRequest', request: { id: 'plan', purpose: 'planReview' } },
+        { kind: 'inputRequest', request: { id: 'plan', planReview: { steps: [] } } },
         { kind: 'inputRequest', request: { id: 'future', purpose: 'futurePurpose' } },
         {
           kind: 'toolCall',
@@ -439,7 +439,7 @@ test('Agent Host chat projection handles protocol input and tool blocker states'
       responseParts: [
         { kind: 'inputRequest', request: { id: 'ask', purpose: 'askUser' }, response: { answers: [] } },
         { kind: 'inputRequest', request: { id: 'elicit', purpose: 'elicitation' }, response: { accepted: true } },
-        { kind: 'inputRequest', request: { id: 'plan', purpose: 'planReview' }, response: { approved: true } },
+        { kind: 'inputRequest', request: { id: 'plan', planReview: { steps: [] } }, response: { approved: true } },
         { kind: 'inputRequest', request: { id: 'future', purpose: 'futurePurpose' }, response: { cancelled: true } },
         { kind: 'toolCall', toolCall: { toolCallId: 'pre-tool', status: 'running' } },
         { kind: 'toolCall', toolCall: { toolCallId: 'post-tool', status: 'completed' } },
