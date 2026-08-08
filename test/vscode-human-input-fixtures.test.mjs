@@ -82,10 +82,28 @@ test('accounts for every human-input blocker family', () => {
   assert.deepEqual(manifest.blockers.map(({ id }) => id), BLOCKER_FAMILIES);
 
   for (const blocker of manifest.blockers) {
-    assert.ok(['partial', 'unsupported'].includes(blocker.status));
-    assert.ok(blocker.observed.length > 0 || blocker.unsupported.length > 0);
-    if (blocker.status === 'unsupported') assert.equal(blocker.observed.length, 0);
+    assert.ok(['complete', 'partial', 'unsupported'].includes(blocker.status));
+    if (blocker.status === 'complete') {
+      assert.ok(blocker.observed.length > 0, `${blocker.id}: complete observations`);
+      assert.equal(blocker.unsupported.length, 0, `${blocker.id}: complete unsupported`);
+    } else if (blocker.status === 'partial') {
+      assert.ok(blocker.observed.length > 0, `${blocker.id}: partial observations`);
+      assert.ok(blocker.unsupported.length > 0, `${blocker.id}: partial unsupported`);
+    } else {
+      assert.equal(blocker.observed.length, 0, `${blocker.id}: unsupported observations`);
+      assert.ok(blocker.unsupported.length > 0, `${blocker.id}: unsupported outcomes`);
+    }
   }
+
+  const manifestFiles = manifest.fixtures.map(({ file }) => file);
+  assert.equal(new Set(manifestFiles).size, manifestFiles.length, 'unique manifest fixture files');
+  assert.deepEqual(
+    manifestFiles.toSorted(),
+    fs.readdirSync(FIXTURE_ROOT)
+      .filter((file) => file.endsWith('.json') && file !== 'manifest.json')
+      .toSorted(),
+    'every fixture file is declared exactly once'
+  );
 
   const observed = new Set(manifest.fixtures.flatMap((fixture) => fixture.observed));
   for (const required of REQUIRED_OBSERVATIONS) assert.ok(observed.has(required), required);

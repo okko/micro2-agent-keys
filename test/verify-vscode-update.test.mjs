@@ -8,6 +8,7 @@ import {
   findVscodeApp,
   parseArgs,
   readVscodeBuild,
+  sameBuild,
   verifyBundleContracts,
 } from '../scripts/dev/verify-vscode-update.mjs';
 
@@ -49,6 +50,18 @@ test('discovers and reads an installed VS Code build', (t) => {
   assert.throws(() => findVscodeApp(missing, []), /does not exist/);
 });
 
+test('requires matching version and commit for an exact evidence build', () => {
+  const evidence = {
+    version: '1.131.0',
+    commit: '0123456789abcdef0123456789abcdef01234567',
+  };
+
+  assert.equal(sameBuild(evidence, evidence), true);
+  assert.equal(sameBuild({ ...evidence, version: '1.132.0' }, evidence), false);
+  assert.equal(sameBuild({ ...evidence, commit: null }, evidence), false);
+  assert.equal(sameBuild(evidence, { ...evidence, commit: null }), false);
+});
+
 test('fails when an installed VS Code contract token disappears', (t) => {
   const resources = temporaryDirectory(t);
   const relativePath = 'out/example.js';
@@ -81,6 +94,11 @@ test('audits fixture provenance and rejects private material', (t) => {
     commit: 'a'.repeat(40),
     fixtureCount: 1,
   });
+
+  const unlistedFixture = path.join(fixtureRoot, 'unlisted.json');
+  fs.writeFileSync(unlistedFixture, JSON.stringify({ status: 'completed' }));
+  assert.throws(() => auditFixtures(manifestPath), /unlisted fixture file: unlisted\.json/);
+  fs.rmSync(unlistedFixture);
 
   fs.writeFileSync(fixturePath, JSON.stringify({ path: '/Users/private/file' }));
   assert.throws(() => auditFixtures(manifestPath), /safe\.json: fixture contains home path/);

@@ -360,7 +360,7 @@
     },
     {
       "id": "plan-review",
-      "status": "partial",
+      "status": "complete",
       "observed": [
         "agent-host-waiting",
         "agent-host-reject",
@@ -372,7 +372,7 @@
     },
     {
       "id": "elicitation",
-      "status": "partial",
+      "status": "complete",
       "observed": [
         "accepted",
         "rejected",
@@ -385,7 +385,7 @@
     },
     {
       "id": "modified-files-review",
-      "status": "partial",
+      "status": "complete",
       "observed": [
         "waiting",
         "approve",
@@ -395,7 +395,7 @@
     },
     {
       "id": "feedback-review",
-      "status": "partial",
+      "status": "complete",
       "observed": [
         "waiting",
         "approve",

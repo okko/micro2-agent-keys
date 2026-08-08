@@ -2,8 +2,10 @@
 
 VS Code ships monthly. AgentKeys does not require a repository update for every VS Code
 release: runtime tracking is version-independent and unknown waiting states fail closed.
-Run one read-only command after VS Code updates to verify that the installed build still
-exports every protocol and persistence contract AgentKeys consumes.
+Run one read-only command after VS Code updates to check that the installed build still
+contains every protocol and persistence marker AgentKeys consumes. This is a structural
+smoke test: it does not prove unchanged semantics or detect a new producer that reuses an
+existing marker.
 
 ## Monthly workflow
 
@@ -17,15 +19,17 @@ That command performs the complete routine check. It does not access the keyboar
 restart the daemon, modify fixtures, create chat sessions, invoke a model, or require UI
 interaction.
 
-The verifier exits nonzero as soon as a compatibility check fails. A successful run ends
+The verifier exits nonzero as soon as a structural check fails. A successful run ends
 with:
 
 ```text
-VS Code update verification passed.
-Runtime contracts: compatible with <installed-version>
+VS Code update structural verification passed.
+Runtime contract markers: present in <installed-version>
 ```
 
-No repository edit is needed when this command passes.
+A passing command means no consumed marker disappeared and the existing projection and
+evidence tests remain green. It does not by itself establish semantic compatibility for a
+different build.
 
 ## What the command checks
 
@@ -60,6 +64,11 @@ A missing token means VS Code changed or removed a consumed contract. The comman
 the bundle and every missing token. Do not delete the check merely to make the verifier
 green; follow the failure procedure below.
 
+Token presence cannot establish how a contract is produced or consumed. In particular,
+the verifier cannot detect when an existing reducer-only field gains a new UI/provider
+producer. Review source or capture production evidence when release notes, a provider
+update, or observed UI behavior indicates such a change.
+
 ### 3. AgentKeys build and tests
 
 The command runs the full `npm test` suite. This compiles TypeScript and checks native
@@ -67,7 +76,7 @@ and Agent Host projections, blocker identity, fail-closed behavior, restart hand
 captured-protocol parity, fixture structure, and the local MCP evidence providers.
 
 `--skip-tests` exists only to develop the verifier itself. A run using it is not a
-complete compatibility result.
+complete verification result.
 
 ### 4. Fixture privacy and provenance
 
@@ -91,12 +100,13 @@ After an ordinary monthly update it will usually report:
 ```text
 Evidence corpus: pinned to <evidence-version>; retained as historical production evidence
 No fixture provenance was rewritten. Recapture only when adding empirical coverage.
+Structural probes do not detect semantic changes or newly available producer paths.
 ```
 
 This is informational, not a compatibility failure. Existing fixtures prove behavior on
 the build that produced them; changing their version without new production capture
-would make the evidence false. Runtime compatibility with the new build is established
-by the installed-bundle probes and the full test suite.
+would make the evidence false. Installed-bundle probes and the full test suite establish
+structural continuity, not semantic equivalence with the evidence build.
 
 ## When verification fails
 
@@ -152,6 +162,11 @@ Routine monthly verification does not require recapturing every production inter
 Capture new evidence only when a release introduces a new blocker shape, changes an
 outcome that AgentKeys distinguishes, makes a previously unsupported provider path
 available, or invalidates an existing source-contract assumption.
+
+The structural verifier cannot discover all of those changes when existing tokens remain
+in the bundles. Treat release notes, changed interaction UI, newly installed providers,
+and unexpected key state as independent triggers for the source-review and capture steps
+above.
 
 For such a change, keep old fixtures under their original VS Code version and add a new
 versioned evidence set or deliberately migrate the manifest only with complete fresh

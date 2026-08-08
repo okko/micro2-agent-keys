@@ -142,6 +142,19 @@ export function verifyBundleContracts(resources, contracts = BUNDLE_CONTRACTS) {
 export function auditFixtures(manifestPath = MANIFEST_PATH) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const fixtureRoot = path.dirname(manifestPath);
+  const manifestFiles = manifest.fixtures.map(({ file }) => file);
+  const declaredFiles = new Set(manifestFiles);
+  if (declaredFiles.size !== manifestFiles.length) {
+    throw new Error('fixture manifest contains duplicate file entries');
+  }
+  const fixtureFiles = fs.readdirSync(fixtureRoot)
+    .filter((file) => file.endsWith('.json') && file !== path.basename(manifestPath));
+  for (const file of fixtureFiles) {
+    if (!declaredFiles.has(file)) throw new Error(`unlisted fixture file: ${file}`);
+  }
+  for (const file of manifestFiles) {
+    if (!fixtureFiles.includes(file)) throw new Error(`missing fixture file: ${file}`);
+  }
   for (const entry of manifest.fixtures) {
     const file = path.join(fixtureRoot, entry.file);
     const contents = fs.readFileSync(file, 'utf8');
@@ -176,10 +189,10 @@ function runTests() {
   return testCount ? `${testCount} tests passed` : 'full suite passed';
 }
 
-function sameBuild(installed, evidence) {
+export function sameBuild(installed, evidence) {
   if (installed.version !== evidence.version) return false;
-  if (installed.commit && evidence.commit) return installed.commit === evidence.commit;
-  return true;
+  if (!installed.commit || !evidence.commit) return false;
+  return installed.commit === evidence.commit;
 }
 
 export function main(argv = process.argv.slice(2)) {
@@ -211,8 +224,10 @@ export function main(argv = process.argv.slice(2)) {
   const evidence = auditFixtures();
   process.stdout.write(`      ${evidence.fixtureCount} fixtures from VS Code ${evidence.version}\n`);
 
-  process.stdout.write('\nVS Code update verification passed.\n');
-  process.stdout.write(`Runtime contracts: compatible with ${installed.version}\n`);
+  process.stdout.write(options.skipTests
+    ? '\nVS Code update marker checks passed; tests were skipped.\n'
+    : '\nVS Code update structural verification passed.\n');
+  process.stdout.write(`Runtime contract markers: present in ${installed.version}\n`);
   if (sameBuild(installed, evidence)) {
     process.stdout.write('Evidence corpus: current for this exact build\n');
   } else {
@@ -221,6 +236,9 @@ export function main(argv = process.argv.slice(2)) {
     );
     process.stdout.write(
       'No fixture provenance was rewritten. Recapture only when adding empirical coverage.\n'
+    );
+    process.stdout.write(
+      'Structural probes do not detect semantic changes or newly available producer paths.\n'
     );
   }
 }
