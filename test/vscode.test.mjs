@@ -14,6 +14,7 @@ import {
   reduceNormalizedEvent,
   workspaceMetadata,
 } from '../dist/vscode.js';
+import { STATES } from '../dist/states.js';
 
 const IDS = [
   '00000000-0000-4000-8000-000000000000',
@@ -119,6 +120,28 @@ function append(file, ...events) {
 
 function event(type, data = {}, timestamp = '2026-08-01T10:00:00.000Z') {
   return { type, data, timestamp };
+}
+
+class FakeAgentHostStateSource {
+  handler = null;
+  sessions = [];
+  stopped = false;
+
+  start(handler) {
+    this.handler = handler;
+  }
+
+  setSessions(sessionIds) {
+    this.sessions = [...sessionIds];
+  }
+
+  async emit(sessionId, state) {
+    await this.handler(sessionId, state);
+  }
+
+  stop() {
+    this.stopped = true;
+  }
 }
 
 test('native chat projection correlates completion with the latest request', () => {
@@ -356,6 +379,7 @@ test('Agent Host chat projection handles protocol input and tool blocker states'
     activeTurn: {
       id: 'protocol-turn',
       responseParts: [
+        { kind: 'toolCall', toolCall: { toolCallId: 'streaming-tool', status: 'streaming' } },
         { kind: 'inputRequest', request: { id: 'ask', purpose: 'askUser' } },
         { kind: 'inputRequest', request: { id: 'elicit', purpose: 'elicitation' } },
         { kind: 'inputRequest', request: { id: 'plan', purpose: 'planReview' } },
@@ -426,6 +450,37 @@ test('Agent Host chat projection handles protocol input and tool blocker states'
   snapshot = projection.snapshot();
   assert.equal(snapshot.blockers.size, 0);
   assert.equal(snapshot.busy, true);
+  assert.deepEqual(snapshot.incompatibilities, []);
+
+  projection.apply({
+    activeTurn: {
+      id: 'protocol-turn',
+      responseParts: [
+        { kind: 'toolCall', toolCall: { toolCallId: 'future-tool', status: 'waiting-for-future-review' } },
+      ],
+    },
+  });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.busy, false);
+  assert.deepEqual(snapshot.incompatibilities, [
+    {
+      code: 'unknown-agent-host-tool-status',
+      source: 'agent-host',
+      responsePartKind: 'toolCall',
+      toolStatus: 'waiting-for-future-review',
+    },
+  ]);
+  const incompatibleRun = emptyRun();
+  reduceNormalizedEvent(incompatibleRun, { type: 'request.started', requestId: snapshot.requestId });
+  assert.equal(
+    reduceNormalizedEvent(incompatibleRun, {
+      type: 'request.incompatible',
+      requestId: snapshot.requestId,
+      code: snapshot.incompatibilities[0].code,
+    }),
+    'error'
+  );
+  assert.equal(incompatibleRun.error, 'incompatible:unknown-agent-host-tool-status');
 
   projection.apply({
     turns: [{ id: 'protocol-turn', state: 'failed', responseParts: [] }],
@@ -433,6 +488,90 @@ test('Agent Host chat projection handles protocol input and tool blocker states'
   snapshot = projection.snapshot();
   assert.equal(snapshot.active, false);
   assert.equal(snapshot.terminal, 'failed');
+});
+
+test('Agent Host unknown tool statuses set a bound slot to incompatible red', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const logs = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    log: (...values) => logs.push(values.join(' ')),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+
+  assert.equal(
+    await integration.applyAgentHostChatState(IDS[0], {
+      activeTurn: {
+        id: 'protocol-turn',
+        responseParts: [
+          { kind: 'toolCall', toolCall: { toolCallId: 'future-tool', status: 'waiting-for-future-review' } },
+        ],
+      },
+    }),
+    true
+  );
+
+  assert.equal(integration.slots[0].state, 'error');
+  assert.equal(integration.slots[0].runError, 'incompatible:unknown-agent-host-tool-status');
+  assert.equal(STATES[integration.slots[0].state].color, 0xff0000);
+  const diagnostic = logs.find((line) => line.startsWith('Incompatible VS Code execution state'));
+  assert.match(
+    diagnostic,
+    new RegExp(
+      `session=${IDS[0]} request=protocol-turn source=agent-host ` +
+      'responsePart=toolCall toolStatus=waiting-for-future-review vscode='
+    )
+  );
+});
+
+test('wires bound Agent Host sessions to authoritative protocol state', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const source = new FakeAgentHostStateSource();
+  const integration = new VSCodeIntegration({
+    ...files,
+    agentHostSource: source,
+    scanIntervalMs: 60_000,
+  });
+  await integration.start();
+
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+  assert.deepEqual(source.sessions, [IDS[0]]);
+
+  await source.emit(IDS[0], {
+    activeTurn: {
+      id: 'protocol-turn',
+      responseParts: [
+        { kind: 'inputRequest', request: { id: 'question-1', purpose: 'askUser' } },
+      ],
+    },
+  });
+  assert.equal(integration.slots[0].state, 'input');
+
+  await source.emit(IDS[0], {
+    activeTurn: { id: 'protocol-turn', responseParts: [] },
+  });
+  assert.equal(integration.slots[0].state, 'running');
+
+  await source.emit(IDS[0], {
+    turns: [{ id: 'protocol-turn', state: 'complete', responseParts: [] }],
+  });
+  assert.equal(integration.slots[0].state, 'done');
+
+  integration.stop();
+  assert.equal(source.stopped, true);
 });
 
 test('normalized execution events scope parallel blockers to the latest request', () => {
@@ -869,7 +1008,7 @@ test('native journal reconciles stale hook-only blockers without new journal byt
   assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
-test('logs unknown native waiting states without interaction content', async (t) => {
+test('marks unknown native waiting states as incompatible without logging interaction content', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'Private project name');
@@ -894,10 +1033,16 @@ test('logs unknown native waiting states without interaction content', async (t)
   });
   await integration.scan();
 
-  const diagnostic = logs.find((line) => line.startsWith('Unknown VS Code waiting status'));
+  assert.equal(integration.slots[0].state, 'error');
+  assert.equal(integration.slots[0].runError, 'incompatible:unknown-native-response');
+  assert.equal(STATES[integration.slots[0].state].color, 0xff0000);
+  const diagnostic = logs.find((line) => line.startsWith('Incompatible VS Code execution state'));
   assert.match(
     diagnostic,
-    new RegExp(`session=${IDS[0]} request=unknown-waiting-request responsePart=futureHumanInput vscode=`)
+    new RegExp(
+      `session=${IDS[0]} request=unknown-waiting-request source=native ` +
+      'responsePart=futureHumanInput stateType=999 vscode='
+    )
   );
   assert.doesNotMatch(diagnostic, /Private project name/);
 });

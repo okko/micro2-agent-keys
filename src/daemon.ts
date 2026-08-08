@@ -4,6 +4,7 @@ import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './d
 import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
 import { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } from './states.js';
 import { VSCodeIntegration, INTEGRATION_SLOT_COUNT, type VSCodeSlot } from './vscode.js';
+import { LocalAgentHostStateSource } from './agent-host.js';
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const HOST = '127.0.0.1';
@@ -103,6 +104,7 @@ function push(changed?: Slot): Promise<void> {
 
 const vscode = new VSCodeIntegration({
   log,
+  agentHostSource: new LocalAgentHostStateSource({ log }),
   onSlot: async (binding: VSCodeSlot) => {
     if (shuttingDown) return;
     const slot = slots[binding.slot];

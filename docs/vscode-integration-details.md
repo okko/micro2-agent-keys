@@ -18,6 +18,13 @@
     This prevents ordinary terminal Copilot sessions from taking slots. Native transcripts
     must have a matching persisted entry under the workspace's `chatSessions/` directory.
 
+   For each bound Agent Host session, the daemon reads VS Code's owner-only local endpoint
+   registry under the active user-data directory. It supports both the legacy shared
+   `metadata.json` array and current per-instance `entries/*.json` files, ignores dead endpoint
+   owners, and connects to each live editor endpoint until one serves the session. The
+   WebSocket upgrade uses the registry bearer token over the published Unix socket; the token
+   is never logged.
+
    At the same time,
    the VS Code's preview agent hooks notify the daemon immediately before and after `vscode_askQuestions`, avoiding the
 native Chat transcript's buffered writes. Generic `PostToolUse` or `PermissionDenied`
@@ -64,6 +71,19 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
     outside-sandbox terminal confirmations use verified
     `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
     local command fingerprint. Persisted records support restart recovery.
+
+   An unrecognized native response form while VS Code reports `NeedsInput`, or an
+   unrecognized Agent Host `ToolCallStatus`, fails closed as `error` and turns the key
+   solid red. The slot records an `incompatible:*` run error, and the daemon logs only
+   the session ID, request ID, source, response-part kind, unknown state/status token,
+   and VS Code version. Prompt text, tool input, paths, and answers are not logged.
+   Agent Host sessions use the live Agent Host Protocol as their authoritative state source.
+   After `initialize`, the daemon subscribes to the default `ahp-chat` channel derived from
+   `copilotcli:/<session-id>`. The initial complete `ChatState` snapshot is applied directly.
+   Later protocol actions are coalesced into fresh `subscribe` snapshots, avoiding a second
+   implementation of VS Code's chat reducer. Endpoint closure or replacement drops ownership;
+   the normal bounded scan reconnects and obtains a new complete snapshot. `session.db` is not
+   used as a chat-state source.
 
     Polling is deliberately bounded to protect CPU use and battery life. No polling
     interval may be shorter than 100 ms, and periodic scans are configured so a

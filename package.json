@@ -21,13 +21,15 @@
     "test": "npm run build --silent && node --test"
   },
   "dependencies": {
-    "node-hid": "^3.4.0"
+    "node-hid": "^3.4.0",
+    "ws": "^8.21.3"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
+    "@types/ws": "^8.18.1",
     "typescript": "^7.0.2"
   }
 }

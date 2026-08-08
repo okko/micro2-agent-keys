@@ -188,6 +188,8 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `AGENTKEYS_LOG` redirects daemon output to a file, needed when launched via
   LaunchServices, which discards stdout.
 - `COPILOT_HOME` overrides the Copilot data directory used by the VS Code integration.
+- `AGENTKEYS_VSCODE_USER_DATA` overrides the VS Code user-data directory used to discover
+  authenticated local Agent Host protocol endpoints.
 - `AGENTKEYS_VSCODE_WORKSPACE_STORAGE` overrides the native VS Code workspace-storage directory.
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
 - `AGENTKEYS_TEST_LAYER` picks which layer the agent keys replace (1-based, default `1`) in tests.
