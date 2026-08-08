@@ -85,11 +85,12 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
    the normal bounded scan reconnects and obtains a new complete snapshot. `session.db` is not
    used as a chat-state source.
 
-    Polling is deliberately bounded to protect CPU use and battery life. No polling
-    interval may be shorter than 100 ms, and periodic scans are configured so a
-    persisted state change normally reaches the key within 100–300 ms. File events and
-    hooks should trigger or coalesce scans instead of introducing faster polling or
-    busy-wait loops.
+   Polling is deliberately bounded to protect CPU use and battery life. No polling
+   interval may be shorter than 100 ms, and periodic scans are configured so a
+   persisted state change normally reaches the `onSlot` callback within 100–300 ms.
+   HID transport and device-rendering latency are not part of this integration target.
+   File events and hooks should trigger or coalesce scans instead of introducing faster
+   polling or busy-wait loops.
 
 5. **Recover after restart**
 

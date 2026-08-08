@@ -14,6 +14,7 @@ import {
   reduceNormalizedEvent,
   workspaceMetadata,
 } from '../dist/vscode.js';
+import { EFFECT } from '../dist/oai.js';
 import { STATES } from '../dist/states.js';
 
 const IDS = [
@@ -23,6 +24,11 @@ const IDS = [
   '00000000-0000-4000-8000-000000000003',
   '00000000-0000-4000-8000-000000000004',
 ];
+
+test('input state maps to orange breathing lighting', () => {
+  assert.equal(STATES.input.color, 0xff6a00);
+  assert.equal(STATES.input.effect, EFFECT.breath);
+});
 
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-vscode-'));
@@ -1573,7 +1579,7 @@ test('polling interval stays within the Phase 5 operating bounds', () => {
   }
 });
 
-test('persisted event writes reach the slot within 300 ms', async (t) => {
+test('persisted event writes reach onSlot within 300 ms', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'project');
@@ -1592,8 +1598,8 @@ test('persisted event writes reach the slot within 300 ms', async (t) => {
     const startedAt = Date.now();
     write();
     await waitFor(
-      () => integration.slots[0]?.state === expected,
-      `persisted state did not reach ${expected}`
+      () => observed.at(-1) === expected,
+      `persisted state did not reach onSlot as ${expected}`
     );
     const elapsedMs = Date.now() - startedAt;
     assert.ok(elapsedMs <= 300, `${expected} propagation took ${elapsedMs} ms`);

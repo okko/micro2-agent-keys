@@ -210,8 +210,8 @@ During normal operation:
 Polling must balance responsiveness with CPU use and battery life:
 
 - no polling interval may be shorter than 100 ms;
-- configure periodic scans so a key normally reflects a persisted state change within
-  100–300 ms;
+- configure periodic scans so a persisted state change normally reaches `onSlot` within
+  100–300 ms; HID transport and device-rendering latency are outside this plan;
 - prefer file events and hooks to extra polling, and coalesce bursts into one scan;
 - do not busy-wait or add a faster fallback loop when a source is idle or unavailable.
 
@@ -266,7 +266,7 @@ This work is complete when:
   version-locked source-contract forms remain unit-tested and all unrecognized waiting
   response parts or tool statuses fail closed;
 - every polling interval is at least 100 ms and persisted state changes normally reach
-  the key within 100–300 ms;
+  `onSlot` within 100–300 ms; HID transport and device-rendering latency are excluded;
 - parallel blockers, restarts, queued requests, edits/resends, cancellation, and failure
   cannot leave a stale orange or blue key;
 - latest-request completion is correlated by identity rather than any request index;
