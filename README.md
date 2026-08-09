@@ -1,7 +1,9 @@
 # micro2-agent-keys
 
-Drive up to 20 agent keys on a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) from
-VS Code, command line and/or via a local HTTP API, so concurrent coding-agent sessions each get a key that shows their status.
+Turn a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) into an at-a-glance
+control surface for up to 20 coding-agent sessions. AgentKeys connects VS Code, the command line,
+and a local HTTP API to physical keys, so each concurrent session has a dedicated, color-coded
+status indicator you can act on without hunting through editor tabs.
 
 No custom firmware. It coexists with Input.app at runtime and talks to the device over
 its existing USB HID interface, using the JSON-RPC messages the stock firmware already
@@ -14,6 +16,20 @@ accepts. Keep Input.app running so its key macros continue to work.
 | `done`  | green        | finished, output unread        |
 | `input` | amber, breathing | paused, waiting on you     |
 | `error` | red          | run failed                     |
+
+## Why AgentKeys
+
+- **Stay focused in VS Code.** AgentKeys automatically tracks eligible VS Code Agent Host and
+  native Copilot Chat sessions as they begin work, wait for input, finish, or fail. A physical
+  key opens the exact project and transcript for its bound session, putting you back in context
+  with one press.
+- **See what needs attention first.** Breathing blue keys show active work, amber keys show
+  sessions blocked on you, green keys show unread completion, and red keys surface failures.
+  Parallel agents become easy to scan from your desk instead of easy to lose in a crowded editor.
+- **Keep your current setup.** No custom firmware or keymap takeover is required. Input.app
+  keeps providing your normal macros, while AgentKeys only updates the colors of the agent keys.
+- **Fit it into any workflow.** Let VS Code assign and update slots automatically, or drive the
+  same clear states from scripts, the CLI, or the localhost HTTP API.
 
 ## How it works
 
@@ -33,6 +49,23 @@ The daemon never touches your keymap. You bind the agent keycodes to a layer onc
 way you want them, and from then on the daemon only sends colours. The lighting settings are
 independent of active layer: If you send a per-key state to a key in anothe layer, that key
 will reflect its current status as soon as you switch that layer to be the active one.
+
+## VS Code integration
+
+VS Code is the automatic path: after installation, AgentKeys discovers eligible VS Code Agent
+Host and native Copilot Chat sessions, assigns a free slot when real work starts, and keeps that
+key synchronized with the session's live state. Simply creating or browsing a session does not
+claim a key, so the hardware reflects active work rather than editor clutter.
+
+When a session needs an answer or approval, its key turns amber; active work breathes blue;
+completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
+VS Code project window and opens that exact chat transcript. Opening a green key acknowledges the
+completion by returning it to white, while keeping the shortcut bound so you can reopen the same
+conversation.
+
+`scripts/install-agent.sh` installs the daemon providing all the features: VS Code hook configuration, CLI and HTTP API. Use
+`agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
+from the terminal, and `agentkeys doctor vscode` to check the detected VS Code integration.
 
 ## The agent layer
 
