@@ -1,6 +1,7 @@
 # micro2-agent-keys
 
-Turn a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) into an at-a-glance
+Turn a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or a
+[Codex Micro](https://worklouder.cc/codex-micro) into an at-a-glance
 control surface for up to 20 coding-agent sessions. AgentKeys connects VS Code, the command line,
 and a local HTTP API to physical keys, so each concurrent session has a dedicated, color-coded
 status indicator you can act on without hunting through editor tabs.
@@ -30,6 +31,19 @@ accepts. Keep Input.app running so its key macros continue to work.
   keeps providing your normal macros, while AgentKeys only updates the colors of the agent keys.
 - **Fit it into any workflow.** Let VS Code assign and update slots automatically, or drive the
   same clear states from scripts, the CLI, or the localhost HTTP API.
+
+| Feature | ChatGPT Codex | AgentKeys |
+| --- | --- | --- |
+| Works with stock firmware | yes | yes |
+| Requires custom firmware | no | no |
+| Open source | no | yes (MIT) |
+| Supports Codex tasks | yes | no |
+| Supports VS Code (Copilot / Agent Host) | no | yes |
+| Key press opens session | yes (Codex task) | yes (VS Code chat) |
+| CLI | no | yes |
+| HTTP API | no | yes |
+| Shell / script integration | no | yes |
+| Agent key slots supported | 6 (AG00–AG05) | 20 (AG00–AG19) |
 
 ## How it works
 
