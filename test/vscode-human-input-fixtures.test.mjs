@@ -123,6 +123,11 @@ test('keeps every real fixture bounded and sanitized', () => {
     assert.doesNotMatch(contents, /file:\/\//, entry.file);
     assert.doesNotMatch(contents, /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i, entry.file);
     assert.doesNotMatch(contents, /eyJ[A-Za-z0-9_-]{40}/, entry.file);
+    assert.doesNotMatch(
+      contents,
+      /(?=[A-Za-z0-9]{16})(?=[A-Za-z0-9]*[a-z])(?=[A-Za-z0-9]*[A-Z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{16,}/,
+      entry.file
+    );
     assert.doesNotMatch(contents, /20\d\d-\d\d-\d\dT\d\d:/, entry.file);
 
     const sources = new Set(fixture.sources.map(({ source }) => source));

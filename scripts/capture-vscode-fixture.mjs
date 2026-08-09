@@ -68,6 +68,10 @@ const JOURNAL_PATH_KEYS = new Set([
 ]);
 const ID_KEY = /(?:^|_)(?:call|interaction|request|resolve|response|session|tool|turn|use)?id$|Id$/;
 const TIME_KEY = /(?:^|_)(?:at|date|time|timestamp)$/i;
+const SCHEMA_KEY = /^[$_A-Za-z][A-Za-z0-9_$]{0,63}$/;
+// Provider identifiers such as call_<opaque> are used as map keys.
+const OPAQUE_RUN =
+  /(?=[A-Za-z0-9]{16})(?=[A-Za-z0-9]*[a-z])(?=[A-Za-z0-9]*[A-Z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{16,}/;
 const DEFAULT_VSCODE_PACKAGE =
   '/Applications/Visual Studio Code.app/Contents/Resources/app/package.json';
 const CAPTURE_TIMESTAMP = Symbol('captureTimestamp');
@@ -105,7 +109,7 @@ function pseudonym(key, value) {
 }
 
 function sanitizeObjectKey(key) {
-  return /[/\\]|^[a-z][a-z0-9+.-]*:/i.test(key) ? pseudonym('objectKey', key) : key;
+  return SCHEMA_KEY.test(key) && !OPAQUE_RUN.test(key) ? key : pseudonym('objectKey', key);
 }
 
 export function sanitizeCapture(value, key = '') {

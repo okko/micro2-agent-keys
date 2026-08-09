@@ -50,6 +50,10 @@ const PRIVACY_PATTERNS = [
   ['file URI', /file:\/\//i],
   ['raw UUID', /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i],
   ['JWT-like token', /eyJ[A-Za-z0-9_-]{40}/],
+  [
+    'opaque provider id',
+    /(?=[A-Za-z0-9]{16})(?=[A-Za-z0-9]*[a-z])(?=[A-Za-z0-9]*[A-Z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{16,}/,
+  ],
   ['absolute timestamp', /20\d\d-\d\d-\d\dT\d\d:/],
   ['authorization header', /authorization\s*:/i],
   ['bearer token', /bearer\s+\S+/i],
