@@ -119,8 +119,9 @@ derives their relevant behavior from externally observable records and fails clo
 
 ### Outcome
 
-The chosen architecture is implemented in `src/vscode.ts`, `src/vscode-chat-state.ts`, and
-`src/vscode-hook.ts`. Native Chat uses a journal projection plus transcript and hook
+The chosen architecture is implemented in `src/vscode.ts`, `src/vscode-chat-state.ts`,
+`src/vscode-session-files.ts`, `src/vscode-app.ts`, and `src/vscode-hook.ts`. Native Chat
+uses a journal projection plus transcript and hook
 correlation. Agent Host uses persisted events for discovery and recovery and complete
 protocol snapshots for live state. Bound sessions remain observable when their chat
 widget is hidden, and unresolved blockers can be reconstructed after restart.

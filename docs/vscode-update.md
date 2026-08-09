@@ -130,7 +130,8 @@ Treat this as a real compatibility investigation:
    state, tool invocation state, `chatAwaitsUserInput`, Agent Host input/tool state, and
    native chat persistence.
 3. Determine whether the contract was renamed, moved, removed, or semantically changed.
-4. Update `src/vscode-chat-state.ts`, `src/vscode.ts`, or `src/agent-host.ts` only if the
+4. Update `src/vscode-chat-state.ts`, `src/vscode-session-files.ts`, `src/vscode.ts`, or
+   `src/agent-host.ts` only if the
    production contract changed.
 5. Add a focused synthetic unit test for the new shape while preserving fail-closed
    handling for unknown states.

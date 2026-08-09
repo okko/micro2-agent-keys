@@ -3,13 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import {
-  VSCodeIntegration,
-  buildSessionUrl,
-  exactOpenSupported,
-  nativeSessionResource,
-  workspaceMetadata,
-} from '../dist/vscode.js';
+import { VSCodeIntegration } from '../dist/vscode.js';
+import { buildSessionUrl, exactOpenSupported, nativeSessionResource } from '../dist/vscode-app.js';
+import { workspaceMetadata } from '../dist/vscode-session-files.js';
 import { EFFECT } from '../dist/oai.js';
 import { STATES } from '../dist/states.js';
 import { event } from './vscode-event.mjs';
