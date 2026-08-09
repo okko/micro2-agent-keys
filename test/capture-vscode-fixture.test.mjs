@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { captureFixture, sanitizeCapture } from '../scripts/capture-vscode-fixture.mjs';
+import { captureFixture, sanitizeCapture } from '../scripts/dev/capture-vscode-fixture.mjs';
 
 const SESSION_ID = '00000000-0000-4000-8000-000000000000';
 

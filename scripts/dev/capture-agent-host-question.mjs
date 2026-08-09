@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 import {
   agentHostChatResource,
   readLocalAgentHostEndpoints,
-} from '../dist/agent-host.js';
+} from '../../dist/agent-host.js';
 
 const DEFAULT_REGISTRY = path.join(
   os.homedir(),

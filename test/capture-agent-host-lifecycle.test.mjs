@@ -10,7 +10,7 @@ import {
   resolutionAction,
   trimAction,
   trimState,
-} from '../scripts/capture-agent-host-question.mjs';
+} from '../scripts/dev/capture-agent-host-question.mjs';
 
 const SESSION_ID = '00000000-0000-4000-8000-000000000000';
 

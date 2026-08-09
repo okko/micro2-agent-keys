@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import test from 'node:test';
-import { createEvidenceServer } from '../scripts/mcp-auth-evidence-server.mjs';
+import { createEvidenceServer } from '../scripts/dev/mcp-auth-evidence-server.mjs';
 
 const ORIGIN = 'http://127.0.0.1:38471';
 const REDIRECT_URI = 'http://127.0.0.1:48123/callback';

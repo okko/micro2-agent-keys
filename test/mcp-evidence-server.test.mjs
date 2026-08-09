@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 test('serves a spec-shaped form elicitation over newline-delimited stdio', async (t) => {
-  const child = spawn(process.execPath, ['scripts/mcp-evidence-server.mjs'], {
+  const child = spawn(process.execPath, ['scripts/dev/mcp-evidence-server.mjs'], {
     cwd: ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -79,7 +79,7 @@ test('serves a spec-shaped form elicitation over newline-delimited stdio', async
 });
 
 test('serves URL elicitation only when the 2025-11-25 capability is negotiated', async (t) => {
-  const child = spawn(process.execPath, ['scripts/mcp-evidence-server.mjs'], {
+  const child = spawn(process.execPath, ['scripts/dev/mcp-evidence-server.mjs'], {
     cwd: ROOT,
     env: {
       ...process.env,
