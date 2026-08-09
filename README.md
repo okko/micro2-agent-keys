@@ -47,9 +47,19 @@ accepts. Keep Input.app running so its key macros continue to work.
 
 ## How it works
 
-```
-your scripts ──HTTP──> daemon ──USB HID JSON-RPC──> keyboard
-  (no perms)         (holds the Input Monitoring grant)
+```mermaid
+flowchart LR
+    VS["VS Code\n(Agent Host / Copilot Chat)"]
+    scripts["your scripts\n(no perms)"]
+    cli["agentkeys CLI\n(no perms)"]
+    daemon["AgentKeys daemon\n(holds System Input Monitoring grant)"]
+    keyboard["Creator Micro 2\n(keyboard)"]
+
+    VS -->|hooks HTTP| daemon
+    daemon -->|reads workspace storage\n& event files| VS
+    scripts -->|shell| cli
+    cli -->|HTTP| daemon
+    daemon <-->|USB HID JSON-RPC| keyboard
 ```
 
 The daemon owns this project's single HID connection and the macOS permission. Input.app
