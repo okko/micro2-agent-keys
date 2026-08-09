@@ -25,10 +25,15 @@ if (process.env.AGENTKEYS_LOG) {
   process.on('uncaughtException', (err) => write('uncaught:', err.stack));
 }
 
+/** One agent key on the keyboard: its lighting state plus the metadata `/state` reports. */
 interface Slot {
+  /** Zero-based key index, used verbatim as the firmware thread id. */
   index: number;
+  /** Key of {@link STATES}; decides colour and effect. */
   state: string;
+  /** Human-readable description of what occupies the slot, or null when idle. */
   label: string | null;
+  /** ISO timestamp of the last state change, or null if never set. */
   updatedAt: string | null;
 }
 
@@ -50,19 +55,29 @@ let visibleDeviceCount = 0;
 let deviceVisibilityKnown = false;
 let deviceError: string | null = null;
 
+/** Writes an ISO-timestamped line to the daemon log. */
 function log(...args: unknown[]): void {
   console.log(new Date().toISOString(), ...args);
 }
 
+/** Extracts a message from an unknown throw value. */
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Translates a slot's state into the firmware thread payload that lights its key. */
 function threadFor(slot: Slot): ThreadInput {
   const spec = STATES[slot.state];
   return { id: slot.index, color: spec.color, effect: spec.effect, speed: spec.speed ?? 0.5 };
 }
 
+/**
+ * Sends slot lighting to the device: `changed` alone for latency, or every slot when omitted.
+ * A successful partial write schedules a full re-send {@link RECONCILE_MS} later so a dropped
+ * report cannot leave a key stale; a newer push or a device swap cancels it. Write failures are
+ * logged and drop the device rather than rejecting, so callers never need to catch.
+ * @returns a promise that settles once the write (and its error handling) is done.
+ */
 function push(changed?: Slot): Promise<void> {
   const current = device;
   if (!current) return Promise.resolve();
@@ -115,6 +130,7 @@ const vscode = new VSCodeIntegration({
   },
 });
 
+/** Closes a failed handle and starts reconnecting; ignores handles already replaced. */
 async function dropDevice(current: Device): Promise<void> {
   if (device !== current) return;
   device = null;
@@ -129,6 +145,7 @@ async function dropDevice(current: Device): Promise<void> {
   scheduleReconnect();
 }
 
+/** Queues a single reconnect attempt {@link RECONNECT_MS} out; repeat calls are no-ops. */
 function scheduleReconnect(): void {
   if (shuttingDown || reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
@@ -137,6 +154,7 @@ function scheduleReconnect(): void {
   }, RECONNECT_MS);
 }
 
+/** Connects unless already connected, sharing one in-flight attempt among concurrent callers. */
 async function connect(): Promise<void> {
   if (shuttingDown || device) return;
   if (connecting) return connecting;
@@ -148,6 +166,12 @@ async function connect(): Promise<void> {
   }
 }
 
+/**
+ * Opens the vendor HID interface, subscribes to AG00..AG03 key presses so they open the matching
+ * VS Code window, blacks out the base lighting, and pushes current slot colours. Absence of the
+ * device is not an error: it records {@link deviceError} and retries later.
+ * @throws if opening the device or the initial lighting write fails.
+ */
 async function connectDevice(): Promise<void> {
   const candidates = listDevices();
   const wasVisible = visibleDeviceCount > 0;
@@ -206,6 +230,7 @@ async function connectDevice(): Promise<void> {
   }
 }
 
+/** Ends the response with `body` as JSON. */
 function send(res: http.ServerResponse, code: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(code, {
@@ -215,6 +240,10 @@ function send(res: http.ServerResponse, code: number, body: unknown): void {
   res.end(payload);
 }
 
+/**
+ * Buffers the request body as UTF-8.
+ * @throws if the body exceeds {@link MAX_BODY} bytes, destroying the request.
+ */
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -239,11 +268,18 @@ function hostAllowed(req: http.IncomingMessage): boolean {
   return host === `${HOST}:${PORT}` || host === `localhost:${PORT}`;
 }
 
+/** Untrusted JSON body of `POST /slots/:index`; fields are validated before use. */
 interface SlotBody {
+  /** Desired state name, matched case-insensitively against {@link STATES}. */
   state?: unknown;
+  /** Optional label; non-strings are dropped and long strings truncated. */
   label?: unknown;
 }
 
+/**
+ * Routes one loopback HTTP request: `/build`, `/state`, `/reset`, `POST /slots/:index`, and the
+ * `/integrations/vscode/*` endpoints. Always responds, falling through to 404.
+ */
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!hostAllowed(req)) return send(res, 403, { error: 'forbidden host' });
 
@@ -342,6 +378,11 @@ const server = http.createServer((req, res) => {
   });
 });
 
+/**
+ * Stops accepting requests, drains in-flight pushes, and closes the device so the firmware keeps
+ * no stale lighting, then exits. Runs once per process; a {@link SHUTDOWN_TIMEOUT_MS} timer forces
+ * exit if a HID write hangs.
+ */
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
