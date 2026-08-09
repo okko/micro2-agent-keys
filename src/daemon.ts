@@ -1,14 +1,12 @@
-import * as http from 'http';
 import * as fs from 'fs';
 import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './device.js';
 import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
-import { STATES, SLOT_COUNT, DEFAULT_STATE, normalizeState } from './states.js';
-import { VSCodeIntegration, INTEGRATION_SLOT_COUNT, type VSCodeSlot } from './vscode.js';
+import { STATES, SLOT_COUNT, DEFAULT_STATE } from './states.js';
+import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
 import { LocalAgentHostStateSource } from './agent-host.js';
+import { createServer, HOST, PORT, type DaemonApi } from './daemon-http.js';
+import type { Slot } from './daemon-interfaces.js';
 
-const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
-const HOST = '127.0.0.1';
-const MAX_BODY = 4096;
 const RECONNECT_MS = 3000;
 const RECONCILE_MS = 250;
 const SHUTDOWN_TIMEOUT_MS = 4000;
@@ -23,18 +21,6 @@ if (process.env.AGENTKEYS_LOG) {
   console.log = write;
   console.error = write;
   process.on('uncaughtException', (err) => write('uncaught:', err.stack));
-}
-
-/** One agent key on the keyboard: its lighting state plus the metadata `/state` reports. */
-interface Slot {
-  /** Zero-based key index, used verbatim as the firmware thread id. */
-  index: number;
-  /** Key of {@link STATES}; decides colour and effect. */
-  state: string;
-  /** Human-readable description of what occupies the slot, or null when idle. */
-  label: string | null;
-  /** ISO timestamp of the last state change, or null if never set. */
-  updatedAt: string | null;
 }
 
 const slots: Slot[] = Array.from({ length: SLOT_COUNT }, (_, index) => ({
@@ -230,153 +216,44 @@ async function connectDevice(): Promise<void> {
   }
 }
 
-/** Ends the response with `body` as JSON. */
-function send(res: http.ServerResponse, code: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(code, {
-    'content-type': 'application/json',
-    'content-length': Buffer.byteLength(payload),
-  });
-  res.end(payload);
+/** Records a validated slot change and lights it. */
+async function setSlot(index: number, state: string, label: string | null): Promise<Slot> {
+  const slot = slots[index];
+  slot.state = state;
+  slot.label = label;
+  slot.updatedAt = new Date().toISOString();
+  const updatedSlot = { ...slot };
+  await push(updatedSlot);
+  return updatedSlot;
 }
 
-/**
- * Buffers the request body as UTF-8.
- * @throws if the body exceeds {@link MAX_BODY} bytes, destroying the request.
- */
-function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > MAX_BODY) {
-        reject(new Error('body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
-
-/** Blocks DNS-rebinding: a browser cannot forge a loopback Host header. */
-function hostAllowed(req: http.IncomingMessage): boolean {
-  const host = req.headers.host ?? '';
-  return host === `${HOST}:${PORT}` || host === `localhost:${PORT}`;
-}
-
-/** Untrusted JSON body of `POST /slots/:index`; fields are validated before use. */
-interface SlotBody {
-  /** Desired state name, matched case-insensitively against {@link STATES}. */
-  state?: unknown;
-  /** Optional label; non-strings are dropped and long strings truncated. */
-  label?: unknown;
-}
-
-/**
- * Routes one loopback HTTP request: `/build`, `/state`, `/reset`, `POST /slots/:index`, and the
- * `/integrations/vscode/*` endpoints. Always responds, falling through to 404.
- */
-async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (!hostAllowed(req)) return send(res, 403, { error: 'forbidden host' });
-
-  const url = new URL(req.url ?? '/', `http://${HOST}:${PORT}`);
-
-  if (req.method === 'GET' && url.pathname === '/build') {
-    return send(res, 200, { buildId: BUILD_ID });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/state') {
-    return send(res, 200, {
-      connected: Boolean(device),
-      deviceVisible: visibleDeviceCount > 0,
-      deviceError,
-      slots,
-    });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/integrations/vscode/slots') {
-    return send(res, 200, { slots: vscode.publicSlots() });
-  }
-
-  if (req.method === 'GET' && url.pathname === '/integrations/vscode/doctor') {
-    return send(res, 200, vscode.doctor());
-  }
-
-  if (req.method === 'POST' && url.pathname === '/integrations/vscode/hooks') {
-    let body: unknown;
-    try {
-      body = JSON.parse((await readBody(req)) || '{}');
-    } catch {
-      return send(res, 400, { error: 'invalid JSON' });
-    }
-    return send(res, 202, { ok: true, handled: await vscode.applyHook(body) });
-  }
-
-  const vscodeOpen = url.pathname.match(/^\/integrations\/vscode\/slots\/(\d+)\/open$/);
-  if (req.method === 'POST' && vscodeOpen) {
-    const index = Number(vscodeOpen[1]);
-    if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
-      return send(res, 400, { error: `VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}` });
-    }
-    try {
-      return send(res, 200, { ok: true, ...(await vscode.open(index)) });
-    } catch (err) {
-      return send(res, 409, { error: errorMessage(err) });
-    }
-  }
-
-  if (req.method === 'POST' && url.pathname === '/reset') {
-    for (const slot of slots) {
-      slot.state = DEFAULT_STATE;
-      slot.label = null;
-      slot.updatedAt = new Date().toISOString();
-    }
-    const resetSlots = slots.map((slot) => ({ ...slot }));
-    await push();
-    return send(res, 200, { ok: true, slots: resetSlots });
-  }
-
-  const match = url.pathname.match(/^\/slots\/(\d+)$/);
-  if (req.method === 'POST' && match) {
-    const index = Number(match[1]);
-    if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) {
-      return send(res, 400, { error: `slot must be 0..${SLOT_COUNT - 1}` });
-    }
-
-    let body: SlotBody;
-    try {
-      body = JSON.parse((await readBody(req)) || '{}') as SlotBody;
-    } catch {
-      return send(res, 400, { error: 'invalid JSON' });
-    }
-
-    const state = normalizeState(body.state);
-    if (!state) {
-      return send(res, 400, { error: `unknown state, expected one of ${Object.keys(STATES).join(', ')}` });
-    }
-
-    const slot = slots[index];
-    slot.state = state;
-    slot.label = typeof body.label === 'string' ? body.label.slice(0, 64) : null;
+/** Returns every slot to {@link DEFAULT_STATE} and repaints the keyboard. */
+async function reset(): Promise<Slot[]> {
+  for (const slot of slots) {
+    slot.state = DEFAULT_STATE;
+    slot.label = null;
     slot.updatedAt = new Date().toISOString();
-    const updatedSlot = { ...slot };
-    await push(updatedSlot);
-    return send(res, 200, { ok: true, slot: updatedSlot });
   }
-
-  return send(res, 404, { error: 'not found' });
+  const resetSlots = slots.map((slot) => ({ ...slot }));
+  await push();
+  return resetSlots;
 }
 
-const server = http.createServer((req, res) => {
-  handle(req, res).catch((err: unknown) => {
-    log('request failed:', errorMessage(err));
-    if (!res.headersSent) send(res, 500, { error: 'internal error' });
-  });
-});
+const api: DaemonApi = {
+  buildId: BUILD_ID,
+  vscode,
+  log,
+  status: () => ({
+    connected: Boolean(device),
+    deviceVisible: visibleDeviceCount > 0,
+    deviceError,
+  }),
+  slots: () => slots,
+  setSlot,
+  reset,
+};
+
+const server = createServer(api);
 
 /**
  * Stops accepting requests, drains in-flight pushes, and closes the device so the firmware keeps
