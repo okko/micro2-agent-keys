@@ -15,6 +15,7 @@ import {
   reduceEvent,
   reduceNormalizedEvent,
   runState,
+  snapshotEvents,
   updateCompatibility,
   type ChatExecutionSnapshot,
   type Compatibility,
@@ -770,49 +771,12 @@ export class VSCodeIntegration {
 
     if (session.pendingNativePrompts > 0 || !current.requestId) return;
 
-    const normalized: NormalizedExecutionEvent[] = [];
-    if (session.run.requestId !== current.requestId) {
-      normalized.push({ type: 'request.started', requestId: current.requestId });
-    }
-    for (const blocker of session.run.blockers.values()) {
-      if (blocker.requestId === current.requestId && !current.blockers.has(blocker.id)) {
-        if (
-          session.run.pendingPermissionIds.has(blocker.sourceId) &&
-          !current.observedToolCallIds.has(blocker.sourceId)
-        ) {
-          continue;
-        }
-        session.run.pendingPermissionIds.delete(blocker.sourceId);
-        normalized.push({
-          type: 'human-input.closed',
-          requestId: current.requestId,
-          blockerId: blocker.id,
-          outcome: 'resolved',
-        });
-      }
-    }
-    for (const blocker of current.blockers.values()) {
-      normalized.push({
-        type: 'human-input.opened',
-        requestId: current.requestId,
-        blockerId: blocker.id,
-        kind: blocker.kind,
-        responsePartKind: blocker.responsePartKind,
-        sourceId: blocker.sourceId,
-      });
-    }
-    normalized.push(...this.incompatibilityEvents(session, current));
-
-    if (
-      current.terminal &&
-      (previous.requestId !== current.requestId || previous.terminal !== current.terminal)
-    ) {
-      normalized.push({
-        type: 'request.finished',
-        requestId: current.requestId,
-        outcome: current.terminal,
-      });
-    }
+    const normalized = snapshotEvents(session.run, current, {
+      deferPendingPermissions: true,
+      incompatibilities: this.incompatibilityEvents(session, current),
+      reportTerminal:
+        previous.requestId !== current.requestId || previous.terminal !== current.terminal,
+    });
     if (normalized.length === 0) return;
     const completedAt = session.nativeProjection.completionTimestamp();
     const timestamp = completedAt && current.terminal
@@ -859,37 +823,10 @@ export class VSCodeIntegration {
     const current = projection.snapshot();
     if (!current.requestId) return false;
 
-    const normalized: NormalizedExecutionEvent[] = [];
-    if (
-      session.run.requestId !== current.requestId ||
-      session.run.error === 'agent-host-state-unavailable'
-    ) {
-      normalized.push({ type: 'request.started', requestId: current.requestId });
-    }
-    for (const blocker of session.run.blockers.values()) {
-      if (blocker.requestId === current.requestId && !current.blockers.has(blocker.id)) {
-        normalized.push({
-          type: 'human-input.closed',
-          requestId: current.requestId,
-          blockerId: blocker.id,
-          outcome: 'resolved',
-        });
-      }
-    }
-    for (const blocker of current.blockers.values()) {
-      normalized.push({
-        type: 'human-input.opened',
-        requestId: current.requestId,
-        blockerId: blocker.id,
-        kind: blocker.kind,
-        responsePartKind: blocker.responsePartKind,
-        sourceId: blocker.sourceId,
-      });
-    }
-    normalized.push(...this.incompatibilityEvents(session, current));
-    if (current.terminal) {
-      normalized.push({ type: 'request.finished', requestId: current.requestId, outcome: current.terminal });
-    }
+    const normalized = snapshotEvents(session.run, current, {
+      restarted: session.run.error === 'agent-host-state-unavailable',
+      incompatibilities: this.incompatibilityEvents(session, current),
+    });
     if (normalized.length === 0) return false;
     await this.applyNormalizedEvents(session, normalized, new Date().toISOString());
     this.save();

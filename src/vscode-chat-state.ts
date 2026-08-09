@@ -325,6 +325,62 @@ export function reduceNormalizedEvent(run: RunState, event: NormalizedExecutionE
   return runState(run);
 }
 
+export interface SnapshotEventOptions {
+  /** Restarts the run even though the request id is unchanged. */
+  restarted?: boolean;
+  /** Keeps a blocker open while its hook-reported permission is missing from the snapshot. */
+  deferPendingPermissions?: boolean;
+  /** Emitted between the blocker events and `request.finished`. */
+  incompatibilities?: readonly NormalizedExecutionEvent[];
+  /** Set false when the terminal state was already reported. */
+  reportTerminal?: boolean;
+}
+
+/** Diffs a run against a fresh execution snapshot of the same session. */
+export function snapshotEvents(
+  run: RunState,
+  current: ChatExecutionSnapshot,
+  options: SnapshotEventOptions = {}
+): NormalizedExecutionEvent[] {
+  const events: NormalizedExecutionEvent[] = [];
+  const requestId = current.requestId;
+  if (!requestId) return events;
+
+  if (run.requestId !== requestId || options.restarted) {
+    events.push({ type: 'request.started', requestId });
+  }
+  for (const blocker of run.blockers.values()) {
+    if (blocker.requestId !== requestId || current.blockers.has(blocker.id)) continue;
+    if (
+      options.deferPendingPermissions &&
+      run.pendingPermissionIds.has(blocker.sourceId) &&
+      !current.observedToolCallIds.has(blocker.sourceId)
+    ) continue;
+    if (options.deferPendingPermissions) run.pendingPermissionIds.delete(blocker.sourceId);
+    events.push({
+      type: 'human-input.closed',
+      requestId,
+      blockerId: blocker.id,
+      outcome: 'resolved',
+    });
+  }
+  for (const blocker of current.blockers.values()) {
+    events.push({
+      type: 'human-input.opened',
+      requestId,
+      blockerId: blocker.id,
+      kind: blocker.kind,
+      responsePartKind: blocker.responsePartKind,
+      sourceId: blocker.sourceId,
+    });
+  }
+  events.push(...(options.incompatibilities ?? []));
+  if (current.terminal && (options.reportTerminal ?? true)) {
+    events.push({ type: 'request.finished', requestId, outcome: current.terminal });
+  }
+  return events;
+}
+
 function objectAtPath(root: unknown, path: (string | number)[]): Record<string | number, unknown> | null {
   let current = root;
   for (const segment of path) {

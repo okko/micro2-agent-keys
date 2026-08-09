@@ -6,6 +6,7 @@ import {
   emptyRun,
   reduceEvent,
   reduceNormalizedEvent,
+  snapshotEvents,
 } from '../dist/vscode-chat-state.js';
 import { event } from './vscode-event.mjs';
 
@@ -686,5 +687,104 @@ test('native transcript completion clears a missed question post-hook', () => {
       'native'
     ).state,
     'input'
+  );
+});
+
+function blocker(id, requestId, sourceId, kind = 'tool-confirmation') {
+  return { id, requestId, responsePartKind: 'toolCall', sourceId, kind };
+}
+
+function snapshot(overrides = {}) {
+  return {
+    requestId: 'req-1',
+    active: true,
+    busy: false,
+    blockers: new Map(),
+    observedToolCallIds: new Set(),
+    terminal: null,
+    incompatibilities: [],
+    ...overrides,
+  };
+}
+
+test('snapshot events order a started run, its blockers, incompatibilities and its outcome', () => {
+  const run = emptyRun();
+  const opened = blocker('req-1:toolCall:call-1', 'req-1', 'call-1');
+  const incompatibility = { type: 'request.incompatible', requestId: 'req-1', code: 'unknown-native-response' };
+
+  const events = snapshotEvents(
+    run,
+    snapshot({ blockers: new Map([[opened.id, opened]]), terminal: 'complete' }),
+    { incompatibilities: [incompatibility] }
+  );
+
+  assert.deepEqual(events.map((entry) => entry.type), [
+    'request.started',
+    'human-input.opened',
+    'request.incompatible',
+    'request.finished',
+  ]);
+  assert.equal(events[3].outcome, 'complete');
+  assert.deepEqual(snapshotEvents(emptyRun(), snapshot({ requestId: null })), []);
+});
+
+test('snapshot events restart a run only when the caller reports a lost feed', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'req-1' });
+  run.error = 'agent-host-state-unavailable';
+
+  assert.deepEqual(snapshotEvents(run, snapshot()), []);
+  assert.deepEqual(
+    snapshotEvents(run, snapshot(), { restarted: true }).map((entry) => entry.type),
+    ['request.started']
+  );
+});
+
+test('snapshot events defer a pending permission the transcript has not caught up with', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'req-1' });
+  const pending = blocker('req-1:toolCall:call-1', 'req-1', 'call-1');
+  run.blockers.set(pending.id, pending);
+  run.pendingPermissionIds.add('call-1');
+
+  assert.deepEqual(snapshotEvents(run, snapshot(), { deferPendingPermissions: true }), []);
+  assert.equal(run.pendingPermissionIds.has('call-1'), true);
+
+  const observed = snapshotEvents(
+    run,
+    snapshot({ observedToolCallIds: new Set(['call-1']) }),
+    { deferPendingPermissions: true }
+  );
+  assert.deepEqual(observed, [
+    { type: 'human-input.closed', requestId: 'req-1', blockerId: pending.id, outcome: 'resolved' },
+  ]);
+  assert.equal(run.pendingPermissionIds.has('call-1'), false);
+});
+
+test('snapshot events close a permission blocker directly when deferral is off', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'req-1' });
+  const pending = blocker('req-1:toolCall:call-1', 'req-1', 'call-1');
+  run.blockers.set(pending.id, pending);
+  run.pendingPermissionIds.add('call-1');
+
+  assert.deepEqual(
+    snapshotEvents(run, snapshot()).map((entry) => entry.type),
+    ['human-input.closed']
+  );
+  assert.equal(run.pendingPermissionIds.has('call-1'), true);
+});
+
+test('snapshot events suppress an outcome the caller already reported', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'req-1' });
+
+  assert.deepEqual(
+    snapshotEvents(run, snapshot({ terminal: 'cancelled' }), { reportTerminal: false }),
+    []
+  );
+  assert.deepEqual(
+    snapshotEvents(run, snapshot({ terminal: 'cancelled' }), { reportTerminal: true }).map((entry) => entry.type),
+    ['request.finished']
   );
 });
