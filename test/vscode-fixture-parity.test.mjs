@@ -7,7 +7,7 @@ import {
   AgentHostChatProjection,
   emptyRun,
   reduceNormalizedEvent,
-} from '../dist/vscode.js';
+} from '../dist/vscode-chat-state.js';
 
 const SUPPORTED_VSCODE_VERSION = '1.131.0';
 const FIXTURE_ROOT = path.join(

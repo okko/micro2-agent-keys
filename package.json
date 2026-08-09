@@ -22,7 +22,7 @@
     "preprobe": "npm run build",
     "probe": "node dist/research/probe.js",
     "setup": "npm install && scripts/make-app.sh && scripts/install-agent.sh",
-    "test": "npm run build --silent && node --test"
+    "test": "npm run build --silent && node --test test/*.test.mjs test/*.test.js"
   },
   "dependencies": {
     "node-hid": "^3.4.0",
