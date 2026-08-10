@@ -1,0 +1,52 @@
+{
+  "transcript": [
+    {
+      "type": "assistant.message",
+      "data": {
+        "toolRequests": [
+          {
+            "toolCallId": "confirmed-external-read",
+            "name": "read_file",
+            "arguments": {
+              "filePath": "../shared/evidence.md"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool.execution_start",
+      "data": {
+        "toolCallId": "confirmed-external-read",
+        "toolName": "read_file"
+      }
+    },
+    {
+      "type": "tool.execution_complete",
+      "data": {
+        "toolCallId": "confirmed-external-read",
+        "success": true
+      }
+    }
+  ],
+  "journal": [
+    {
+      "kind": 1,
+      "k": [
+        "requests",
+        1,
+        "response"
+      ],
+      "v": [
+        {
+          "kind": "toolInvocationSerialized",
+          "toolCallId": "confirmed-external-read",
+          "isConfirmed": {
+            "type": 1
+          },
+          "isComplete": true
+        }
+      ]
+    }
+  ]
+}

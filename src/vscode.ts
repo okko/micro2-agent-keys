@@ -1073,11 +1073,23 @@ export class VSCodeIntegration {
     const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource);
     await this.launch(url);
     const current = this.slots[index];
-    if (current?.sessionId === sessionId && current.state === 'done') {
-      current.state = 'idle';
-      current.stateChangedAt = new Date().toISOString();
-      await this.onSlot({ ...current });
-      this.save();
+    if (current?.sessionId === sessionId) {
+      if (current.state === 'error') {
+        session.boundSlot = null;
+        this.slots[index] = null;
+        this.agentHostSource?.setSessions(
+          [...this.sessions.values()]
+            .filter((candidate) => candidate.source === SOURCE_COPILOT_CLI && candidate.boundSlot !== null)
+            .map((candidate) => candidate.id)
+        );
+        await this.onSlot({ slot: index, state: 'idle', stateChangedAt: new Date().toISOString() });
+        this.save();
+      } else if (current.state === 'done') {
+        current.state = 'idle';
+        current.stateChangedAt = new Date().toISOString();
+        await this.onSlot({ ...current });
+        this.save();
+      }
     }
     return { slot: this.publicSlots()[index], url };
   }

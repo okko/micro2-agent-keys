@@ -595,7 +595,7 @@ test('native permissioned tool requests wait for execution approval', () => {
   );
 });
 
-test('native external file requests wait for execution approval', () => {
+test('native external file requests await journal confirmation', () => {
   const cwd = '/workspace/project';
   const outside = emptyRun();
   assert.equal(
@@ -607,8 +607,9 @@ test('native external file requests wait for execution approval', () => {
       'native',
       cwd
     ).state,
-    'input'
+    'running'
   );
+  assert.deepEqual([...outside.pendingPermissionIds], ['external-read']);
   assert.equal(
     reduceEvent(
       outside,
@@ -616,7 +617,7 @@ test('native external file requests wait for execution approval', () => {
       'native',
       cwd
     ).state,
-    'input'
+    'running'
   );
   assert.equal(
     reduceEvent(outside, event('permission.completed', { requestId: 'external-read' }), 'native', cwd).state,

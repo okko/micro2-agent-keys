@@ -62,13 +62,15 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
 
     Native Chat's `vscode_askQuestions` transition comes from the installed
     `PreToolUse`/`PostToolUse` hooks. Transcript tool requests identify explicit network,
-    unsandboxed, and outside-workspace file approvals before execution; native execution
-    starts retain that input state. The chat-session journal keeps an approval pending
-    while its confirmation is null and no terminal command state exists, then clears it
-    when a confirmation is persisted. This also covers external-file journal records,
-    which omit the original access flags. Correlated `PostToolUse`, `PermissionDenied`,
-    and tool completion are fallbacks. No command or tool input is retained. Automatic
-    outside-sandbox terminal confirmations use verified
+   unsandboxed, and outside-workspace file access candidates before execution. Explicit
+   network and unsandboxed requests enter `input` immediately, and native execution starts
+   retain that state. An outside-workspace path alone is not proof of a wait: its tool ID is
+   retained for correlation, and the chat-session journal enters `input` only while the
+   matching confirmation is null and no terminal command state exists. A persisted
+   confirmation keeps an ordinary external read in `running`. This also covers external-file
+   journal records, which omit the original access flags. Correlated `PostToolUse`,
+   `PermissionDenied`, and tool completion are fallbacks. No command or tool input is
+   retained. Automatic outside-sandbox terminal confirmations use verified
     `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
     local command fingerprint. Persisted records support restart recovery.
 
@@ -121,6 +123,8 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
   Opening a green `done` session acknowledges it by turning its key white, but keeps
   the session bound: pressing the white key reopens the same transcript repeatedly.
   The binding remains until a newly submitted session needs and reuses that slot.
+   Opening a red `error` session turns its key white and releases the failed binding,
+   preventing a persisted incompatibility from reclaiming the slot on the next scan.
    Exact opening is enabled for every installed VS Code version that registers the
    `vscode://` URL handler. `agentkeys doctor vscode` reports the observed version and
    protocol registration; the version is diagnostic metadata rather than an opening gate.

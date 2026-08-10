@@ -837,7 +837,9 @@ export function reduceEvent(
     for (const request of data?.toolRequests ?? []) {
       if (request.toolCallId && requestsPermission(request.arguments, cwd)) {
         run.pendingPermissionIds.add(request.toolCallId);
-        openInput(request.toolCallId, 'tool-confirmation', 'toolInvocation');
+        if (requestsPermission(request.arguments)) {
+          openInput(request.toolCallId, 'tool-confirmation', 'toolInvocation');
+        }
       }
     }
   } else if (event?.type === 'tool.execution_start') {

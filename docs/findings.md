@@ -148,7 +148,8 @@ The effective telemetry model used by this project is:
 - native VS Code Chat completion is derived from its persisted chat-session journal;
 - native transcript tool requests expose explicit network and unsandboxed flags, and
   external-file requests can be identified by resolving their structured paths against
-  the session workspace;
+  the session workspace. Path scope identifies a permission candidate, not an unresolved
+  blocker by itself;
 - the transcript writes `tool.execution_start` when the approval UI opens, not after the
   user accepts, so a permissioned native start must retain input state;
 - generic approvals do not emit a verified pre-approval `PermissionRequest` hook.
@@ -161,7 +162,8 @@ The effective telemetry model used by this project is:
   Process creation and `PreToolUse` are not response signals because both may occur before
   the user accepts;
 - journal records for external reads omit access flags, so records whose tool-call IDs are
-  already pending from the transcript are also interpreted. Each confirmation clears only
+  already pending from the transcript are also interpreted. An unconfirmed record opens
+  the blocker; an already confirmed record remains running. Each confirmation clears only
   its matching request, preserving other parallel approval waits;
 - unconfirmed journal records recover approval waits across restarts;
 - automatic outside-sandbox retry waits use `PermissionRequest`, `PostToolUse`, and

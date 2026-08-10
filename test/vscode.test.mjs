@@ -17,6 +17,9 @@ const IDS = [
   '00000000-0000-4000-8000-000000000003',
   '00000000-0000-4000-8000-000000000004',
 ];
+const CONFIRMED_EXTERNAL_READ = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/vscode-native-confirmed-external-read.json', import.meta.url), 'utf8')
+);
 
 test('input state maps to orange breathing lighting', () => {
   assert.equal(STATES.input.color, 0xff6a00);
@@ -395,7 +398,7 @@ test('native journal tracks permission waits before transcript execution', async
     })
   );
   await integration.scan();
-  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[0].state, 'running');
 
   append(journalPath, {
     kind: 2,
@@ -432,6 +435,47 @@ test('native journal tracks permission waits before transcript execution', async
       { toolCallId: 'external-b', isConfirmed: { type: 4 }, isComplete: true },
     ],
   });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+});
+
+test('native confirmed external reads remain running before execution', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot.state),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'native-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  observed.length = 0;
+  append(eventsPath, CONFIRMED_EXTERNAL_READ.transcript[0]);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
+
+  append(eventsPath, CONFIRMED_EXTERNAL_READ.transcript[1]);
+  append(journalPath, ...CONFIRMED_EXTERNAL_READ.journal);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+  assert.deepEqual(observed, []);
+
+  append(eventsPath, CONFIRMED_EXTERNAL_READ.transcript[2]);
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
 });
@@ -640,14 +684,19 @@ test('native journal reconciles stale hook-only blockers without new journal byt
   assert.equal(integration.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
-test('marks unknown native waiting states as incompatible without logging interaction content', async (t) => {
+test('marks unknown native waiting states as incompatible and releases them when opened', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'Private project name');
   fs.mkdirSync(cwd);
   const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
   const logs = [];
-  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000, log: (...values) => logs.push(values.join(' ')) });
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    launch: async () => {},
+    log: (...values) => logs.push(values.join(' ')),
+  });
   await integration.start();
   t.after(() => integration.stop());
 
@@ -680,6 +729,14 @@ test('marks unknown native waiting states as incompatible without logging intera
     )
   );
   assert.doesNotMatch(diagnostic, /Private project name/);
+
+  await integration.open(0);
+  assert.equal(integration.publicSlots()[0].state, 'idle');
+  assert.equal(integration.slots[0], null);
+  assert.equal(integration.sessions.get(IDS[0]).boundSlot, null);
+
+  await integration.scan();
+  assert.equal(integration.publicSlots()[0].state, 'idle');
 });
 
 test('native journal ignores an old completion until the prompted request is inserted', async (t) => {
@@ -796,7 +853,7 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
     )
   );
   await integration.scan();
-  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[0].state, 'running');
   assert.equal(
     await integration.applyHook({
       hookEventName: 'PreToolUse',
@@ -807,7 +864,7 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
     }),
     false
   );
-  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[0].state, 'running');
   assert.equal(
     await integration.applyHook({
       hookEventName: 'PostToolUse',
@@ -839,7 +896,7 @@ test('tracks and opens a native VS Code Chat session', async (t) => {
     })
   );
   await integration.scan();
-  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[0].state, 'running');
   assert.equal(
     await integration.applyHook({
       hookEventName: 'PermissionDenied',

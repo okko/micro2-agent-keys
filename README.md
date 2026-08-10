@@ -85,7 +85,8 @@ When a session needs an answer or approval, its key turns amber; active work bre
 completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
 VS Code project window and opens that exact chat transcript. Opening a green key acknowledges the
 completion by returning it to white, while keeping the shortcut bound so you can reopen the same
-conversation.
+conversation. Opening a red key returns it to white and releases the failed binding so the slot can
+be reused.
 
 `scripts/install-agent.sh` installs the daemon providing all the features: VS Code hook configuration, CLI and HTTP API. Use
 `agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
