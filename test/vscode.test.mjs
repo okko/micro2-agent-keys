@@ -775,6 +775,22 @@ test('native journal ignores an old completion until the prompted request is ins
   assert.equal(integration.slots[0].state, 'done');
 });
 
+test('native session discovered after startup publishes its completed journal', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  const cwd = path.join(files.directory, 'Late native project');
+  fs.mkdirSync(cwd);
+  createNativeSession(files.nativeRoot, IDS[0], cwd);
+
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
+  assert.equal(integration.sessions.get(IDS[0]).pendingNativePrompts, 0);
+});
+
 test('builds an encoded exact-session URL', () => {
   const url = buildSessionUrl('/tmp/Prøject space', IDS[0]);
   assert.match(url, /^vscode:\/\/file\/tmp\/Pr%C3%B8ject%20space\?/);

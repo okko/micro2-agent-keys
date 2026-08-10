@@ -505,7 +505,9 @@ export class VSCodeIntegration {
         let session = this.sessions.get(id);
         if (!session) {
           const stat = fs.statSync(admitted.eventsPath);
-          const nativeProjection = nativeProjectionFromFile(admitted.journalPath ?? null);
+          const nativeProjection = initial
+            ? nativeProjectionFromFile(admitted.journalPath ?? null)
+            : new NativeChatProjection();
           session = {
             id,
             cwd: admitted.cwd,
@@ -515,7 +517,7 @@ export class VSCodeIntegration {
             resource: admitted.resource,
             offset: initial ? stat.size : 0,
             identity: `${stat.dev}:${stat.ino}`,
-            journalOffset: admitted.journalPath ? fs.statSync(admitted.journalPath).size : 0,
+            journalOffset: admitted.journalPath && initial ? fs.statSync(admitted.journalPath).size : 0,
             journalIdentity: admitted.journalPath
               ? `${fs.statSync(admitted.journalPath).dev}:${fs.statSync(admitted.journalPath).ino}`
               : null,
