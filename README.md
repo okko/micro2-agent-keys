@@ -89,7 +89,8 @@ conversation.
 
 `scripts/install-agent.sh` installs the daemon providing all the features: VS Code hook configuration, CLI and HTTP API. Use
 `agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
-from the terminal, and `agentkeys doctor vscode` to check the detected VS Code integration.
+from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
+`agentkeys doctor vscode` to check the detected VS Code integration.
 
 ## The agent layer
 
@@ -200,6 +201,7 @@ agentkeys reset
 agentkeys status
 agentkeys list-states     # list names and aliases
 agentkeys vscode slots
+agentkeys vscode reset
 agentkeys vscode open 0
 agentkeys doctor vscode
 ```
@@ -220,6 +222,7 @@ POST /reset
 GET  /integrations/vscode/slots
 GET  /integrations/vscode/doctor
 POST /integrations/vscode/hooks
+POST /integrations/vscode/slots/reset
 POST /integrations/vscode/slots/:index/open
 ```
 

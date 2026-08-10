@@ -43,6 +43,10 @@ function fakeApi({ vscode, ...overrides } = {}) {
     ...overrides,
     vscode: {
       publicSlots: () => [{ slot: 0, state: 'running' }],
+      resetSlots: async () => {
+        calls.push(['resetSlots']);
+        return [{ slot: 0, state: 'idle' }];
+      },
       doctor: () => ({ ok: true }),
       applyHook: async (body) => {
         calls.push(['applyHook', body]);
@@ -106,10 +110,10 @@ test('GET /build and /state report the api view', async () => {
 test('POST /slots/:index normalizes the state alias and truncates the label', async () => {
   api = fakeApi();
 
-  const response = await post('/slots/2', { state: ' BUSY ', label: 'x'.repeat(80) });
+  const response = await post('/slots/19', { state: ' BUSY ', label: 'x'.repeat(80) });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ok: true, slot: slot(2, 'running', 'x'.repeat(64)) });
-  assert.deepEqual(api.calls, [['setSlot', 2, 'running', 'x'.repeat(64)]]);
+  assert.deepEqual(await response.json(), { ok: true, slot: slot(19, 'running', 'x'.repeat(64)) });
+  assert.deepEqual(api.calls, [['setSlot', 19, 'running', 'x'.repeat(64)]]);
 });
 
 test('POST /slots/:index drops a non-string label', async () => {
@@ -122,9 +126,9 @@ test('POST /slots/:index drops a non-string label', async () => {
 test('POST /slots/:index rejects a bad index, state or body without touching the api', async () => {
   api = fakeApi();
 
-  const outOfRange = await post('/slots/6', { state: 'idle' });
+  const outOfRange = await post('/slots/20', { state: 'idle' });
   assert.equal(outOfRange.status, 400);
-  assert.deepEqual(await outOfRange.json(), { error: 'slot must be 0..5' });
+  assert.deepEqual(await outOfRange.json(), { error: 'slot must be 0..19' });
 
   const unknownState = await post('/slots/0', { state: 'sideways' });
   assert.equal(unknownState.status, 400);
@@ -160,12 +164,17 @@ test('VS Code routes delegate to the integration', async () => {
   assert.equal(hook.status, 202);
   assert.deepEqual(await hook.json(), { ok: true, handled: true });
 
+  const reset = await post('/integrations/vscode/slots/reset');
+  assert.equal(reset.status, 200);
+  assert.deepEqual(await reset.json(), { ok: true, slots: [{ slot: 0, state: 'idle' }] });
+
   const opened = await post('/integrations/vscode/slots/1/open');
   assert.equal(opened.status, 200);
   assert.deepEqual(await opened.json(), { ok: true, slot: { slot: 1 }, url: 'vscode://window/1' });
 
   assert.deepEqual(api.calls, [
     ['applyHook', { kind: 'stop' }],
+    ['resetSlots'],
     ['open', 1],
   ]);
 });

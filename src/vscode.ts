@@ -1032,6 +1032,22 @@ export class VSCodeIntegration {
     return this.slots.map((slot, index) => (slot ? { ...slot } : { slot: index, state: 'idle' }));
   }
 
+  async resetSlots(): Promise<VSCodeSlot[]> {
+    for (const session of this.sessions.values()) {
+      session.boundSlot = null;
+      session.startupReplay = null;
+    }
+    this.slots.fill(null);
+    this.agentHostSource?.setSessions([]);
+    this.save();
+
+    const stateChangedAt = new Date().toISOString();
+    for (let slot = 0; slot < INTEGRATION_SLOT_COUNT; slot++) {
+      await this.onSlot({ slot, state: 'idle', stateChangedAt });
+    }
+    return this.publicSlots();
+  }
+
   async open(index: number): Promise<{ slot: VSCodeSlot; url: string }> {
     if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
       throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);

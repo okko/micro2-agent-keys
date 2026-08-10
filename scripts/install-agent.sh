@@ -11,6 +11,7 @@ BINDIR="$HOME/.local/bin"
 HOOKDIR="$HOME/.copilot/hooks"
 HOOKFILE="$HOOKDIR/agentkeys.json"
 HOOKRUNNER="$BINDIR/agentkeys-vscode-hook"
+VSCODERESET="$BINDIR/agentkeys-reset-vscode-slots"
 
 [ -x "$APP" ] || { echo "run scripts/make-app.sh first" >&2; exit 1; }
 (cd "$ROOT" && npm run build --silent)
@@ -99,6 +100,7 @@ fi
 echo "Input Monitoring: verified (keyboard connected)"
 
 ln -sfn "$ROOT/dist/cli.js" "$BINDIR/agentkeys"
+ln -sfn "$ROOT/scripts/reset-vscode-slots.sh" "$VSCODERESET"
 
 cat > "$HOOKRUNNER" <<RUNNER
 #!/bin/sh
@@ -158,6 +160,7 @@ HOOKS
 echo "loaded $LABEL"
 echo "log: $HOME/.local/state/agentkeys/daemon.log"
 echo "cli: $BINDIR/agentkeys"
+echo "VS Code slot reset: $VSCODERESET"
 echo "VS Code hooks: $HOOKFILE"
 
 case ":$PATH:" in

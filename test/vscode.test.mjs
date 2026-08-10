@@ -1058,6 +1058,44 @@ test('lifecycle hooks leave bound slots intact', async (t) => {
   assert.equal(observed.at(-1).state, 'running');
 });
 
+test('reset frees persisted VS Code slots and sends idle key states', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const source = new FakeAgentHostStateSource();
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    agentHostSource: source,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message', {}, '2026-08-01T10:00:00.000Z'));
+  await integration.scan();
+  assert.equal(integration.slots[0].sessionId, IDS[0]);
+  assert.deepEqual(source.sessions, [IDS[0]]);
+
+  const reset = await integration.resetSlots();
+  assert.deepEqual(reset, [0, 1, 2, 3].map((slot) => ({ slot, state: 'idle' })));
+  assert.ok(integration.slots.every((slot) => slot === null));
+  assert.equal(integration.sessions.get(IDS[0]).boundSlot, null);
+  assert.deepEqual(source.sessions, []);
+  assert.deepEqual(
+    observed.slice(-4),
+    [0, 1, 2, 3].map((slot) => ({ slot, state: 'idle', stateChangedAt: observed.at(-1).stateChangedAt }))
+  );
+  assert.deepEqual(JSON.parse(fs.readFileSync(files.statePath, 'utf8')).slots, [null, null, null, null]);
+
+  append(eventsPath, event('user.message', {}, '2026-08-01T10:01:00.000Z'));
+  await integration.scan();
+  assert.equal(integration.slots[0].sessionId, IDS[0]);
+});
+
 test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

@@ -65,6 +65,20 @@ test('daemon reports the emitted build id and device state', async (t) => {
   assert.equal(state.connected, false);
   assert.equal(state.deviceVisible, false);
   assert.equal(state.deviceError, null);
+  assert.deepEqual(state.slots.map((slot) => slot.index), Array.from({ length: 20 }, (_, index) => index));
+
+  const setResponse = await fetch(`http://127.0.0.1:${port}/slots/19`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ state: 'running' }),
+  });
+  assert.equal(setResponse.status, 200);
+
+  const resetResponse = await fetch(`http://127.0.0.1:${port}/reset`, { method: 'POST' });
+  assert.equal(resetResponse.status, 200);
+  const reset = await resetResponse.json();
+  assert.equal(reset.slots.length, 20);
+  assert.ok(reset.slots.every((slot) => slot.state === 'idle'));
 });
 
 test('daemon shutdown closes an incomplete HTTP request', async () => {
