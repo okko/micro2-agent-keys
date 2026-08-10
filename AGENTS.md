@@ -10,3 +10,9 @@ invoke the commit helper.
 
 `scripts/restart-agent.sh` will not work in the sandbox. Run it with unsandboxed
 execution so `launchctl` can restart the LaunchAgent in the user's GUI domain.
+
+## Shell Commands
+
+JavaScript containing `!==` can trigger shell history expansion when embedded in a
+command string. Run multiline JavaScript with a quoted heredoc such as
+`node --input-type=module <<'NODE'` so the shell treats `!` literally.
