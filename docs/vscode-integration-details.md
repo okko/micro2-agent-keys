@@ -74,6 +74,13 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
     `PermissionRequest`, `PostToolUse`, and `PermissionDenied` hooks, forwarding only a
     local command fingerprint. Persisted records support restart recovery.
 
+   Native transcript prompts and journal request insertion can arrive out of order by a
+   single poll. The reducer keeps a prompt barrier so stale journal completion from the
+   previous request cannot flash green on a newly started prompt, and now carries journal
+   insertion credit forward when the journal wins the race. This preserves the rule that stale
+   completion must not briefly show done on a new request, while still allowing journal-only
+   completion to settle a slot when the transcript tail stops mid-tool.
+
    An unrecognized native response form while VS Code reports `NeedsInput`, an
    unrecognized Agent Host `ToolCallStatus`, or Agent Host status `24` without a
    recognized blocker fails closed as `error` and turns the key solid red. The slot

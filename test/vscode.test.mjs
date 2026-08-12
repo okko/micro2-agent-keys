@@ -794,7 +794,12 @@ test('native journal ignores an old completion until the prompted request is ins
   const cwd = path.join(files.directory, 'Native project');
   fs.mkdirSync(cwd);
   const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
-  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot.state),
+  });
   await integration.start();
   t.after(() => integration.stop());
 
@@ -806,6 +811,7 @@ test('native journal ignores an old completion until the prompted request is ins
   });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
+  assert.deepEqual(observed, ['running']);
 
   append(journalPath, {
     kind: 2,
@@ -814,6 +820,7 @@ test('native journal ignores an old completion until the prompted request is ins
   });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
+  assert.deepEqual(observed, ['running']);
 
   append(journalPath, {
     kind: 1,
@@ -822,6 +829,56 @@ test('native journal ignores an old completion until the prompted request is ins
   });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'done');
+  assert.deepEqual(observed, ['running', 'done']);
+});
+
+test('native journal can finish a running slot when request insertion arrives before transcript prompt', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'new-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.sessions.get(IDS[0]).pendingNativePrompts, 0);
+
+  append(
+    eventsPath,
+    event('user.message', {}, '2026-08-12T17:00:47.019Z'),
+    event('assistant.turn_start', { turnId: 'new-turn' }, '2026-08-12T17:00:47.120Z'),
+    event(
+      'tool.execution_start',
+      { toolCallId: 'stuck-tool-call', toolName: 'run_in_terminal' },
+      '2026-08-12T17:00:53.525Z'
+    )
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(
+    journalPath,
+    {
+      kind: 1,
+      k: ['requests', 1, 'result'],
+      v: { timings: {} },
+    },
+    {
+      kind: 1,
+      k: ['requests', 1, 'modelState'],
+      v: { value: 1, completedAt: 1786554057160 },
+    }
+  );
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
+  assert.ok(integration.slots[0].doneAt);
 });
 
 test('native session discovered after startup publishes its completed journal', async (t) => {

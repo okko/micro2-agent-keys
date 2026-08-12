@@ -58,53 +58,101 @@ interface StartupReplay {
 
 /** One key on the physical keyboard, bound to a VS Code session or idle. */
 export interface VSCodeSlot {
+  /** Fixed integration slot index (0..INTEGRATION_SLOT_COUNT-1). */
   slot: number;
+  /** Bound session UUID; omitted for idle/unbound public slots. */
   sessionId?: string;
+  /** Absolute project path for the bound session. */
   cwd?: string;
+  /** Transcript/event JSONL path for diagnostics and doctor checks. */
   eventsPath?: string;
+  /** Native journal JSONL path; null/omitted for Agent Host sessions. */
   journalPath?: string | null;
+  /** Session source discriminator (`native` or `copilot-cli`). */
   source?: SessionSource;
+  /** Exact session resource included in VS Code open URLs. */
   resource?: string;
+  /** Human-facing label shown on the slot (basename of cwd when bound). */
   label?: string;
+  /** ISO timestamp when this slot was last bound to its current session. */
   boundAt?: string;
+  /** Display state mapped to LEDs and APIs (`idle`/`running`/`input`/`done`/`error`). */
   state: string;
+  /** ISO timestamp of the last state transition. */
   stateChangedAt?: string;
+  /** ISO completion timestamp when state entered `done`; cleared on acknowledge/new prompt. */
   doneAt?: string | null;
+  /** ISO timestamp of the latest event/snapshot applied to the slot state. */
   lastEventAt?: string | null;
+  /** Machine-readable run error code when state is `error` (for example `incompatible:*`). */
   runError?: string | null;
+  /** Last consumed transcript byte offset associated with this slot. */
   eventOffset?: number;
 }
 
 interface Session {
+  /** Canonical VS Code chat session UUID (validated by {@link SESSION_ID}). */
   id: string;
+  /** Absolute workspace path for the session, used for labels and exact-session URLs. */
   cwd: string;
+  /** Path to the persisted transcript/event JSONL consumed by {@link readAppended}. */
   eventsPath: string;
+  /** Path to the native chat-session journal JSONL, or null for Agent Host sessions. */
   journalPath: string | null;
+  /** Origin of truth for this session (`native` transcript/journal or `copilot-cli`). */
   source: SessionSource;
+  /** Exact session resource passed to VS Code via `?session=` when opening. */
   resource: string;
+  /** Consumed byte offset within {@link eventsPath}. */
   offset: number;
+  /** File identity (`dev:ino`) for {@link eventsPath} at the tracked {@link offset}. */
   identity: string | null;
+  /** Consumed byte offset within {@link journalPath}. */
   journalOffset: number;
+  /** File identity (`dev:ino`) for {@link journalPath} at the tracked {@link journalOffset}. */
   journalIdentity: string | null;
+  /** Native journal projection used to derive authoritative native request state. */
   nativeProjection: NativeChatProjection;
+  /** Last native projection snapshot applied during reconciliation. */
   nativeSnapshot: ChatExecutionSnapshot;
+  /** Last observed native request count, used to detect newly inserted requests. */
   nativeRequestCount: number;
+  /** Transcript prompts not yet matched by authoritative native request insertion. */
   pendingNativePrompts: number;
+  /** Surplus native request insertions that arrived before transcript prompts. */
+  pendingNativePromptCredits: number;
+  /** Reduced execution state for slot mapping (running/input/error/done). */
   run: RunState;
+  /** Producer/version/lifecycle support markers derived from observed events. */
   compatibility: Compatibility;
+  /** Bound integration slot index, or null when unbound. */
   boundSlot: number | null;
+  /** Consecutive scans where a previously bound session was not rediscovered. */
   missingScans: number;
+  /** Timestamp of the latest applied event or normalized snapshot transition. */
   lastEventAt: string | null;
+  /** Restart checkpoint used to replay persisted bindings before adopting live state. */
   startupReplay: StartupReplay | null;
 }
 
+/**
+ * Discoverable VS Code session descriptor produced by filesystem scans before it is
+ * merged into tracked {@link Session} state.
+ */
 interface Candidate {
+  /** Canonical VS Code chat session UUID (validated by {@link SESSION_ID}). */
   id: string;
+  /** Absolute workspace path resolved from workspace metadata/URI. */
   cwd: string;
+  /** Path to the persisted transcript/event JSONL for this session. */
   eventsPath: string;
+  /** Path to the native chat-session journal JSONL, or null for Agent Host sessions. */
   journalPath: string | null;
+  /** Native workspace state database path used for active-session checks during initial scan. */
   indexPath?: string;
+  /** Session source discriminator (`native` or `copilot-cli`). */
   source: SessionSource;
+  /** Exact session resource used to open the chat in VS Code. */
   resource: string;
 }
 
@@ -184,6 +232,7 @@ export class VSCodeIntegration {
   started: boolean;
   lifecycleVersion: number;
 
+  /** Initializes integration paths, callbacks, and in-memory slot/session state. */
   constructor(options: VSCodeIntegrationOptions = {}) {
     this.root =
       options.root ?? path.join(process.env.COPILOT_HOME ?? path.join(os.homedir(), '.copilot'), 'session-state');
@@ -212,6 +261,7 @@ export class VSCodeIntegration {
     this.lifecycleVersion = 0;
   }
 
+  /** Loads persisted slots and sessions, preparing bound sessions for startup replay. */
   load(): void {
     let saved: PersistedState;
     try {
@@ -246,6 +296,7 @@ export class VSCodeIntegration {
         nativeSnapshot: nativeProjection.snapshot(),
         nativeRequestCount: nativeProjection.requestCount(),
         pendingNativePrompts: 0,
+        pendingNativePromptCredits: 0,
         run: emptyRun(),
         compatibility: { ...emptyCompatibility(), ...raw.compatibility },
         boundSlot: null,
@@ -276,6 +327,7 @@ export class VSCodeIntegration {
           nativeSnapshot: nativeProjection.snapshot(),
           nativeRequestCount: nativeProjection.requestCount(),
           pendingNativePrompts: 0,
+          pendingNativePromptCredits: 0,
           run: emptyRun(),
           compatibility: emptyCompatibility(),
           boundSlot: null,
@@ -294,6 +346,7 @@ export class VSCodeIntegration {
       session.nativeProjection.reset();
       session.nativeSnapshot = session.nativeProjection.snapshot();
       session.nativeRequestCount = 0;
+      session.pendingNativePromptCredits = 0;
       session.run = emptyRun();
       this.sessions.set(session.id, session);
       this.slots[index] = {
@@ -323,11 +376,13 @@ export class VSCodeIntegration {
     }
   }
 
+  /** Returns the canonical event-log path for a validated session ID. */
   eventsPath(id: string): string {
     if (!SESSION_ID.test(id)) throw new Error('invalid VS Code session id');
     return path.join(this.root, id, 'events.jsonl');
   }
 
+  /** Persists current slots and tracked session metadata atomically to disk. */
   save(): void {
     const state: PersistedState = {
       schemaVersion: SCHEMA_VERSION,
@@ -353,6 +408,7 @@ export class VSCodeIntegration {
     fs.renameSync(temporary, this.statePath);
   }
 
+  /** Starts protocol listeners, performs an initial scan, and schedules periodic scans. */
   async start(): Promise<void> {
     if (this.started) return;
     const lifecycleVersion = ++this.lifecycleVersion;
@@ -375,6 +431,7 @@ export class VSCodeIntegration {
     this.timer.unref?.();
   }
 
+  /** Stops scanning, stops protocol listeners, and saves state if started. */
   stop(): void {
     this.lifecycleVersion++;
     if (this.timer) clearInterval(this.timer);
@@ -384,6 +441,7 @@ export class VSCodeIntegration {
     this.started = false;
   }
 
+  /** Validates and returns an Agent Host session candidate from session-state files. */
   admit(id: string): Candidate | null {
     if (!SESSION_ID.test(id)) return null;
     const directory = path.join(this.root, id);
@@ -414,6 +472,7 @@ export class VSCodeIntegration {
     };
   }
 
+  /** Discovers native VS Code transcript/journal pairs as scan candidates. */
   nativeCandidates(initial = false): Candidate[] {
     const candidates: Candidate[] = [];
     let workspaceIds: string[];
@@ -476,6 +535,7 @@ export class VSCodeIntegration {
     return candidates;
   }
 
+  /** Reconciles discovered candidates with tracked sessions and updates published slots. */
   async scan(initial = false): Promise<void> {
     if (this.scanning) return;
     this.scanning = true;
@@ -525,6 +585,7 @@ export class VSCodeIntegration {
             nativeSnapshot: nativeProjection.snapshot(),
             nativeRequestCount: nativeProjection.requestCount(),
             pendingNativePrompts: 0,
+            pendingNativePromptCredits: 0,
             run: emptyRun(),
             compatibility: inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath),
             boundSlot: null,
@@ -556,6 +617,7 @@ export class VSCodeIntegration {
           journalOffset: session.journalOffset,
           journalIdentity: session.journalIdentity,
           pendingNativePrompts: session.pendingNativePrompts,
+          pendingNativePromptCredits: session.pendingNativePromptCredits,
           run: cloneRun(session.run),
           compatibility: { ...session.compatibility },
           lastEventAt: session.lastEventAt,
@@ -587,6 +649,7 @@ export class VSCodeIntegration {
           session.journalOffset = checkpoint.journalOffset;
           session.journalIdentity = checkpoint.journalIdentity;
           session.pendingNativePrompts = checkpoint.pendingNativePrompts;
+          session.pendingNativePromptCredits = checkpoint.pendingNativePromptCredits;
           session.run = checkpoint.run;
           session.compatibility = checkpoint.compatibility;
           session.lastEventAt = checkpoint.lastEventAt;
@@ -661,6 +724,7 @@ export class VSCodeIntegration {
     }
   }
 
+    /** Reads newly appended transcript events and applies them to a tracked session. */
   async readAppended(session: Session): Promise<void> {
     const stat = fs.statSync(session.eventsPath);
     const identity = `${stat.dev}:${stat.ino}`;
@@ -713,6 +777,7 @@ export class VSCodeIntegration {
     }
   }
 
+  /** Reads newly appended native journal patches and reconciles authoritative state. */
   async readJournalAppended(session: Session): Promise<void> {
     if (!session.journalPath) return;
     const stat = fs.statSync(session.journalPath);
@@ -761,12 +826,17 @@ export class VSCodeIntegration {
     );
   }
 
+  /** Applies a native snapshot to run state while honoring prompt/journal ordering barriers. */
   async reconcileNativeSnapshot(session: Session, current: ChatExecutionSnapshot): Promise<void> {
     const previous = session.nativeSnapshot;
     const requestCount = session.nativeProjection.requestCount();
     const insertedRequests = Math.max(0, requestCount - session.nativeRequestCount);
     if (insertedRequests > 0) {
-      session.pendingNativePrompts = Math.max(0, session.pendingNativePrompts - insertedRequests);
+      const unresolvedPrompts = session.pendingNativePrompts - insertedRequests;
+      session.pendingNativePrompts = Math.max(0, unresolvedPrompts);
+      if (unresolvedPrompts < 0) {
+        session.pendingNativePromptCredits += Math.abs(unresolvedPrompts);
+      }
     } else if (current.requestId !== previous.requestId && session.pendingNativePrompts > 0) {
       session.pendingNativePrompts--;
     }
@@ -789,6 +859,7 @@ export class VSCodeIntegration {
     await this.applyNormalizedEvents(session, normalized, timestamp);
   }
 
+  /** Builds normalized incompatibility events and emits one diagnostic log per new mismatch. */
   incompatibilityEvents(session: Session, current: ChatExecutionSnapshot): NormalizedExecutionEvent[] {
     const events: NormalizedExecutionEvent[] = [];
     if (!current.requestId) return events;
@@ -837,6 +908,7 @@ export class VSCodeIntegration {
     return true;
   }
 
+  /** Marks active bound Agent Host sessions as unavailable when protocol state is lost. */
   async markAgentHostStateUnavailable(sessionIds: readonly string[]): Promise<void> {
     const timestamp = new Date().toISOString();
     let changed = false;
@@ -862,6 +934,7 @@ export class VSCodeIntegration {
     if (changed) this.save();
   }
 
+  /** Applies normalized reducer events to run/slot state and emits slot updates on change. */
   async applyNormalizedEvents(
     session: Session,
     events: NormalizedExecutionEvent[],
@@ -883,6 +956,7 @@ export class VSCodeIntegration {
     if (changed && !session.startupReplay && !this.scanning) await this.onSlot({ ...slot });
   }
 
+  /** Ensures a session is bound to a slot, reusing an inactive slot when needed. */
   allocate(session: Session, timestamp?: string | null): number | null {
     if (session.boundSlot !== null) return session.boundSlot;
     let index = this.slots.findIndex((slot) => slot === null);
@@ -926,6 +1000,7 @@ export class VSCodeIntegration {
     return index;
   }
 
+  /** Returns whether any tracked session has verified supported producer lifecycle markers. */
   providerVerified(): boolean {
     return [...this.sessions.values()].some(
       (session) =>
@@ -935,12 +1010,18 @@ export class VSCodeIntegration {
     );
   }
 
+  /** Applies one transcript- or hook-derived event to session and bound-slot state. */
   async applyEvent(session: Session, event: VSCodeEvent, historicalReplay = false): Promise<void> {
     updateCompatibility(session.compatibility, event, session.source);
     const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
     if (transition.prompt && session.source === SOURCE_NATIVE && !historicalReplay) {
       session.pendingNativePrompts++;
+      if (session.pendingNativePromptCredits > 0) {
+        const resolvedPrompts = Math.min(session.pendingNativePrompts, session.pendingNativePromptCredits);
+        session.pendingNativePrompts -= resolvedPrompts;
+        session.pendingNativePromptCredits -= resolvedPrompts;
+      }
     }
     session.lastEventAt = event.timestamp ?? new Date().toISOString();
     let allocated = false;
@@ -970,6 +1051,7 @@ export class VSCodeIntegration {
     }
   }
 
+  /** Maps supported native hook events into normalized integration events. */
   async applyHook(event: unknown): Promise<boolean> {
     const hook = event as
       | {
@@ -1044,10 +1126,12 @@ export class VSCodeIntegration {
     return true;
   }
 
+  /** Returns the externally visible slot view, filling unbound entries as idle slots. */
   publicSlots(): VSCodeSlot[] {
     return this.slots.map((slot, index) => (slot ? { ...slot } : { slot: index, state: 'idle' }));
   }
 
+  /** Clears all slot bindings and publishes idle for every integration slot. */
   async resetSlots(): Promise<VSCodeSlot[]> {
     for (const session of this.sessions.values()) {
       session.boundSlot = null;
@@ -1064,6 +1148,7 @@ export class VSCodeIntegration {
     return this.publicSlots();
   }
 
+  /** Opens the exact VS Code session for a slot and handles post-open acknowledgement rules. */
   async open(index: number): Promise<{ slot: VSCodeSlot; url: string }> {
     if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
       throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
@@ -1110,6 +1195,7 @@ export class VSCodeIntegration {
     return { slot: this.publicSlots()[index], url };
   }
 
+  /** Reports integration readiness and per-slot diagnostics for troubleshooting. */
   doctor(): DoctorInfo {
     let rootReadable = false;
     try {
