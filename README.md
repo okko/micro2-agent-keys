@@ -53,14 +53,23 @@ accepts. Keep Input.app running so its key macros continue to work.
 
 ```mermaid
 flowchart LR
-    VS["VS Code\n(Agent Host / Copilot Chat)"]
+    subgraph vsc["VS Code"]
+        VS["Agent Host / Copilot Chat"]
+        subgraph ws["workspace storage"]
+            vscdb["state.vscdb\n(SQLite)"]
+            jsonl["chatSessions/ & transcripts/\n(JSONL files)"]
+        end
+    end
     scripts["your scripts\n(no perms)"]
     cli["agentkeys CLI\n(no perms)"]
     daemon["AgentKeys daemon\n(holds System Input Monitoring grant)"]
     keyboard["Creator Micro 2\n(keyboard)"]
 
+    VS -.->|writes| vscdb
+    VS -.->|writes| jsonl
+    vscdb -->|sqlite3 read| daemon
+    jsonl -->|file tail| daemon
     VS -->|hooks HTTP| daemon
-    daemon -->|reads workspace storage\n& event files| VS
     scripts -->|shell| cli
     cli -->|HTTP| daemon
     daemon <-->|USB HID JSON-RPC| keyboard
