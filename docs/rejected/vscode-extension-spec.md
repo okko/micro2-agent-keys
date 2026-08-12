@@ -323,7 +323,7 @@ vscode://file/<absolute-project-path>?session=<encoded-session-resource>
 Example before URL encoding:
 
 ```text
-project path: /Users/okko/git/project-a
+project path: /Users/name/git/project-a
 session:      agent-host-copilotcli:/01234567-89ab-cdef-0123-456789abcdef
 ```
 
