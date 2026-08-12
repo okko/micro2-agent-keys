@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { STATES, ALIASES, SLOT_COUNT, normalizeState } from './states.js';
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
@@ -10,6 +13,7 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys status                       show all slots
   agentkeys reset                        set every slot to idle
   agentkeys list-states                  list valid state names
+  agentkeys log                          follow the daemon log
 
   agentkeys vscode slots                 show automatic VS Code bindings
   agentkeys vscode reset                 free all VS Code bindings
@@ -130,6 +134,19 @@ async function main(argv: string[]): Promise<void> {
           .map(([alias]) => alias);
         console.log(`  ${name.padEnd(8)} ${aliases.length ? `(${aliases.join(', ')})` : ''}`);
       }
+      return;
+
+    case 'log':
+      await new Promise<void>((resolve, reject) => {
+        const tail = spawn('tail', ['-f', join(homedir(), '.local/state/agentkeys/daemon.log')], {
+          stdio: 'inherit',
+        });
+        tail.once('error', reject);
+        tail.once('exit', (code, signal) => {
+          if (code === 0 || signal === 'SIGINT' || signal === 'SIGTERM') resolve();
+          else reject(new Error(signal ? `tail terminated by ${signal}` : `tail exited with code ${code}`));
+        });
+      });
       return;
 
     case 'vscode': {

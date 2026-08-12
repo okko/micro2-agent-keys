@@ -200,6 +200,7 @@ agentkeys set 1 done
 agentkeys set 2 input
 agentkeys reset
 agentkeys status
+agentkeys log
 agentkeys list-states     # list names and aliases
 agentkeys vscode slots
 agentkeys vscode reset
@@ -258,8 +259,13 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 ## Logs
 
 ```sh
-tail -f ~/.local/state/agentkeys/daemon.log
+agentkeys log
 ```
+
+## Known issues
+
+- `~/.local/state/agentkeys/daemon.log` is not rotated automatically; log rotation is not yet
+  implemented.
 
 ## Notes
 
