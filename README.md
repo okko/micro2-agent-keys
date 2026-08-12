@@ -264,6 +264,9 @@ agentkeys log
 
 ## Known issues
 
+- Native VS Code session completion may be delayed because AgentKeys relies on journal writes,
+  which VS Code may defer. VS Code currently provides no live, authoritative completion
+  notification for these sessions. The delay is generally below a few seconds, sometimes even ~ 15 s.
 - `~/.local/state/agentkeys/daemon.log` is not rotated automatically; log rotation is not yet
   implemented.
 
