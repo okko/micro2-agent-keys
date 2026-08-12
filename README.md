@@ -18,6 +18,10 @@ accepts. Keep Input.app running so its key macros continue to work.
 | `input` | amber, breathing | paused, waiting on you     |
 | `error` | red          | run failed                     |
 
+## Demo
+
+[<img src="https://img.youtube.com/vi/QpnkxvVaaSU/hqdefault.jpg" alt="Watch the demo" width="384">](https://youtu.be/QpnkxvVaaSU)
+
 ## Why AgentKeys
 
 - **Stay focused in VS Code.** AgentKeys automatically tracks eligible VS Code Agent Host and
