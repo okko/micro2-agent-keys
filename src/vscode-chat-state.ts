@@ -55,8 +55,12 @@ export interface RunState {
   questionHooksObserved: boolean;
   /** Approval request or tool-call IDs still waiting for permission. */
   pendingPermissionIds: Set<string>;
+  /** Terminal tool-call IDs inferred as waiting from authoritative native state. */
+  inferredPermissionIds: Set<string>;
   /** Tool-call IDs that have started during the current run. */
   startedToolIds: Set<string>;
+  /** Terminal tool-call IDs requested by the assistant but not yet started. */
+  unstartedTerminalToolIds: Set<string>;
 }
 
 export interface Compatibility {
@@ -122,7 +126,9 @@ export function emptyRun(): RunState {
     knownQuestionToolIds: new Set(),
     questionHooksObserved: false,
     pendingPermissionIds: new Set(),
+    inferredPermissionIds: new Set(),
     startedToolIds: new Set(),
+    unstartedTerminalToolIds: new Set(),
   };
 }
 
@@ -134,7 +140,9 @@ export function cloneRun(run: RunState): RunState {
     activeTools: new Map(run.activeTools),
     knownQuestionToolIds: new Set(run.knownQuestionToolIds),
     pendingPermissionIds: new Set(run.pendingPermissionIds),
+    inferredPermissionIds: new Set(run.inferredPermissionIds),
     startedToolIds: new Set(run.startedToolIds),
+    unstartedTerminalToolIds: new Set(run.unstartedTerminalToolIds),
   };
 }
 
@@ -236,6 +244,7 @@ export interface ChatExecutionSnapshot {
   requestId: string | null;
   active: boolean;
   busy: boolean;
+  needsInput: boolean;
   blockers: Map<string, HumanInputBlocker>;
   observedToolCallIds: Set<string>;
   terminal: 'complete' | 'cancelled' | 'failed' | null;
@@ -346,17 +355,49 @@ export function snapshotEvents(
   const requestId = current.requestId;
   if (!requestId) return events;
 
-  if (run.requestId !== requestId || options.restarted) {
+  const requestChanged = run.requestId !== requestId;
+  if (requestChanged || options.restarted) {
     events.push({ type: 'request.started', requestId });
   }
   for (const blocker of run.blockers.values()) {
-    if (blocker.requestId !== requestId || current.blockers.has(blocker.id)) continue;
+    if (blocker.requestId !== requestId) {
+      if (
+        requestChanged &&
+        options.deferPendingPermissions &&
+        (
+          (
+            run.pendingPermissionIds.has(blocker.sourceId) &&
+            !current.observedToolCallIds.has(blocker.sourceId)
+          ) ||
+          (current.needsInput && run.inferredPermissionIds.has(blocker.sourceId))
+        )
+      ) {
+        events.push({
+          type: 'human-input.opened',
+          requestId,
+          blockerId: blockerIdentity(requestId, blocker.responsePartKind, blocker.sourceId),
+          kind: blocker.kind,
+          responsePartKind: blocker.responsePartKind,
+          sourceId: blocker.sourceId,
+        });
+      }
+      continue;
+    }
+    if (current.blockers.has(blocker.id)) continue;
     if (
       options.deferPendingPermissions &&
-      run.pendingPermissionIds.has(blocker.sourceId) &&
-      !current.observedToolCallIds.has(blocker.sourceId)
+      (
+        (
+          run.pendingPermissionIds.has(blocker.sourceId) &&
+          !current.observedToolCallIds.has(blocker.sourceId)
+        ) ||
+        (current.needsInput && run.inferredPermissionIds.has(blocker.sourceId))
+      )
     ) continue;
-    if (options.deferPendingPermissions) run.pendingPermissionIds.delete(blocker.sourceId);
+    if (options.deferPendingPermissions) {
+      run.pendingPermissionIds.delete(blocker.sourceId);
+      run.inferredPermissionIds.delete(blocker.sourceId);
+    }
     events.push({
       type: 'human-input.closed',
       requestId,
@@ -373,6 +414,24 @@ export function snapshotEvents(
       responsePartKind: blocker.responsePartKind,
       sourceId: blocker.sourceId,
     });
+  }
+  if (current.needsInput) {
+    const blockerSourceIds = new Set([
+      ...[...run.blockers.values()].map((blocker) => blocker.sourceId),
+      ...[...current.blockers.values()].map((blocker) => blocker.sourceId),
+    ]);
+    for (const sourceId of run.unstartedTerminalToolIds) {
+      if (blockerSourceIds.has(sourceId)) continue;
+      run.inferredPermissionIds.add(sourceId);
+      events.push({
+        type: 'human-input.opened',
+        requestId,
+        blockerId: blockerIdentity(requestId, 'toolInvocation', sourceId),
+        kind: 'tool-confirmation',
+        responsePartKind: 'toolInvocation',
+        sourceId,
+      });
+    }
   }
   events.push(...(options.incompatibilities ?? []));
   if (current.terminal && (options.reportTerminal ?? true)) {
@@ -416,6 +475,7 @@ const KNOWN_NATIVE_HUMAN_INPUT_PARTS = new Set([
   'questionCarousel',
   'planReview',
   'elicitation2',
+  'elicitationSerialized',
 ]);
 
 function isUnknownStateBearingNativePart(part: NativeResponsePart): boolean {
@@ -495,7 +555,8 @@ function isResolvedHumanInputPart(part: NativeResponsePart): boolean {
       (stateType !== undefined || part.isConfirmed != null || part.isComplete === true);
   }
   if (['confirmation', 'questionCarousel', 'planReview'].includes(partKind)) return part.isUsed === true;
-  return partKind === 'elicitation2' && stateValue !== undefined && stateValue !== 'pending';
+  return (partKind === 'elicitation2' || partKind === 'elicitationSerialized') &&
+    stateValue !== undefined && stateValue !== 'pending';
 }
 
 export class NativeChatProjection {
@@ -585,6 +646,7 @@ export class NativeChatProjection {
       requestId,
       active,
       busy: active && blockers.size === 0 && incompatibilities.length === 0,
+      needsInput: latest?.modelState?.value === 4,
       blockers,
       observedToolCallIds,
       terminal,
@@ -766,6 +828,7 @@ export class AgentHostChatProjection {
       requestId,
       active,
       busy: active && blockers.size === 0 && incompatibilities.length === 0,
+      needsInput: Boolean(activeTurn && executionStatus === 24),
       blockers,
       observedToolCallIds,
       terminal,
@@ -835,6 +898,9 @@ export function reduceEvent(
     if (id) run.turns.delete(id);
   } else if (source === SOURCE_NATIVE && event?.type === 'assistant.message') {
     for (const request of data?.toolRequests ?? []) {
+      if (request.toolCallId && (request.name ?? request.toolName) === 'run_in_terminal') {
+        run.unstartedTerminalToolIds.add(request.toolCallId);
+      }
       if (request.toolCallId && requestsPermission(request.arguments, cwd)) {
         run.pendingPermissionIds.add(request.toolCallId);
         if (requestsPermission(request.arguments)) {
@@ -844,9 +910,11 @@ export function reduceEvent(
     }
   } else if (event?.type === 'tool.execution_start') {
     const id = data?.toolCallId;
+    const inferredPermission = id ? run.inferredPermissionIds.delete(id) : false;
     if (id) {
       if (source !== SOURCE_NATIVE) run.pendingPermissionIds.delete(id);
       run.startedToolIds.add(id);
+      run.unstartedTerminalToolIds.delete(id);
     }
     const question = data?.toolName === 'vscode_askQuestions';
     if (id && question) run.knownQuestionToolIds.add(id);
@@ -858,9 +926,12 @@ export function reduceEvent(
       run.activeTools.set(id, data?.toolName ?? '');
       if (question || data?.toolName === 'ask_user') openInput(id, 'question', 'questionCarousel');
     }
+    if (id && inferredPermission) closeInput(id, 'tool-confirmation');
     ensureRequest();
   } else if (event?.type === 'tool.execution_complete') {
     if (data?.toolCallId) run.pendingPermissionIds.delete(data.toolCallId);
+    if (data?.toolCallId) run.inferredPermissionIds.delete(data.toolCallId);
+    if (data?.toolCallId) run.unstartedTerminalToolIds.delete(data.toolCallId);
     const completedQuestion = data?.toolCallId ? run.knownQuestionToolIds.delete(data.toolCallId) : false;
     const hookQuestion = data?.fromHook && data?.toolName === 'vscode_askQuestions';
     if (hookQuestion) run.questionHooksObserved = true;
@@ -898,7 +969,9 @@ export function reduceEvent(
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
     run.pendingPermissionIds.clear();
+    run.inferredPermissionIds.clear();
     run.startedToolIds.clear();
+    run.unstartedTerminalToolIds.clear();
   } else if (event?.type === 'hook.end' && hookType === 'sessionEnd') {
     const requestId = ensureRequest();
     reduceNormalizedEvent(run, { type: 'request.finished', requestId, outcome: 'complete' });
@@ -906,7 +979,9 @@ export function reduceEvent(
     run.activeTools.clear();
     run.knownQuestionToolIds.clear();
     run.pendingPermissionIds.clear();
+    run.inferredPermissionIds.clear();
     run.startedToolIds.clear();
+    run.unstartedTerminalToolIds.clear();
   } else {
     return { run, prompt: false, state: null };
   }

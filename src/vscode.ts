@@ -601,7 +601,9 @@ export class VSCodeIntegration {
         if (startup) {
           const slot = this.slots[startup.slot.slot];
           if (slot?.sessionId === session.id) {
-            if (!changedWhileStopped) {
+            const staleIncompatibility = startup.slot.runError?.startsWith('incompatible:') &&
+              session.run.error !== startup.slot.runError;
+            if (!changedWhileStopped && !staleIncompatibility) {
               const eventOffset = slot.eventOffset;
               Object.assign(slot, startup.slot);
               slot.eventOffset = eventOffset;
@@ -1004,6 +1006,18 @@ export class VSCodeIntegration {
       await this.applyEvent(session, {
         type: hook.hookEventName === 'PermissionRequest' ? 'permission.requested' : 'permission.completed',
         data: { requestId: hook.requestId },
+        timestamp,
+      });
+    } else if (
+      hook.toolName !== 'vscode_askQuestions' &&
+      hook.toolName !== 'vscode_get_terminal_confirmation' &&
+      hook.hookEventName === 'PermissionRequest' &&
+      typeof hook.toolUseId === 'string' &&
+      hook.toolUseId
+    ) {
+      await this.applyEvent(session, {
+        type: 'permission.requested',
+        data: { requestId: nativeHookToolCallId(hook.toolUseId) },
         timestamp,
       });
     } else if (

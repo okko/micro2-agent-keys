@@ -94,6 +94,19 @@ async function main(): Promise<void> {
       });
     } else if (
       event.tool_name !== TERMINAL_CONFIRMATION_TOOL &&
+      event.hook_event_name === 'PermissionRequest' &&
+      typeof event.tool_use_id === 'string' &&
+      event.tool_use_id
+    ) {
+      await post({
+        hookEventName: event.hook_event_name,
+        sessionId: event.session_id,
+        toolName: event.tool_name,
+        toolUseId: event.tool_use_id,
+        timestamp: event.timestamp,
+      });
+    } else if (
+      event.tool_name !== TERMINAL_CONFIRMATION_TOOL &&
       (event.hook_event_name === 'PostToolUse' || event.hook_event_name === 'PermissionDenied') &&
       typeof event.tool_use_id === 'string' &&
       event.tool_use_id

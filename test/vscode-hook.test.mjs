@@ -88,3 +88,22 @@ test('generic completion clears permission without forwarding tool input', async
   const denied = await runHook({ ...event, hook_event_name: 'PermissionDenied' });
   assert.equal(denied.hookEventName, 'PermissionDenied');
 });
+
+test('generic permission request forwards identity without tool input', async () => {
+  const event = {
+    session_id: '00000000-0000-4000-8000-000000000000',
+    tool_name: 'read_file',
+    hook_event_name: 'PermissionRequest',
+    tool_input: { filePath: '/private/external-file' },
+    tool_use_id: 'call_external_read',
+  };
+  const forwarded = await runHook(event);
+
+  assert.deepEqual(forwarded, {
+    hookEventName: 'PermissionRequest',
+    sessionId: event.session_id,
+    toolName: event.tool_name,
+    toolUseId: event.tool_use_id,
+  });
+  assert.equal(JSON.stringify(forwarded).includes('/private/external-file'), false);
+});

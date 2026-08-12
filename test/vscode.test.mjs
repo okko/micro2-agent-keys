@@ -439,6 +439,55 @@ test('native journal tracks permission waits before transcript execution', async
   assert.equal(integration.slots[0].state, 'running');
 });
 
+test('generic permission hook tracks a non-terminal approval across scans', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message'),
+    event('assistant.turn_start', { turnId: 'native-turn' }),
+    event('assistant.message', {
+      toolRequests: [{ toolCallId: 'read-call', name: 'read_file', arguments: {} }],
+    })
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{
+      requestId: 'native-request',
+      response: [],
+      modelState: { value: 0 },
+    }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  const hook = {
+    sessionId: IDS[0],
+    toolName: 'read_file',
+    toolUseId: 'read-call__vscode-1785759144224',
+  };
+  assert.equal(await integration.applyHook({ ...hook, hookEventName: 'PermissionRequest' }), true);
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal([...integration.sessions.get(IDS[0]).run.blockers.values()][0].kind, 'tool-confirmation');
+
+  append(eventsPath, event('tool.execution_start', { toolCallId: 'read-call', toolName: 'read_file' }));
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  assert.equal(await integration.applyHook({ ...hook, hookEventName: 'PermissionDenied' }), true);
+  assert.equal(integration.slots[0].state, 'running');
+});
+
 test('native confirmed external reads remain running before execution', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
@@ -1007,7 +1056,7 @@ test('prefers Agent Host telemetry when VS Code mirrors the same session nativel
   assert.equal(integration.slots[0].state, 'running');
 });
 
-test('coalesces transcript and journal updates into one authoritative slot change', async (t) => {
+test('preserves a permission wait when the journal replaces the transcript request ID', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
   const cwd = path.join(files.directory, 'Native project');
@@ -1030,7 +1079,8 @@ test('coalesces transcript and journal updates into one authoritative slot chang
       toolRequests: [
         { toolCallId: 'optimistic-tool', arguments: { requestUnsandboxedExecution: true } },
       ],
-    })
+    }),
+    event('tool.execution_start', { toolCallId: 'optimistic-tool', toolName: 'run_in_terminal' })
   );
   append(journalPath, {
     kind: 2,
@@ -1039,8 +1089,8 @@ test('coalesces transcript and journal updates into one authoritative slot chang
   });
 
   await integration.scan();
-  assert.equal(integration.slots[0].state, 'running');
-  assert.deepEqual(observed, ['running']);
+  assert.equal(integration.slots[0].state, 'input');
+  assert.deepEqual(observed, ['input']);
 });
 
 test('polling interval stays within the Phase 5 operating bounds', () => {
@@ -1262,6 +1312,8 @@ test('native restart reconstructs blocked and newly resolved journals', async (t
   });
   await first.scan();
   assert.equal(first.slots[0].state, 'input');
+  await first.scan();
+  assert.equal(first.slots[0].state, 'input');
   first.stop();
 
   const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
@@ -1283,6 +1335,56 @@ test('native restart reconstructs blocked and newly resolved journals', async (t
   t.after(() => third.stop());
   assert.equal(third.slots[0].state, 'done');
   assert.equal(third.sessions.get(IDS[0]).run.blockers.size, 0);
+});
+
+test('native restart reconstructs an unstarted terminal confirmation', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(
+    eventsPath,
+    event('user.message'),
+    event('assistant.turn_start', { turnId: 'native-turn' }),
+    event('assistant.message', {
+      toolRequests: [{ toolCallId: 'terminal-call', name: 'run_in_terminal', arguments: {} }],
+    })
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{
+      requestId: 'native-request',
+      response: [
+        {
+          kind: 'toolInvocationSerialized',
+          toolCallId: 'terminal-call',
+          isConfirmed: { type: 1 },
+          isComplete: true,
+          toolSpecificData: { terminalCommandState: { exitCode: 1 } },
+        },
+        { kind: 'elicitationSerialized', state: 'rejected' },
+      ],
+      modelState: { value: 4 },
+    }],
+  });
+  await first.scan();
+  assert.equal(first.slots[0].state, 'input');
+  first.stop();
+
+  const persisted = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  persisted.slots[0].state = 'error';
+  persisted.slots[0].runError = 'incompatible:unknown-native-response';
+  fs.writeFileSync(files.statePath, JSON.stringify(persisted));
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0].state, 'input');
+  assert.equal(second.slots[0].runError, null);
 });
 
 test('restart preserves an acknowledged completed session as idle', async (t) => {

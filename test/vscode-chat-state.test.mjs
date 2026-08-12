@@ -6,6 +6,7 @@ import {
   emptyRun,
   reduceEvent,
   reduceNormalizedEvent,
+  runState,
   snapshotEvents,
 } from '../dist/vscode-chat-state.js';
 import { event } from './vscode-event.mjs';
@@ -237,6 +238,42 @@ test('native chat projection covers every Phase 4 response lifecycle', () => {
     assert.equal(projection.snapshot().blockers.size, 0, name);
     assert.equal(projection.snapshot().busy, true, name);
   }
+});
+
+test('resolved serialized elicitation preserves a hook-reported terminal permission', () => {
+  const requestId = 'live-request';
+  const permissionId = 'terminal-confirmation:command';
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId });
+  reduceNormalizedEvent(run, {
+    type: 'human-input.opened',
+    requestId,
+    blockerId: `${requestId}:toolInvocation:${permissionId}`,
+    sourceId: permissionId,
+    kind: 'tool-confirmation',
+  });
+  run.pendingPermissionIds.add(permissionId);
+
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: {
+      requests: [{
+        requestId,
+        response: [{ kind: 'elicitationSerialized', state: 'rejected' }],
+        modelState: { value: 4 },
+      }],
+    },
+  });
+  const current = projection.snapshot();
+  assert.deepEqual(current.incompatibilities, []);
+
+  const events = snapshotEvents(run, current, { deferPendingPermissions: true });
+  let state = 'input';
+  for (const normalized of events) state = reduceNormalizedEvent(run, normalized);
+  assert.equal(state, 'input');
+  assert.equal(run.error, null);
+  assert.equal(run.blockers.size, 1);
 });
 
 test('native projection rejects unknown tool state numbers beside resolved input', () => {
@@ -700,6 +737,7 @@ function snapshot(overrides = {}) {
     requestId: 'req-1',
     active: true,
     busy: false,
+    needsInput: false,
     blockers: new Map(),
     observedToolCallIds: new Set(),
     terminal: null,
@@ -760,6 +798,76 @@ test('snapshot events defer a pending permission the transcript has not caught u
     { type: 'human-input.closed', requestId: 'req-1', blockerId: pending.id, outcome: 'resolved' },
   ]);
   assert.equal(run.pendingPermissionIds.has('call-1'), false);
+});
+
+test('snapshot events migrate a pending permission to the authoritative request', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'provisional' });
+  const pending = blocker('provisional:toolCall:call-1', 'provisional', 'call-1');
+  run.blockers.set(pending.id, pending);
+  run.pendingPermissionIds.add('call-1');
+
+  const events = snapshotEvents(
+    run,
+    snapshot({ requestId: 'authoritative' }),
+    { deferPendingPermissions: true }
+  );
+  assert.deepEqual(events.map(({ type }) => type), ['request.started', 'human-input.opened']);
+  for (const normalized of events) reduceNormalizedEvent(run, normalized);
+  assert.equal(run.requestId, 'authoritative');
+  assert.deepEqual(
+    [...run.blockers.values()].map(({ requestId, sourceId, kind }) => ({ requestId, sourceId, kind })),
+    [{ requestId: 'authoritative', sourceId: 'call-1', kind: 'tool-confirmation' }]
+  );
+});
+
+test('snapshot events infer an unstarted terminal confirmation only from NeedsInput', () => {
+  const run = emptyRun();
+  reduceNormalizedEvent(run, { type: 'request.started', requestId: 'req-1' });
+  run.unstartedTerminalToolIds.add('terminal-call');
+
+  assert.deepEqual(snapshotEvents(run, snapshot()), []);
+  const events = snapshotEvents(run, snapshot({ needsInput: true }));
+  assert.deepEqual(events.map(({ type }) => type), ['human-input.opened']);
+  for (const normalized of events) reduceNormalizedEvent(run, normalized);
+  assert.equal(runState(run), 'input');
+
+  assert.deepEqual(
+    snapshotEvents(
+      run,
+      snapshot({ needsInput: true, observedToolCallIds: new Set(['terminal-call']) }),
+      { deferPendingPermissions: true }
+    ),
+    []
+  );
+  assert.equal(runState(run), 'input');
+
+  const resolved = snapshotEvents(run, snapshot(), { deferPendingPermissions: true });
+  assert.deepEqual(resolved.map(({ type }) => type), ['human-input.closed']);
+  for (const normalized of resolved) reduceNormalizedEvent(run, normalized);
+  assert.equal(runState(run), 'running');
+});
+
+test('permission request after dispatch remains a pre-tool confirmation', () => {
+  const run = emptyRun();
+  reduceEvent(run, event('user.message'), 'native');
+  reduceEvent(
+    run,
+    event('tool.execution_start', { toolCallId: 'fetch-call', toolName: 'fetch_webpage' }),
+    'native'
+  );
+
+  const waiting = reduceEvent(
+    run,
+    event('permission.requested', { requestId: 'fetch-call' }),
+    'native'
+  );
+  assert.equal(waiting.state, 'input');
+  assert.equal([...run.blockers.values()][0].kind, 'tool-confirmation');
+  assert.equal(runState(run), 'input');
+
+  reduceEvent(run, event('permission.completed', { requestId: 'fetch-call' }), 'native');
+  assert.equal(runState(run), 'running');
 });
 
 test('snapshot events close a permission blocker directly when deferral is off', () => {

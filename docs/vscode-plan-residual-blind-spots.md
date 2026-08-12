@@ -55,13 +55,27 @@ do not guess from kind names.
 
 If a UI blocks execution but neither the native journal/transcript/hooks nor the live
 Agent Host protocol exports that blocker, AgentKeys cannot observe it and therefore
-cannot turn red. Timing is not an acceptable substitute because auto-approved and
+cannot turn amber. Timing is not an acceptable substitute because auto-approved and
 human-delayed permission events share persisted shapes.
+
+This currently includes native post-tool result approval. VS Code represents the open
+"Approve Tool Result" dialog as
+`IChatToolInvocation.StateKind.WaitingForPostApproval` in the live workbench chat model.
+`IChatModel.requestNeedsInput`, `AgentSessionApprovalModel`, and the optional window
+notification observe that state in-process, but no stable or proposed extension API,
+hook, command result, IPC endpoint, context key, transcript event, or timely journal
+record exports the session resource plus unresolved tool-call ID. `PostToolUse` runs only
+after approval resolves. The journal's eventual serialized tool result is also
+post-resolution and cannot reconstruct the waiting interval.
+
+Live validation on VS Code 1.131.0 held a real fetch result dialog open while polling the
+AgentKeys slot repeatedly; the slot remained `running`. Synthetic `PermissionRequest`
+events are not evidence for this dialog because the real event stream emits none.
 
 The archived evidence completion ledger at
 `docs/archive-do-not-edit/vscode-plan-gaps-todo.md` requires each such case to remain
 unsupported until a production signal exists. The correct upstream fix is to export an
-unresolved blocker identity or authoritative `awaitsUserInput` state.
+unresolved blocker identity or authoritative `awaitsUserInput` state keyed by session.
 
 ### No Agent Host endpoint before first ownership
 
