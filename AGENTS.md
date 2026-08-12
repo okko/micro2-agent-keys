@@ -11,6 +11,11 @@ invoke the commit helper.
 `scripts/restart-agent.sh` will not work in the sandbox. Run it with unsandboxed
 execution so `launchctl` can restart the LaunchAgent in the user's GUI domain.
 
+## Tests
+
+`npm test` is not supported inside the sandbox because it cannot handle the test
+suite's `127.0.0.1` listeners and connections. Run it with unsandboxed execution.
+
 ## Shell Commands
 
 JavaScript containing `!==` can trigger shell history expansion when embedded in a
