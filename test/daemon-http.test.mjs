@@ -40,13 +40,13 @@ function fakeApi({ vscode, ...overrides } = {}) {
       calls.push(['reset']);
       return [slot(0, 'idle'), slot(1, 'idle')];
     },
+    resetVSCodeSlots: async () => {
+      calls.push(['resetVSCodeSlots']);
+      return [{ slot: 0, state: 'idle' }];
+    },
     ...overrides,
     vscode: {
       publicSlots: () => [{ slot: 0, state: 'running' }],
-      resetSlots: async () => {
-        calls.push(['resetSlots']);
-        return [{ slot: 0, state: 'idle' }];
-      },
       doctor: () => ({ ok: true }),
       applyHook: async (body) => {
         calls.push(['applyHook', body]);
@@ -77,6 +77,7 @@ const server = createServer({
   slots: () => api.slots(),
   setSlot: (...args) => api.setSlot(...args),
   reset: () => api.reset(),
+  resetVSCodeSlots: () => api.resetVSCodeSlots(),
 });
 server.listen(PORT, HOST);
 await once(server, 'listening');
@@ -174,7 +175,7 @@ test('VS Code routes delegate to the integration', async () => {
 
   assert.deepEqual(api.calls, [
     ['applyHook', { kind: 'stop' }],
-    ['resetSlots'],
+    ['resetVSCodeSlots'],
     ['open', 1],
   ]);
 });

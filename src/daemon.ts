@@ -3,6 +3,7 @@ import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './d
 import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
 import { STATES, SLOT_COUNT, DEFAULT_STATE } from './states.js';
 import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
+import { readConfiguredAgentSlots } from './keymap.js';
 import { LocalAgentHostStateSource } from './agent-host.js';
 import { createServer, HOST, PORT, type DaemonApi } from './daemon-http.js';
 import type { Slot } from './daemon-interfaces.js';
@@ -105,6 +106,10 @@ function push(changed?: Slot): Promise<void> {
 
 const vscode = new VSCodeIntegration({
   log,
+  enabledSlots:
+    process.env.AGENTKEYS_NO_DEVICE === '1'
+      ? Array.from({ length: SLOT_COUNT }, (_, index) => index)
+      : [],
   agentHostSource: new LocalAgentHostStateSource({ log }),
   onSlot: async (binding: VSCodeSlot) => {
     if (shuttingDown) return;
@@ -115,6 +120,14 @@ const vscode = new VSCodeIntegration({
     await push(slot);
   },
 });
+
+/** Reads the live device keymap and applies its sparse AG indices to the VS Code integration. */
+async function refreshVSCodeSlots(current: Device): Promise<number[]> {
+  const enabledSlots = await readConfiguredAgentSlots(current);
+  await vscode.setEnabledSlots(enabledSlots);
+  log(`VS Code slots enabled from device keymap: ${enabledSlots.length ? enabledSlots.join(', ') : 'none'}`);
+  return enabledSlots;
+}
 
 /** Closes a failed handle and starts reconnecting; ignores handles already replaced. */
 async function dropDevice(current: Device): Promise<void> {
@@ -193,6 +206,7 @@ async function connectDevice(): Promise<void> {
   };
   candidate.onNotify = onNotify;
   try {
+    await refreshVSCodeSlots(candidate);
     await setZones(candidate, {
       keys: { color: 0x000000, effect: EFFECT.off, brightness: 0 },
       ambient: { color: 0x101010, effect: EFFECT.solid, brightness: 0.3 },
@@ -239,6 +253,14 @@ async function reset(): Promise<Slot[]> {
   return resetSlots;
 }
 
+/** Refreshes mapped AG indices from the connected keyboard, then frees every VS Code binding. */
+async function resetVSCodeSlots(): Promise<VSCodeSlot[]> {
+  const current = device;
+  if (!current) throw new Error('keyboard disconnected; cannot refresh VS Code slots');
+  await refreshVSCodeSlots(current);
+  return vscode.resetSlots();
+}
+
 const api: DaemonApi = {
   buildId: BUILD_ID,
   vscode,
@@ -251,6 +273,7 @@ const api: DaemonApi = {
   slots: () => slots,
   setSlot,
   reset,
+  resetVSCodeSlots,
 };
 
 const server = createServer(api);
@@ -311,10 +334,14 @@ async function shutdown(signal: string): Promise<void> {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => shutdown(signal));
 
 server.listen(PORT, HOST, () => log(`listening on http://${HOST}:${PORT}`));
-vscode.start().catch((err: unknown) => log(`VS Code integration disabled: ${errorMessage(err)}`));
-if (process.env.AGENTKEYS_NO_DEVICE !== '1') {
-  connect().catch((err: unknown) => {
-    log('connect failed:', errorMessage(err));
-    scheduleReconnect();
-  });
-}
+void (async () => {
+  if (process.env.AGENTKEYS_NO_DEVICE !== '1') {
+    try {
+      await connect();
+    } catch (err) {
+      log('connect failed:', errorMessage(err));
+      scheduleReconnect();
+    }
+  }
+  await vscode.start();
+})().catch((err: unknown) => log(`VS Code integration disabled: ${errorMessage(err)}`));

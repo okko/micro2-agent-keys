@@ -1,6 +1,6 @@
 import * as http from 'http';
 import { STATES, SLOT_COUNT, normalizeState } from './states.js';
-import { INTEGRATION_SLOT_COUNT, type VSCodeIntegration } from './vscode.js';
+import { INTEGRATION_SLOT_COUNT, type VSCodeIntegration, type VSCodeSlot } from './vscode.js';
 import type { DeviceStatus, Slot } from './daemon-interfaces.js';
 
 export const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
@@ -9,7 +9,7 @@ const MAX_BODY = 4096;
 const MAX_LABEL = 64;
 
 /** The subset of the VS Code integration the routes reach for. */
-type VSCodeRoutes = Pick<VSCodeIntegration, 'publicSlots' | 'resetSlots' | 'doctor' | 'applyHook' | 'open'>;
+type VSCodeRoutes = Pick<VSCodeIntegration, 'publicSlots' | 'doctor' | 'applyHook' | 'open'>;
 
 /**
  * Everything the routes may touch. The daemon keeps the HID handle and the slot array to itself
@@ -24,6 +24,7 @@ export interface DaemonApi {
   /** `state` is already normalized; resolves to the slot as recorded, once the lighting is sent. */
   setSlot(index: number, state: string, label: string | null): Promise<Slot>;
   reset(): Promise<Slot[]>;
+  resetVSCodeSlots(): Promise<VSCodeSlot[]>;
 }
 
 function errorMessage(err: unknown): string {
@@ -112,7 +113,7 @@ async function handle(api: DaemonApi, req: http.IncomingMessage, res: http.Serve
   }
 
   if (req.method === 'POST' && url.pathname === '/integrations/vscode/slots/reset') {
-    return send(res, 200, { ok: true, slots: await api.vscode.resetSlots() });
+    return send(res, 200, { ok: true, slots: await api.resetVSCodeSlots() });
   }
 
   const vscodeOpen = url.pathname.match(/^\/integrations\/vscode\/slots\/(\d+)\/open$/);

@@ -16,7 +16,7 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys log                          follow the daemon log
 
   agentkeys vscode slots                 show automatic VS Code bindings
-  agentkeys vscode reset                 free all 20 VS Code bindings
+  agentkeys vscode reset                 refresh mapped keys and free bindings
   agentkeys vscode open <slot>           open an exact VS Code session
   agentkeys doctor vscode                check VS Code integration availability
 

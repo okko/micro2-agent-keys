@@ -1277,6 +1277,71 @@ test('reset frees persisted VS Code slots and sends idle key states', async (t) 
   assert.equal(integration.slots[0].sessionId, IDS[0]);
 });
 
+test('allocates only sparse AG slots mapped in the device keymap', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const enabledSlots = [0, 1, 3, 17];
+  const projects = IDS.slice(0, enabledSlots.length + 1).map((id, index) => {
+    const cwd = path.join(files.directory, `project-${index}`);
+    fs.mkdirSync(cwd);
+    return createSession(files.root, id, cwd);
+  });
+  const integration = new VSCodeIntegration({
+    ...files,
+    enabledSlots,
+    scanIntervalMs: 60_000,
+    launch: async () => {},
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  for (let index = 0; index < projects.length; index++) {
+    append(projects[index], event('user.message', {}, `2026-08-01T10:00:0${index}.000Z`));
+    await integration.scan();
+  }
+
+  assert.deepEqual(integration.publicSlots().map((slot) => slot.slot), enabledSlots);
+  assert.deepEqual(enabledSlots.map((slot) => integration.slots[slot]?.sessionId), IDS.slice(0, 4));
+  assert.equal(integration.sessions.get(IDS[4]).boundSlot, null);
+  assert.ok(integration.slots.every((slot, index) => enabledSlots.includes(index) || slot === null));
+  assert.equal((await integration.open(17)).slot.slot, 17);
+});
+
+test('refreshes sparse AG slots when the connected device keymap changes', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const observed = [];
+  const projects = IDS.slice(0, 3).map((id, index) => {
+    const cwd = path.join(files.directory, `project-${index}`);
+    fs.mkdirSync(cwd);
+    return createSession(files.root, id, cwd);
+  });
+  const integration = new VSCodeIntegration({
+    ...files,
+    enabledSlots: [0, 3],
+    scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  for (let index = 0; index < 2; index++) {
+    append(projects[index], event('user.message', {}, `2026-08-01T10:00:0${index}.000Z`));
+    await integration.scan();
+  }
+  assert.equal(integration.slots[3].sessionId, IDS[1]);
+
+  await integration.setEnabledSlots([0, 17]);
+  assert.deepEqual(integration.publicSlots().map((slot) => slot.slot), [0, 17]);
+  assert.equal(integration.sessions.get(IDS[1]).boundSlot, null);
+  assert.equal(integration.slots[3], null);
+  assert.ok(observed.slice(-2).every((slot) => slot.state === 'idle'));
+
+  append(projects[2], event('user.message', {}, '2026-08-01T10:00:02.000Z'));
+  await integration.scan();
+  assert.equal(integration.slots[17].sessionId, IDS[2]);
+});
+
 test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

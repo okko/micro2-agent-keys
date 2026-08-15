@@ -94,6 +94,13 @@ Host and native Copilot Chat sessions, assigns a free slot when real work starts
 key synchronized with the session's live state. Simply creating or browsing a session does not
 claim a key, so the hardware reflects active work rather than editor clutter.
 
+At each device connection, the daemon reads `keymap.json` from the keyboard and enables only the
+`KV_OAI_AG00` through `KV_OAI_AG19` numbers mapped in any profile layer. Slot identity follows the
+keycode number rather than layout position: if the keymap contains only `AG00`, `AG01`, `AG03`, and
+`AG17`, new VS Code sessions cycle through slots 0, 1, 3, and 17. Duplicate keycodes across layers
+still represent one slot. After changing agent-key mappings in Input.app, run `agentkeys vscode reset`;
+it re-reads the live keyboard keymap and frees the existing bindings, so no daemon restart is needed.
+
 When a session needs an answer or approval, its key turns amber; active work breathes blue;
 completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
 VS Code project window and opens that exact chat transcript. Opening a green key acknowledges the

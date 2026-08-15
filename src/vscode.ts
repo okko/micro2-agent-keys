@@ -182,6 +182,7 @@ export interface VSCodeIntegrationOptions {
   root?: string;
   nativeRoot?: string;
   statePath?: string;
+  enabledSlots?: Iterable<number>;
   agentHostSource?: AgentHostStateSource;
   onSlot?: (slot: VSCodeSlot) => void | Promise<void>;
   log?: (...args: unknown[]) => void;
@@ -226,6 +227,7 @@ export class VSCodeIntegration {
   launch: (url: string) => Promise<void>;
   nativeSessionActive: (indexPath: string, sessionId: string) => boolean | null;
   scanIntervalMs: number;
+  enabledSlots: Set<number>;
   slots: (VSCodeSlot | null)[];
   sessions: Map<string, Session>;
   timer: NodeJS.Timeout | null;
@@ -254,6 +256,9 @@ export class VSCodeIntegration {
     this.scanIntervalMs = Number.isFinite(requestedScanInterval)
       ? Math.max(MIN_SCAN_INTERVAL_MS, requestedScanInterval)
       : SCAN_INTERVAL_MS;
+    this.enabledSlots = new Set(
+      options.enabledSlots ?? Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => index)
+    );
     this.slots = Array(INTEGRATION_SLOT_COUNT).fill(null);
     this.sessions = new Map();
     this.timer = null;
@@ -307,6 +312,7 @@ export class VSCodeIntegration {
       });
     }
     for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
+      if (!this.enabledSlots.has(index)) continue;
       const raw = saved.slots?.[index];
       if (!raw || !SESSION_ID.test(raw.sessionId ?? '')) continue;
       const sessionId = raw.sessionId as string;
@@ -700,7 +706,7 @@ export class VSCodeIntegration {
         slot.runError = 'event-stream-missing';
         slot.stateChangedAt = new Date().toISOString();
       }
-      for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
+      for (const index of this.enabledSlots) {
         const previous = previousSlots[index];
         const current = this.slots[index];
         const changed =
@@ -960,10 +966,13 @@ export class VSCodeIntegration {
   /** Ensures a session is bound to a slot, reusing an inactive slot when needed. */
   allocate(session: Session, timestamp?: string | null): number | null {
     if (session.boundSlot !== null) return session.boundSlot;
-    let index = this.slots.findIndex((slot) => slot === null);
+    let index = [...this.enabledSlots].find((slot) => this.slots[slot] === null) ?? -1;
     if (index < 0) {
       const reusable = this.slots
-        .filter((slot): slot is VSCodeSlot => slot !== null && (slot.state === 'done' || slot.state === 'idle'))
+        .filter(
+          (slot): slot is VSCodeSlot =>
+            slot !== null && this.enabledSlots.has(slot.slot) && (slot.state === 'done' || slot.state === 'idle')
+        )
         .sort((a, b) => {
           const time = String(a.doneAt ?? a.stateChangedAt ?? '').localeCompare(
             String(b.doneAt ?? b.stateChangedAt ?? '')
@@ -1127,12 +1136,48 @@ export class VSCodeIntegration {
     return true;
   }
 
-  /** Returns the externally visible slot view, filling unbound entries as idle slots. */
-  publicSlots(): VSCodeSlot[] {
-    return this.slots.map((slot, index) => (slot ? { ...slot } : { slot: index, state: 'idle' }));
+  /** Replaces the sparse set of physical AG indices available to VS Code sessions. */
+  async setEnabledSlots(indices: Iterable<number>): Promise<void> {
+    const next = new Set(
+      [...indices]
+        .filter((index) => Number.isInteger(index) && index >= 0 && index < INTEGRATION_SLOT_COUNT)
+        .sort((a, b) => a - b)
+    );
+    const changed = new Set([...this.enabledSlots, ...next].filter((index) => this.enabledSlots.has(index) !== next.has(index)));
+    if (!changed.size) return;
+
+    for (const index of changed) {
+      const binding = this.slots[index];
+      if (binding?.sessionId) {
+        const session = this.sessions.get(binding.sessionId);
+        if (session) {
+          session.boundSlot = null;
+          session.startupReplay = null;
+        }
+      }
+      this.slots[index] = null;
+    }
+    this.enabledSlots = next;
+    this.agentHostSource?.setSessions(
+      [...this.sessions.values()]
+        .filter((session) => session.source === SOURCE_COPILOT_CLI && session.boundSlot !== null)
+        .map((session) => session.id)
+    );
+    if (this.started) this.save();
+
+    const stateChangedAt = new Date().toISOString();
+    for (const slot of changed) await this.onSlot({ slot, state: 'idle', stateChangedAt });
   }
 
-  /** Clears all slot bindings and publishes idle for every integration slot. */
+  /** Returns enabled physical slots, filling unbound entries as idle slots. */
+  publicSlots(): VSCodeSlot[] {
+    return [...this.enabledSlots].map((index) => {
+      const slot = this.slots[index];
+      return slot ? { ...slot } : { slot: index, state: 'idle' };
+    });
+  }
+
+  /** Clears all slot bindings and publishes idle for every enabled integration slot. */
   async resetSlots(): Promise<VSCodeSlot[]> {
     for (const session of this.sessions.values()) {
       session.boundSlot = null;
@@ -1143,7 +1188,7 @@ export class VSCodeIntegration {
     this.save();
 
     const stateChangedAt = new Date().toISOString();
-    for (let slot = 0; slot < INTEGRATION_SLOT_COUNT; slot++) {
+    for (const slot of this.enabledSlots) {
       await this.onSlot({ slot, state: 'idle', stateChangedAt });
     }
     return this.publicSlots();
@@ -1154,6 +1199,7 @@ export class VSCodeIntegration {
     if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
       throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
     }
+    if (!this.enabledSlots.has(index)) throw new Error(`VS Code slot ${index} is not mapped on the keyboard`);
     const slot = this.slots[index];
     if (!slot || !slot.sessionId) throw new Error(`VS Code slot ${index} is unbound`);
     const sessionId = slot.sessionId;
@@ -1193,7 +1239,8 @@ export class VSCodeIntegration {
         this.save();
       }
     }
-    return { slot: this.publicSlots()[index], url };
+    const publicSlot = this.slots[index];
+    return { slot: publicSlot ? { ...publicSlot } : { slot: index, state: 'idle' }, url };
   }
 
   /** Reports integration readiness and per-slot diagnostics for troubleshooting. */
