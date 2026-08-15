@@ -7,16 +7,13 @@ import { VSCodeIntegration } from '../dist/vscode.js';
 import { buildSessionUrl, exactOpenSupported, nativeSessionResource } from '../dist/vscode-app.js';
 import { workspaceMetadata } from '../dist/vscode-session-files.js';
 import { EFFECT } from '../dist/oai.js';
-import { STATES } from '../dist/states.js';
+import { SLOT_COUNT, STATES } from '../dist/states.js';
 import { event } from './vscode-event.mjs';
 
-const IDS = [
-  '00000000-0000-4000-8000-000000000000',
-  '00000000-0000-4000-8000-000000000001',
-  '00000000-0000-4000-8000-000000000002',
-  '00000000-0000-4000-8000-000000000003',
-  '00000000-0000-4000-8000-000000000004',
-];
+const IDS = Array.from(
+  { length: SLOT_COUNT + 1 },
+  (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
+);
 const CONFIRMED_EXTERNAL_READ = JSON.parse(
   fs.readFileSync(new URL('./fixtures/vscode-native-confirmed-external-read.json', import.meta.url), 'utf8')
 );
@@ -1261,15 +1258,19 @@ test('reset frees persisted VS Code slots and sends idle key states', async (t) 
   assert.deepEqual(source.sessions, [IDS[0]]);
 
   const reset = await integration.resetSlots();
-  assert.deepEqual(reset, [0, 1, 2, 3].map((slot) => ({ slot, state: 'idle' })));
+  assert.deepEqual(reset, Array.from({ length: 20 }, (_, slot) => ({ slot, state: 'idle' })));
   assert.ok(integration.slots.every((slot) => slot === null));
   assert.equal(integration.sessions.get(IDS[0]).boundSlot, null);
   assert.deepEqual(source.sessions, []);
   assert.deepEqual(
-    observed.slice(-4),
-    [0, 1, 2, 3].map((slot) => ({ slot, state: 'idle', stateChangedAt: observed.at(-1).stateChangedAt }))
+    observed.slice(-20),
+    Array.from({ length: 20 }, (_, slot) => ({
+      slot,
+      state: 'idle',
+      stateChangedAt: observed.at(-1).stateChangedAt,
+    }))
   );
-  assert.deepEqual(JSON.parse(fs.readFileSync(files.statePath, 'utf8')).slots, [null, null, null, null]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(files.statePath, 'utf8')).slots, Array(20).fill(null));
 
   append(eventsPath, event('user.message', {}, '2026-08-01T10:01:00.000Z'));
   await integration.scan();
@@ -1295,23 +1296,23 @@ test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t
   t.after(() => integration.stop());
   assert.ok(integration.publicSlots().every((slot) => slot.state === 'idle'));
 
-  for (let index = 0; index < 4; index++) {
+  for (let index = 0; index < SLOT_COUNT; index++) {
     append(
       projects[index],
-      event('hook.start', { hookType: 'userPromptSubmitted' }, `2026-08-01T10:00:0${index}.000Z`),
-      event('hook.end', { hookType: 'sessionEnd' }, `2026-08-01T10:00:1${index}.000Z`)
+      event('hook.start', { hookType: 'userPromptSubmitted' }, `2026-08-01T10:00:${String(index).padStart(2, '0')}.000Z`),
+      event('hook.end', { hookType: 'sessionEnd' }, `2026-08-01T10:01:${String(index).padStart(2, '0')}.000Z`)
     );
     await integration.scan();
   }
-  assert.deepEqual(integration.slots.map((slot) => slot.sessionId), IDS.slice(0, 4));
+  assert.deepEqual(integration.slots.map((slot) => slot.sessionId), IDS.slice(0, SLOT_COUNT));
   await integration.open(0);
   assert.equal(integration.slots[0].state, 'idle');
   assert.equal(integration.slots[0].sessionId, IDS[0]);
 
-  append(projects[4], event('user.message', {}, '2026-08-01T10:01:00.000Z'));
+  append(projects[SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
   await integration.scan();
-  assert.equal(integration.slots[0].sessionId, IDS[4]);
-  assert.deepEqual(integration.slots.slice(1).map((slot) => slot.sessionId), IDS.slice(1, 4));
+  assert.equal(integration.slots[0].sessionId, IDS[SLOT_COUNT]);
+  assert.deepEqual(integration.slots.slice(1).map((slot) => slot.sessionId), IDS.slice(1, SLOT_COUNT));
 });
 
 test('restart replay reconstructs outstanding input for a bound session', async (t) => {
@@ -1796,15 +1797,19 @@ test('does not acknowledge a slot that was rebound while opening', async (t) => 
   });
   await integration.start();
   t.after(() => integration.stop());
-  for (let index = 0; index < 4; index++) {
-    append(projects[index], event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  for (let index = 0; index < SLOT_COUNT; index++) {
+    append(
+      projects[index],
+      event('user.message', {}, `2026-08-01T10:00:${String(index).padStart(2, '0')}.000Z`),
+      event('hook.end', { hookType: 'sessionEnd' }, `2026-08-01T10:01:${String(index).padStart(2, '0')}.000Z`)
+    );
     await integration.scan();
   }
 
   const opening = integration.open(0);
-  append(projects[4], event('user.message'));
+  append(projects[SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
   await integration.scan();
-  assert.equal(integration.slots[0].sessionId, IDS[4]);
+  assert.equal(integration.slots[0].sessionId, IDS[SLOT_COUNT]);
   finishLaunch();
   await opening;
   assert.equal(integration.slots[0].state, 'running');

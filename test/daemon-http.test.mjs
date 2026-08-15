@@ -182,8 +182,8 @@ test('VS Code routes delegate to the integration', async () => {
 test('a failed VS Code open answers 409 and an out-of-range slot answers 400', async () => {
   api = fakeApi({
     vscode: {
-      open: async () => {
-        throw new Error('slot 0 is unbound');
+      open: async (index) => {
+        throw new Error(`slot ${index} is unbound`);
       },
     },
   });
@@ -192,9 +192,13 @@ test('a failed VS Code open answers 409 and an out-of-range slot answers 400', a
   assert.equal(conflict.status, 409);
   assert.deepEqual(await conflict.json(), { error: 'slot 0 is unbound' });
 
-  const outOfRange = await post('/integrations/vscode/slots/4/open');
+  const lastSlot = await post('/integrations/vscode/slots/19/open');
+  assert.equal(lastSlot.status, 409);
+  assert.deepEqual(await lastSlot.json(), { error: 'slot 19 is unbound' });
+
+  const outOfRange = await post('/integrations/vscode/slots/20/open');
   assert.equal(outOfRange.status, 400);
-  assert.deepEqual(await outOfRange.json(), { error: 'VS Code slot must be 0..3' });
+  assert.deepEqual(await outOfRange.json(), { error: 'VS Code slot must be 0..19' });
 });
 
 test('an unknown route answers 404', async () => {

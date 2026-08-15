@@ -153,7 +153,7 @@ async function connect(): Promise<void> {
 }
 
 /**
- * Opens the vendor HID interface, subscribes to AG00..AG03 key presses so they open the matching
+ * Opens the vendor HID interface, subscribes to AG00..AG19 key presses so they open the matching
  * VS Code window, blacks out the base lighting, and pushes current slot colours. Absence of the
  * device is not an error: it records {@link deviceError} and retries later.
  * @throws if opening the device or the initial lighting write fails.
@@ -187,7 +187,7 @@ async function connectDevice(): Promise<void> {
   const onNotify: NotifyHandler = (message: DeviceMessage) => {
     const key = message?.m === 'v.oai.hid' ? message.p?.k ?? null : null;
     const pressed = message?.p?.act === 1;
-    const match = typeof key === 'string' ? key.match(/^AG0([0-3])$/) : null;
+    const match = typeof key === 'string' ? key.match(/^AG([01]\d)$/) : null;
     if (!pressed || !match) return;
     vscode.open(Number(match[1])).catch((err: unknown) => log(`key ${key} open failed: ${errorMessage(err)}`));
   };

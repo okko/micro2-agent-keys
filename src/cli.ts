@@ -16,7 +16,7 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys log                          follow the daemon log
 
   agentkeys vscode slots                 show automatic VS Code bindings
-  agentkeys vscode reset                 free all VS Code bindings
+  agentkeys vscode reset                 free all 20 VS Code bindings
   agentkeys vscode open <slot>           open an exact VS Code session
   agentkeys doctor vscode                check VS Code integration availability
 
@@ -161,7 +161,9 @@ async function main(argv: string[]): Promise<void> {
       }
       if (subcommand === 'open') {
         const slot = Number(rawSlot);
-        if (!Number.isInteger(slot) || slot < 0 || slot > 3) throw new Error('VS Code slot must be 0..3');
+        if (!Number.isInteger(slot) || slot < 0 || slot >= SLOT_COUNT) {
+          throw new Error(`VS Code slot must be 0..${SLOT_COUNT - 1}`);
+        }
         await request('POST', `/integrations/vscode/slots/${slot}/open`);
         return;
       }

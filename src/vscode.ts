@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import type { AgentHostStateSource } from './agent-host.js';
+import { SLOT_COUNT } from './states.js';
 import {
   AgentHostChatProjection,
   NativeChatProjection,
@@ -42,7 +43,7 @@ import {
   type WorkspaceMetadata,
 } from './vscode-session-files.js';
 
-export const INTEGRATION_SLOT_COUNT = 4;
+export const INTEGRATION_SLOT_COUNT = SLOT_COUNT;
 const CLIENT_NAME = 'vscode-agent-host';
 const MIN_SCAN_INTERVAL_MS = 100;
 const SCAN_INTERVAL_MS = 200;
