@@ -43,7 +43,6 @@ import {
   type WorkspaceMetadata,
 } from './vscode-session-files.js';
 
-export const INTEGRATION_SLOT_COUNT = SLOT_COUNT;
 const CLIENT_NAME = 'vscode-agent-host';
 const MIN_SCAN_INTERVAL_MS = 100;
 const SCAN_INTERVAL_MS = 200;
@@ -59,7 +58,7 @@ interface StartupReplay {
 
 /** One key on the physical keyboard, bound to a VS Code session or idle. */
 export interface VSCodeSlot {
-  /** Fixed integration slot index (0..INTEGRATION_SLOT_COUNT-1). */
+  /** Fixed integration slot index (0..SLOT_COUNT-1). */
   slot: number;
   /** Bound session UUID; omitted for idle/unbound public slots. */
   sessionId?: string;
@@ -257,9 +256,9 @@ export class VSCodeIntegration {
       ? Math.max(MIN_SCAN_INTERVAL_MS, requestedScanInterval)
       : SCAN_INTERVAL_MS;
     this.enabledSlots = new Set(
-      options.enabledSlots ?? Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => index)
+      options.enabledSlots ?? Array.from({ length: SLOT_COUNT }, (_, index) => index)
     );
-    this.slots = Array(INTEGRATION_SLOT_COUNT).fill(null);
+    this.slots = Array(SLOT_COUNT).fill(null);
     this.sessions = new Map();
     this.timer = null;
     this.scanning = false;
@@ -311,7 +310,7 @@ export class VSCodeIntegration {
         startupReplay: null,
       });
     }
-    for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
+    for (let index = 0; index < SLOT_COUNT; index++) {
       if (!this.enabledSlots.has(index)) continue;
       const raw = saved.slots?.[index];
       if (!raw || !SESSION_ID.test(raw.sessionId ?? '')) continue;
@@ -1140,7 +1139,7 @@ export class VSCodeIntegration {
   async setEnabledSlots(indices: Iterable<number>): Promise<void> {
     const next = new Set(
       [...indices]
-        .filter((index) => Number.isInteger(index) && index >= 0 && index < INTEGRATION_SLOT_COUNT)
+        .filter((index) => Number.isInteger(index) && index >= 0 && index < SLOT_COUNT)
         .sort((a, b) => a - b)
     );
     const changed = new Set([...this.enabledSlots, ...next].filter((index) => this.enabledSlots.has(index) !== next.has(index)));
@@ -1188,7 +1187,7 @@ export class VSCodeIntegration {
     this.save();
 
     const stateChangedAt = new Date().toISOString();
-    for (let slot = 0; slot < INTEGRATION_SLOT_COUNT; slot++) {
+    for (let slot = 0; slot < SLOT_COUNT; slot++) {
       await this.onSlot({ slot, state: 'idle', stateChangedAt });
     }
     return this.publicSlots();
@@ -1196,8 +1195,8 @@ export class VSCodeIntegration {
 
   /** Opens the exact VS Code session for a slot and handles post-open acknowledgement rules. */
   async open(index: number): Promise<{ slot: VSCodeSlot; url: string }> {
-    if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
-      throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
+    if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) {
+      throw new Error(`VS Code slot must be 0..${SLOT_COUNT - 1}`);
     }
     if (!this.enabledSlots.has(index)) throw new Error(`VS Code slot ${index} is not mapped on the keyboard`);
     const slot = this.slots[index];

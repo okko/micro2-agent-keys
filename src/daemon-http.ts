@@ -1,6 +1,6 @@
 import * as http from 'http';
 import { STATES, SLOT_COUNT, normalizeState } from './states.js';
-import { INTEGRATION_SLOT_COUNT, type VSCodeIntegration, type VSCodeSlot } from './vscode.js';
+import { SLOT_COUNT, type VSCodeIntegration, type VSCodeSlot } from './vscode.js';
 import type { DeviceStatus, Slot } from './daemon-interfaces.js';
 
 export const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
@@ -119,8 +119,8 @@ async function handle(api: DaemonApi, req: http.IncomingMessage, res: http.Serve
   const vscodeOpen = url.pathname.match(/^\/integrations\/vscode\/slots\/(\d+)\/open$/);
   if (req.method === 'POST' && vscodeOpen) {
     const index = Number(vscodeOpen[1]);
-    if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
-      return send(res, 400, { error: `VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}` });
+    if (!Number.isInteger(index) || index < 0 || index >= SLOT_COUNT) {
+      return send(res, 400, { error: `VS Code slot must be 0..${SLOT_COUNT - 1}` });
     }
     try {
       return send(res, 200, { ok: true, ...(await api.vscode.open(index)) });
