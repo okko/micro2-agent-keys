@@ -1340,6 +1340,11 @@ test('refreshes sparse AG slots when the connected device keymap changes', async
   append(projects[2], event('user.message', {}, '2026-08-01T10:00:02.000Z'));
   await integration.scan();
   assert.equal(integration.slots[17].sessionId, IDS[2]);
+
+  observed.length = 0;
+  assert.deepEqual((await integration.resetSlots()).map((slot) => slot.slot), [0, 17]);
+  assert.deepEqual(observed.map((slot) => slot.slot), Array.from({ length: SLOT_COUNT }, (_, slot) => slot));
+  assert.ok(observed.every((slot) => slot.state === 'idle'));
 });
 
 test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t) => {

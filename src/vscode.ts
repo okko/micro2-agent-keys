@@ -1177,7 +1177,7 @@ export class VSCodeIntegration {
     });
   }
 
-  /** Clears all slot bindings and publishes idle for every enabled integration slot. */
+  /** Clears all slot bindings and publishes idle across the full firmware slot range. */
   async resetSlots(): Promise<VSCodeSlot[]> {
     for (const session of this.sessions.values()) {
       session.boundSlot = null;
@@ -1188,7 +1188,7 @@ export class VSCodeIntegration {
     this.save();
 
     const stateChangedAt = new Date().toISOString();
-    for (const slot of this.enabledSlots) {
+    for (let slot = 0; slot < INTEGRATION_SLOT_COUNT; slot++) {
       await this.onSlot({ slot, state: 'idle', stateChangedAt });
     }
     return this.publicSlots();

@@ -48,9 +48,24 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
 
    For an unbound session:
 
-   - use the lowest unbound slot;
-  - otherwise reuse the oldest `done` or acknowledged `idle` slot;
+   - use the lowest unbound AG index enabled by the device keymap;
+   - otherwise reuse the oldest `done` or acknowledged `idle` slot;
    - never steal `running`, `input`, or `error`.
+
+   Slot identity is the AG keycode number, not an ordinal position in the enabled set.
+   When the keymap changes, bindings whose exact AG indices remain mapped stay on those
+   physical keys. Never renumber or compact surviving bindings: doing so would move sessions
+   between physical keys unexpectedly.
+
+   A session whose AG index was removed remains tracked but becomes unbound. A later qualifying
+   prompt may allocate it to an available mapped slot. Remapping must not evict another active
+   session merely to preserve the displaced session's binding.
+
+   `agentkeys vscode reset` is intentionally stronger than a keymap refresh. It re-reads the
+   device keymap, releases every VS Code binding, and publishes `idle` to the complete firmware
+   range `AG00` through `AG19`, including currently unmapped indices. This clears lingering LED
+   state. The all-slots-idle publication is part of the command contract and must be preserved
+   by future changes even though `agentkeys vscode slots` lists only mapped indices.
 
 4. **Update the LED**
 
