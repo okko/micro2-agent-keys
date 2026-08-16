@@ -1,6 +1,6 @@
 import { EFFECT } from './oai.js';
 
-export const SLOT_COUNT = 20;
+export const INTEGRATION_SLOT_COUNT = 20;
 
 export interface StateSpec {
   color: number;

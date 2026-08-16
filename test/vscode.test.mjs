@@ -7,11 +7,11 @@ import { VSCodeIntegration } from '../dist/vscode.js';
 import { buildSessionUrl, exactOpenSupported, nativeSessionResource } from '../dist/vscode-app.js';
 import { workspaceMetadata } from '../dist/vscode-session-files.js';
 import { EFFECT } from '../dist/oai.js';
-import { SLOT_COUNT, STATES } from '../dist/states.js';
+import { INTEGRATION_SLOT_COUNT, STATES } from '../dist/states.js';
 import { event } from './vscode-event.mjs';
 
 const IDS = Array.from(
-  { length: SLOT_COUNT + 1 },
+  { length: INTEGRATION_SLOT_COUNT + 1 },
   (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 );
 const CONFIRMED_EXTERNAL_READ = JSON.parse(
@@ -1343,7 +1343,7 @@ test('refreshes sparse AG slots when the connected device keymap changes', async
 
   observed.length = 0;
   assert.deepEqual((await integration.resetSlots()).map((slot) => slot.slot), [0, 17]);
-  assert.deepEqual(observed.map((slot) => slot.slot), Array.from({ length: SLOT_COUNT }, (_, slot) => slot));
+  assert.deepEqual(observed.map((slot) => slot.slot), Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, slot) => slot));
   assert.ok(observed.every((slot) => slot.state === 'idle'));
 });
 
@@ -1366,7 +1366,7 @@ test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t
   t.after(() => integration.stop());
   assert.ok(integration.publicSlots().every((slot) => slot.state === 'idle'));
 
-  for (let index = 0; index < SLOT_COUNT; index++) {
+  for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
     append(
       projects[index],
       event('hook.start', { hookType: 'userPromptSubmitted' }, `2026-08-01T10:00:${String(index).padStart(2, '0')}.000Z`),
@@ -1374,15 +1374,15 @@ test('prompt-gates allocation and reuses the oldest acknowledged slot', async (t
     );
     await integration.scan();
   }
-  assert.deepEqual(integration.slots.map((slot) => slot.sessionId), IDS.slice(0, SLOT_COUNT));
+  assert.deepEqual(integration.slots.map((slot) => slot.sessionId), IDS.slice(0, INTEGRATION_SLOT_COUNT));
   await integration.open(0);
   assert.equal(integration.slots[0].state, 'idle');
   assert.equal(integration.slots[0].sessionId, IDS[0]);
 
-  append(projects[SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
+  append(projects[INTEGRATION_SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
   await integration.scan();
-  assert.equal(integration.slots[0].sessionId, IDS[SLOT_COUNT]);
-  assert.deepEqual(integration.slots.slice(1).map((slot) => slot.sessionId), IDS.slice(1, SLOT_COUNT));
+  assert.equal(integration.slots[0].sessionId, IDS[INTEGRATION_SLOT_COUNT]);
+  assert.deepEqual(integration.slots.slice(1).map((slot) => slot.sessionId), IDS.slice(1, INTEGRATION_SLOT_COUNT));
 });
 
 test('restart replay reconstructs outstanding input for a bound session', async (t) => {
@@ -1867,7 +1867,7 @@ test('does not acknowledge a slot that was rebound while opening', async (t) => 
   });
   await integration.start();
   t.after(() => integration.stop());
-  for (let index = 0; index < SLOT_COUNT; index++) {
+  for (let index = 0; index < INTEGRATION_SLOT_COUNT; index++) {
     append(
       projects[index],
       event('user.message', {}, `2026-08-01T10:00:${String(index).padStart(2, '0')}.000Z`),
@@ -1877,9 +1877,9 @@ test('does not acknowledge a slot that was rebound while opening', async (t) => 
   }
 
   const opening = integration.open(0);
-  append(projects[SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
+  append(projects[INTEGRATION_SLOT_COUNT], event('user.message', {}, '2026-08-01T10:02:00.000Z'));
   await integration.scan();
-  assert.equal(integration.slots[0].sessionId, IDS[SLOT_COUNT]);
+  assert.equal(integration.slots[0].sessionId, IDS[INTEGRATION_SLOT_COUNT]);
   finishLaunch();
   await opening;
   assert.equal(integration.slots[0].state, 'running');

@@ -2,14 +2,14 @@
 import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { STATES, ALIASES, SLOT_COUNT, normalizeState } from './states.js';
+import { STATES, ALIASES, INTEGRATION_SLOT_COUNT, normalizeState } from './states.js';
 
 const PORT = Number(process.env.AGENTKEYS_PORT ?? 8787);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
 
-  agentkeys set <slot> <state> [label]   set one slot (slot 0..${SLOT_COUNT - 1})
+  agentkeys set <slot> <state> [label]   set one slot (slot 0..${INTEGRATION_SLOT_COUNT - 1})
   agentkeys status                       show all slots
   agentkeys reset                        set every slot to idle
   agentkeys list-states                  list valid state names
@@ -106,8 +106,8 @@ async function main(argv: string[]): Promise<void> {
     case 'set': {
       const [rawSlot, rawState, ...label] = rest;
       const slot = Number(rawSlot);
-      if (!Number.isInteger(slot) || slot < 0 || slot >= SLOT_COUNT) {
-        throw new Error(`slot must be 0..${SLOT_COUNT - 1}`);
+      if (!Number.isInteger(slot) || slot < 0 || slot >= INTEGRATION_SLOT_COUNT) {
+        throw new Error(`slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
       }
       if (!normalizeState(rawState)) {
         throw new Error(`unknown state '${rawState ?? ''}', try: ${Object.keys(STATES).join(', ')}`);
@@ -161,8 +161,8 @@ async function main(argv: string[]): Promise<void> {
       }
       if (subcommand === 'open') {
         const slot = Number(rawSlot);
-        if (!Number.isInteger(slot) || slot < 0 || slot >= SLOT_COUNT) {
-          throw new Error(`VS Code slot must be 0..${SLOT_COUNT - 1}`);
+        if (!Number.isInteger(slot) || slot < 0 || slot >= INTEGRATION_SLOT_COUNT) {
+          throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
         }
         await request('POST', `/integrations/vscode/slots/${slot}/open`);
         return;

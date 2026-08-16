@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './device.js';
 import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
-import { STATES, SLOT_COUNT, DEFAULT_STATE } from './states.js';
+import { STATES, INTEGRATION_SLOT_COUNT, DEFAULT_STATE } from './states.js';
 import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
 import { readConfiguredAgentSlots } from './keymap.js';
 import { LocalAgentHostStateSource } from './agent-host.js';
@@ -24,7 +24,7 @@ if (process.env.AGENTKEYS_LOG) {
   process.on('uncaughtException', (err) => write('uncaught:', err.stack));
 }
 
-const slots: Slot[] = Array.from({ length: SLOT_COUNT }, (_, index) => ({
+const slots: Slot[] = Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => ({
   index,
   state: DEFAULT_STATE,
   label: null,
@@ -108,7 +108,7 @@ const vscode = new VSCodeIntegration({
   log,
   enabledSlots:
     process.env.AGENTKEYS_NO_DEVICE === '1'
-      ? Array.from({ length: SLOT_COUNT }, (_, index) => index)
+      ? Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => index)
       : [],
   agentHostSource: new LocalAgentHostStateSource({ log }),
   onSlot: async (binding: VSCodeSlot) => {

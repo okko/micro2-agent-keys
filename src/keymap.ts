@@ -1,5 +1,5 @@
 import type { DeviceLike } from './oai.js';
-import { SLOT_COUNT } from './states.js';
+import { INTEGRATION_SLOT_COUNT } from './states.js';
 
 const KEYMAP_FILE = 'keymap.json';
 const AGENT_KEYCODE = /^KV_OAI_AG(\d{2})$/;
@@ -19,7 +19,7 @@ function collectAgentSlots(value: unknown, slots: Set<number>): void {
     const match = value.match(AGENT_KEYCODE);
     if (!match) return;
     const slot = Number(match[1]);
-    if (slot < SLOT_COUNT) slots.add(slot);
+    if (slot < INTEGRATION_SLOT_COUNT) slots.add(slot);
     return;
   }
   if (Array.isArray(value)) {
