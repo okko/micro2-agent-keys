@@ -24,6 +24,7 @@ export interface DaemonApi {
   /** `state` is already normalized; resolves to the slot as recorded, once the lighting is sent. */
   setSlot(index: number, state: string, label: string | null): Promise<Slot>;
   reset(): Promise<Slot[]>;
+  demo(): Promise<void>;
   resetVSCodeSlots(): Promise<VSCodeSlot[]>;
 }
 
@@ -131,6 +132,11 @@ async function handle(api: DaemonApi, req: http.IncomingMessage, res: http.Serve
 
   if (req.method === 'POST' && url.pathname === '/reset') {
     return send(res, 200, { ok: true, slots: await api.reset() });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/demo') {
+    await api.demo();
+    return send(res, 200, { ok: true });
   }
 
   const match = url.pathname.match(/^\/slots\/(\d+)$/);

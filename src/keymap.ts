@@ -1,6 +1,14 @@
 import type { DeviceLike } from './oai.js';
 import { INTEGRATION_SLOT_COUNT } from './states.js';
 
+export {
+  CODEX_LAYER,
+  deviceLayerIndex,
+  deviceProfileIndex,
+  withTemporaryCodexLayer,
+  type LayerBuilder,
+} from './research/keymap.js';
+
 const KEYMAP_FILE = 'keymap.json';
 const AGENT_KEYCODE = /^KV_OAI_AG(\d{2})$/;
 

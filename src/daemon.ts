@@ -2,8 +2,9 @@ import * as fs from 'fs';
 import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './device.js';
 import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
 import { STATES, INTEGRATION_SLOT_COUNT, DEFAULT_STATE } from './states.js';
+import { runDemo } from './demo.js';
 import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
-import { readConfiguredAgentSlots } from './keymap.js';
+import { deviceLayerIndex, deviceProfileIndex, readConfiguredAgentSlots } from './keymap.js';
 import { LocalAgentHostStateSource } from './agent-host.js';
 import { createServer, HOST, PORT, type DaemonApi } from './daemon-http.js';
 import type { Slot } from './daemon-interfaces.js';
@@ -37,6 +38,7 @@ let reconnectTimer: NodeJS.Timeout | null = null;
 let reconcileTimer: NodeJS.Timeout | null = null;
 let pushGeneration = 0;
 const pendingPushes = new Set<Promise<void>>();
+let demoRunning: Promise<void> | null = null;
 let shuttingDown = false;
 let visibleDeviceCount = 0;
 let deviceVisibilityKnown = false;
@@ -67,7 +69,7 @@ function threadFor(slot: Slot): ThreadInput {
  */
 function push(changed?: Slot): Promise<void> {
   const current = device;
-  if (!current) return Promise.resolve();
+  if (!current || demoRunning) return Promise.resolve();
   const generation = ++pushGeneration;
   if (reconcileTimer) clearTimeout(reconcileTimer);
   reconcileTimer = null;
@@ -253,6 +255,36 @@ async function reset(): Promise<Slot[]> {
   return resetSlots;
 }
 
+/** Runs the temporary all-agentic layer demo on the layer that is active now. */
+async function demo(): Promise<void> {
+  if (demoRunning) throw new Error('demo already running');
+  const current = device;
+  if (!current) throw new Error('keyboard disconnected; cannot run demo');
+
+  const operation = (async () => {
+    const status = await current.call('device.status');
+    const profile = deviceProfileIndex(status);
+    const layer = deviceLayerIndex(status);
+    if (profile === null || profile < 0) throw new Error('keyboard did not report an active profile');
+    if (layer === null || layer < 1) throw new Error('keyboard did not report an active layer');
+    log(`demo targeting profile ${profile}, layer ${layer}`);
+
+    pushGeneration++;
+    if (reconcileTimer) clearTimeout(reconcileTimer);
+    reconcileTimer = null;
+    while (pendingPushes.size) await Promise.allSettled([...pendingPushes]);
+    if (device !== current) throw new Error('keyboard disconnected before demo started');
+    await runDemo(current, profile, layer);
+  })();
+  demoRunning = operation;
+  try {
+    await operation;
+  } finally {
+    if (demoRunning === operation) demoRunning = null;
+    if (!shuttingDown && device === current) await push();
+  }
+}
+
 /** Refreshes mapped AG indices from the connected keyboard, then frees every VS Code binding. */
 async function resetVSCodeSlots(): Promise<VSCodeSlot[]> {
   const current = device;
@@ -273,6 +305,7 @@ const api: DaemonApi = {
   slots: () => slots,
   setSlot,
   reset,
+  demo,
   resetVSCodeSlots,
 };
 
@@ -316,6 +349,7 @@ async function shutdown(signal: string): Promise<void> {
       // A failed connection has no live handle to close.
     }
   }
+  if (demoRunning) await Promise.allSettled([demoRunning]);
   while (pendingPushes.size) await Promise.allSettled([...pendingPushes]);
 
   const current = device;
