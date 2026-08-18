@@ -82,10 +82,21 @@ client, so hooks, shell aliases and editor tasks need no special entitlement.
 Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array of
 per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
 
-The daemon never touches your keymap. You bind the agent keycodes to a layer once, the
-way you want them, and from then on the daemon only sends colours. The lighting settings are
-independent of active layer: If you send a per-key state to a key in anothe layer, that key
-will reflect its current status as soon as you switch that layer to be the active one.
+The daemon normally never touches your keymap. You bind the agent keycodes to a layer once, the
+way you want them, and from then on the daemon only sends colours. The `agentkeys demo` command
+is the exception: it temporarily replaces the currently active layer with an all-agentic
+layer, sends a random solid colour from the state palette to every supported agent slot every five
+seconds for 30 seconds, then restores the exact original keymap before returning.
+
+The lighting settings are independent of active layer: If you send a per-key state to a key in
+another layer, that key will reflect its current status as soon as you switch that layer to be the
+active one.
+
+## CLI
+
+Use `agentkeys demo` to run the temporary all-agentic lighting demonstration. The command blocks
+until the 30-second run and keymap restoration are complete; it requires the AgentKeys daemon to
+be running and the keyboard to be connected.
 
 ## VS Code integration
 
