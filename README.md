@@ -1,4 +1,4 @@
-# micro2-agent-keys
+# AgentKeys
 
 Turn a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or a
 [Codex Micro](https://worklouder.cc/codex-micro) into an at-a-glance
