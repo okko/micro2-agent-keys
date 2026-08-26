@@ -68,8 +68,8 @@ function createSession(root, id, cwd) {
   return path.join(directory, 'events.jsonl');
 }
 
-function createNativeSession(nativeRoot, id, cwd) {
-  const directory = path.join(nativeRoot, 'workspace-id');
+function createNativeSession(nativeRoot, id, cwd, workspaceId = 'workspace-id') {
+  const directory = path.join(nativeRoot, workspaceId);
   const transcripts = path.join(directory, 'GitHub.copilot-chat', 'transcripts');
   const chatSessions = path.join(directory, 'chatSessions');
   fs.mkdirSync(transcripts, { recursive: true });
@@ -1642,6 +1642,46 @@ test('restart releases a native binding no longer active in VS Code', async (t) 
   t.after(() => second.stop());
   assert.equal(second.slots[0], null);
   assert.deepEqual(observed.map(({ slot, state }) => ({ slot, state })), [{ slot: 0, state: 'idle' }]);
+});
+
+test('restart preserves slot order for completed native sessions no longer active in VS Code', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const sessions = IDS.slice(0, 2).map((id, index) => {
+    const cwd = path.join(files.directory, `native-project-${index}`);
+    fs.mkdirSync(cwd);
+    return createNativeSession(files.nativeRoot, id, cwd, `workspace-${index}`);
+  });
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  for (let index = 0; index < sessions.length; index++) {
+    append(
+      sessions[index].eventsPath,
+      event('user.message'),
+      event('assistant.turn_start', { turnId: `turn-${index}` })
+    );
+    append(sessions[index].journalPath, {
+      kind: 2,
+      k: ['requests'],
+      v: [{
+        requestId: `request-${index}`,
+        response: [],
+        modelState: { value: 1, completedAt: 1785616803000 + index },
+      }],
+    });
+    await first.scan();
+  }
+  assert.deepEqual(first.slots.slice(0, 2).map((slot) => slot.sessionId), IDS.slice(0, 2));
+  first.stop();
+
+  const second = new VSCodeIntegration({
+    ...files,
+    scanIntervalMs: 60_000,
+    nativeSessionActive: () => false,
+  });
+  await second.start();
+  t.after(() => second.stop());
+  assert.deepEqual(second.slots.slice(0, 2).map((slot) => slot?.sessionId), IDS.slice(0, 2));
 });
 
 test('restart preserves the exact native session resource', async (t) => {

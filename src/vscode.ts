@@ -150,6 +150,8 @@ interface Candidate {
   journalPath: string | null;
   /** Native workspace state database path used for active-session checks during initial scan. */
   indexPath?: string;
+  /** Whether VS Code still lists this persisted native session as active during initial scan. */
+  nativeActive?: boolean | null;
   /** Session source discriminator (`native` or `copilot-cli`). */
   source: SessionSource;
   /** Exact session resource used to open the chat in VS Code. */
@@ -522,11 +524,6 @@ export class VSCodeIntegration {
         }
         const persisted = this.sessions.get(id);
         const persistedSlot = persisted?.boundSlot === null ? null : this.slots[persisted?.boundSlot ?? -1];
-        if (
-          initial &&
-          persistedSlot &&
-          this.nativeSessionActive(indexPath, id) === false
-        ) continue;
         candidates.push({
           id,
           cwd,
@@ -535,6 +532,9 @@ export class VSCodeIntegration {
           indexPath,
           source: SOURCE_NATIVE,
           resource: nativeSessionResource(id),
+          nativeActive: initial && persistedSlot
+            ? this.nativeSessionActive(indexPath, id)
+            : null,
         });
       }
     }
@@ -687,6 +687,15 @@ export class VSCodeIntegration {
             }
             session.startupReplay = null;
             startupSlots.add(slot.slot);
+            if (
+              initial &&
+              admitted.nativeActive === false &&
+              slot.state !== 'done' &&
+              slot.state !== 'idle'
+            ) {
+              session.boundSlot = null;
+              this.slots[slot.slot] = null;
+            }
           } else {
             session.startupReplay = null;
           }
@@ -766,11 +775,9 @@ export class VSCodeIntegration {
       const bytes = Buffer.byteLength(line) + 1;
       if (line.trim()) {
         try {
-          const replayOffset = session.startupReplay?.eventOffset;
           await this.applyEvent(
             session,
-            JSON.parse(line) as VSCodeEvent,
-            replayOffset !== null && replayOffset !== undefined && lineOffset < replayOffset
+            JSON.parse(line) as VSCodeEvent
           );
         } catch (err) {
           if (err instanceof SyntaxError) this.log(`Malformed VS Code event at ${session.id.slice(0, 8)}:${lineOffset}`);
@@ -1023,11 +1030,11 @@ export class VSCodeIntegration {
   }
 
   /** Applies one transcript- or hook-derived event to session and bound-slot state. */
-  async applyEvent(session: Session, event: VSCodeEvent, historicalReplay = false): Promise<void> {
+  async applyEvent(session: Session, event: VSCodeEvent): Promise<void> {
     updateCompatibility(session.compatibility, event, session.source);
     const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
-    if (transition.prompt && session.source === SOURCE_NATIVE && !historicalReplay) {
+    if (transition.prompt && session.source === SOURCE_NATIVE) {
       session.pendingNativePrompts++;
       if (session.pendingNativePromptCredits > 0) {
         const resolvedPrompts = Math.min(session.pendingNativePrompts, session.pendingNativePromptCredits);
