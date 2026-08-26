@@ -1465,6 +1465,42 @@ test('native restart reconstructs blocked and newly resolved journals', async (t
   assert.equal(third.sessions.get(IDS[0]).run.blockers.size, 0);
 });
 
+test('native restart repairs a stale running slot from its completed journal', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'native-request', response: [], modelState: { value: 0 } }],
+  });
+  await first.scan();
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 1, 'modelState'],
+    v: { value: 1, completedAt: 1785616803000 },
+  });
+  await first.scan();
+  assert.equal(first.slots[0].state, 'done');
+  first.stop();
+
+  const persisted = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  persisted.slots[0].state = 'running';
+  persisted.slots[0].doneAt = null;
+  fs.writeFileSync(files.statePath, JSON.stringify(persisted));
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0].state, 'done');
+  assert.equal(second.sessions.get(IDS[0]).run.terminal, 'complete');
+});
+
 test('native restart reconstructs an unstarted terminal confirmation', async (t) => {
   const files = fixture();
   t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));

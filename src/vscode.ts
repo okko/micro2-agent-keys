@@ -672,7 +672,10 @@ export class VSCodeIntegration {
           if (slot?.sessionId === session.id) {
             const staleIncompatibility = startup.slot.runError?.startsWith('incompatible:') &&
               session.run.error !== startup.slot.runError;
-            if (!changedWhileStopped && !staleIncompatibility) {
+            const staleNativeRunning = session.source === SOURCE_NATIVE &&
+              startup.slot.state === 'running' &&
+              slot.state === 'done';
+            if (!changedWhileStopped && !staleIncompatibility && !staleNativeRunning) {
               const eventOffset = slot.eventOffset;
               Object.assign(slot, startup.slot);
               slot.eventOffset = eventOffset;
