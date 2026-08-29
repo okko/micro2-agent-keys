@@ -54,6 +54,7 @@ interface StartupReplay {
   eventIdentity: string | null;
   journalOffset: number | null;
   journalIdentity: string | null;
+  nativeNeedsInput: boolean;
 }
 
 /** One key on the physical keyboard, bound to a VS Code session or idle. */
@@ -348,6 +349,7 @@ export class VSCodeIntegration {
       const eventIdentity = session.identity;
       const journalOffset = session.journalIdentity ? session.journalOffset : null;
       const journalIdentity = session.journalIdentity;
+      const nativeNeedsInput = session.nativeSnapshot.needsInput;
       session.boundSlot = index;
       session.offset = 0;
       session.journalOffset = 0;
@@ -380,6 +382,7 @@ export class VSCodeIntegration {
         eventIdentity,
         journalOffset,
         journalIdentity,
+        nativeNeedsInput,
       };
     }
   }
@@ -646,6 +649,14 @@ export class VSCodeIntegration {
               startup.journalIdentity !== `${stat.dev}:${stat.ino}` || startup.journalOffset !== stat.size;
           }
           await this.readAppended(session);
+          if (
+            startup &&
+            !changedWhileStopped &&
+            session.source === SOURCE_NATIVE &&
+            startup.nativeNeedsInput
+          ) {
+            session.pendingNativePrompts = 0;
+          }
           if (session.journalPath) await this.readJournalAppended(session);
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
@@ -674,7 +685,7 @@ export class VSCodeIntegration {
               session.run.error !== startup.slot.runError;
             const staleNativeRunning = session.source === SOURCE_NATIVE &&
               startup.slot.state === 'running' &&
-              slot.state === 'done';
+              slot.state !== 'running';
             if (!changedWhileStopped && !staleIncompatibility && !staleNativeRunning) {
               const eventOffset = slot.eventOffset;
               Object.assign(slot, startup.slot);

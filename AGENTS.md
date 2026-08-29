@@ -10,6 +10,8 @@ invoke the commit helper.
 
 `scripts/restart-agent.sh` will not work in the sandbox. Run it with unsandboxed
 execution so `launchctl` can restart the LaunchAgent in the user's GUI domain.
+The script only checks and kickstarts the `eu.okko.agentkeys` daemon; it does not
+stop input.app or write the keymap. Do not re-check the script before routine restarts.
 
 ## Tests
 

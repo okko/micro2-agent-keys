@@ -148,6 +148,54 @@ test('native chat projection gives parallel blockers stable compound identities'
   assert.equal(snapshot.blockers.has('active-request:elicitation2:position-6'), false);
 });
 
+test('native chat projection recognizes terminal confirmation metadata while the model is running', () => {
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: {
+      requests: [
+        {
+          requestId: 'active-request',
+          modelState: { value: 0 },
+          response: [
+            {
+              kind: 'toolInvocationSerialized',
+              toolCallId: 'terminal-call',
+              isComplete: true,
+              toolSpecificData: {
+                requestUnsandboxedExecution: false,
+                requestAllowNetwork: false,
+                confirmation: { commandLine: {} },
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  let snapshot = projection.snapshot();
+  assert.equal(snapshot.needsInput, false);
+  assert.deepEqual(
+    [...snapshot.blockers.values()].map(({ sourceId, kind }) => [sourceId, kind]),
+    [['terminal-call', 'tool-confirmation']]
+  );
+
+  projection.apply({
+    kind: 1,
+    k: ['requests', 0, 'response', 0, 'isConfirmed'],
+    v: { type: 4 },
+  });
+  projection.apply({
+    kind: 1,
+    k: ['requests', 0, 'response', 0, 'toolSpecificData', 'terminalCommandState'],
+    v: { exitCode: 0 },
+  });
+  snapshot = projection.snapshot();
+  assert.equal(snapshot.blockers.size, 0);
+  assert.equal(snapshot.busy, true);
+});
+
 test('native chat projection covers every Phase 4 response lifecycle', () => {
   const cases = [
     {
@@ -274,6 +322,43 @@ test('resolved serialized elicitation preserves a hook-reported terminal permiss
   assert.equal(state, 'input');
   assert.equal(run.error, null);
   assert.equal(run.blockers.size, 1);
+});
+
+test('visible rejected serialized elicitation remains waiting for native confirmation', () => {
+  const projection = new NativeChatProjection();
+  projection.apply({
+    kind: 0,
+    v: {
+      requests: [{
+        requestId: 'terminal-confirmation',
+        response: [{
+          kind: 'toolInvocationSerialized',
+          toolCallId: 'terminal-tool',
+          isConfirmed: { type: 1 },
+          isComplete: true,
+          toolSpecificData: {
+            kind: 'terminal',
+            requestUnsandboxedExecution: false,
+            terminalCommandState: { exitCode: 1 },
+          },
+        }, {
+          kind: 'elicitationSerialized',
+          title: { value: 'Run zsh command outside the sandbox?' },
+          state: 'rejected',
+          isHidden: false,
+        }],
+        modelState: { value: 4 },
+      }],
+    },
+  });
+
+  const snapshot = projection.snapshot();
+  assert.equal(snapshot.needsInput, true);
+  assert.deepEqual([...snapshot.blockers.values()].map(({ kind }) => kind), ['elicitation']);
+  assert.deepEqual(snapshot.incompatibilities, []);
+
+  projection.apply({ kind: 1, k: ['requests', 0, 'response', 1, 'isHidden'], v: true });
+  assert.equal(projection.snapshot().blockers.size, 0);
 });
 
 test('native projection rejects unknown tool state numbers beside resolved input', () => {

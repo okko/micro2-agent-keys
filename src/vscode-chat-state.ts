@@ -210,11 +210,13 @@ interface NativeResponsePart {
   resolveId?: unknown;
   isConfirmed?: unknown;
   isComplete?: unknown;
+  isHidden?: unknown;
   isUsed?: unknown;
   state?: unknown;
   toolSpecificData?: {
     requestUnsandboxedExecution?: unknown;
     requestAllowNetwork?: unknown;
+    confirmation?: unknown;
     terminalCommandState?: unknown;
   };
 }
@@ -523,7 +525,11 @@ function blockerForPart(
     else if (
       part.isConfirmed == null &&
       part.toolSpecificData?.terminalCommandState == null &&
-      (knownToolConfirmationIds.has(toolCallId) || requestsPermission(part.toolSpecificData))
+      (
+        knownToolConfirmationIds.has(toolCallId) ||
+        requestsPermission(part.toolSpecificData) ||
+        part.toolSpecificData?.confirmation != null
+      )
     ) kind = 'tool-confirmation';
   } else if (partKind === 'confirmation' && !part.isUsed) {
     kind = 'confirmation';
@@ -536,6 +542,8 @@ function blockerForPart(
       ? part.state
       : (part.state as { value?: unknown } | null)?.value;
     if (state === 'pending') kind = 'elicitation';
+  } else if (partKind === 'elicitationSerialized' && part.isHidden === false) {
+    kind = 'elicitation';
   }
 
   if (!kind) return null;
@@ -555,6 +563,7 @@ function isResolvedHumanInputPart(part: NativeResponsePart): boolean {
       (stateType !== undefined || part.isConfirmed != null || part.isComplete === true);
   }
   if (['confirmation', 'questionCarousel', 'planReview'].includes(partKind)) return part.isUsed === true;
+  if (partKind === 'elicitationSerialized' && part.isHidden === false) return false;
   return (partKind === 'elicitation2' || partKind === 'elicitationSerialized') &&
     stateValue !== undefined && stateValue !== 'pending';
 }
@@ -845,9 +854,16 @@ export function reduceEvent(
 ): Transition {
   const data = event?.data;
   const hookType = data?.hookType;
+  const steering =
+    source === SOURCE_NATIVE &&
+    event?.type === 'user.message' &&
+    run.active &&
+    run.turns.size > 0;
   const prompt =
     (event?.type === 'hook.start' && hookType === 'userPromptSubmitted') ||
-    event?.type === 'user.message';
+    (event?.type === 'user.message' && !steering);
+
+  if (steering) return { run, prompt: false, state: runState(run) };
 
   if (prompt) {
     run = emptyRun();

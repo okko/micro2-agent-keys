@@ -323,6 +323,53 @@ test('wires bound Agent Host sessions to authoritative protocol state', async (t
   assert.equal(source.stopped, true);
 });
 
+test('native visible serialized terminal confirmation sets slot to input', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{
+      requestId: 'native-request',
+      response: [{
+        kind: 'toolInvocationSerialized',
+        toolCallId: 'terminal-tool',
+        isConfirmed: { type: 1 },
+        isComplete: true,
+        toolSpecificData: {
+          kind: 'terminal',
+          requestUnsandboxedExecution: false,
+          terminalCommandState: { exitCode: 1 },
+        },
+      }, {
+        kind: 'elicitationSerialized',
+        title: { value: 'Run zsh command outside the sandbox?' },
+        state: 'rejected',
+        isHidden: false,
+      }],
+      modelState: { value: 4 },
+    }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'input');
+
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 1, 'response', 1, 'isHidden'],
+    v: true,
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+});
+
 test('parses quoted workspace metadata', () => {
   assert.deepEqual(
     workspaceMetadata('id: abc\ncwd: "/tmp/project space"\nclient_name: vscode-agent-host\n'),
@@ -876,6 +923,41 @@ test('native journal can finish a running slot when request insertion arrives be
   await integration.scan();
   assert.equal(integration.slots[0].state, 'done');
   assert.ok(integration.slots[0].doneAt);
+});
+
+test('native steering messages do not block same-request journal completion', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message', {}, '2026-08-12T17:00:47.019Z'),
+    event('assistant.turn_start', { turnId: 'active-turn' }, '2026-08-12T17:00:47.120Z')
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'active-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(eventsPath, event('user.message', {}, '2026-08-12T17:00:48.000Z'));
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 1, 'modelState'],
+    v: { value: 1, completedAt: 1786554049000 },
+  });
+  await integration.scan();
+
+  assert.equal(integration.sessions.get(IDS[0]).pendingNativePrompts, 0);
+  assert.equal(integration.slots[0].state, 'done');
 });
 
 test('native session discovered after startup publishes its completed journal', async (t) => {
@@ -1499,6 +1581,48 @@ test('native restart repairs a stale running slot from its completed journal', a
   t.after(() => second.stop());
   assert.equal(second.slots[0].state, 'done');
   assert.equal(second.sessions.get(IDS[0]).run.terminal, 'complete');
+});
+
+test('native restart repairs a stale running slot from a visible confirmation', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Native project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const first = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await first.start();
+  append(eventsPath, event('user.message'), event('assistant.turn_start', { turnId: 'native-turn' }));
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{
+      requestId: 'native-request',
+      response: [{
+        kind: 'elicitationSerialized',
+        state: 'rejected',
+        isHidden: false,
+      }],
+      modelState: { value: 4 },
+    }],
+  });
+  await first.scan();
+  assert.equal(first.slots[0].state, 'input');
+  first.stop();
+
+  append(eventsPath, event('user.message', {}, '2026-08-01T10:00:01.000Z'));
+  const persisted = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  persisted.slots[0].state = 'running';
+  const eventStat = fs.statSync(eventsPath);
+  persisted.slots[0].eventOffset = eventStat.size;
+  const persistedSession = persisted.sessions.find(({ id }) => id === IDS[0]);
+  persistedSession.offset = eventStat.size;
+  persistedSession.identity = `${eventStat.dev}:${eventStat.ino}`;
+  fs.writeFileSync(files.statePath, JSON.stringify(persisted));
+
+  const second = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await second.start();
+  t.after(() => second.stop());
+  assert.equal(second.slots[0].state, 'input');
 });
 
 test('native restart reconstructs an unstarted terminal confirmation', async (t) => {
