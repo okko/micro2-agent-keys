@@ -40,6 +40,9 @@ function fakeApi({ vscode, ...overrides } = {}) {
       calls.push(['reset']);
       return [slot(0, 'idle'), slot(1, 'idle')];
     },
+    demo: async () => {
+      calls.push(['demo']);
+    },
     resetVSCodeSlots: async () => {
       calls.push(['resetVSCodeSlots']);
       return [{ slot: 0, state: 'idle' }];
@@ -77,6 +80,7 @@ const server = createServer({
   slots: () => api.slots(),
   setSlot: (...args) => api.setSlot(...args),
   reset: () => api.reset(),
+  demo: () => api.demo(),
   resetVSCodeSlots: () => api.resetVSCodeSlots(),
 });
 server.listen(PORT, HOST);
@@ -151,6 +155,15 @@ test('POST /reset returns the slots the api recorded', async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, slots: [slot(0, 'idle'), slot(1, 'idle')] });
   assert.deepEqual(api.calls, [['reset']]);
+});
+
+test('POST /demo delegates to the demo operation', async () => {
+  api = fakeApi();
+
+  const response = await post('/demo');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.deepEqual(api.calls, [['demo']]);
 });
 
 test('VS Code routes delegate to the integration', async () => {

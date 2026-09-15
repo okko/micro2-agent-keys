@@ -3,9 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { DeviceLike } from '../oai.js';
 
-// Research support only. The daemon never writes keymap.json - you bind the agent
-// keycodes yourself, once. Everything here exists so test scripts can install a layer
-// temporarily and be sure of putting the original back.
+// Temporary keymap support for experiments and the CLI demo. All callers must use
+// a wrapper that restores the original keymap instead of leaving a replacement live.
 
 const KEYMAP_FILE = 'keymap.json';
 const MARKER = 'KV_OAI_AG00';
@@ -177,7 +176,64 @@ export async function withCodexLayer<T>(
   }
 }
 
+/** Replaces one live layer for the duration of a callback and restores its exact source text. */
+export async function withTemporaryCodexLayer<T>(
+  device: DeviceLike,
+  profileIndex: number,
+  layerNumber: number,
+  fn: () => T | Promise<T>,
+  buildLayer: LayerBuilder = codexLayer,
+  exitOnSignal = true
+): Promise<T> {
+  const original = await readKeymap(device);
+  const keymap = JSON.parse(original) as KeymapDocument;
+  const index = layerNumber - 1;
+  const layers = keymap.profiles[profileIndex]?.layers;
+  if (!layers) throw new Error(`profile ${profileIndex} has no layers`);
+  if (index < 0 || index >= layers.length) {
+    throw new Error(`layer ${layerNumber} does not exist (keymap has ${layers.length})`);
+  }
+
+  layers[index] = buildLayer(layers[index], index);
+  const next = JSON.stringify(keymap);
+  let restoreNeeded = next !== original;
+  let restoring: Promise<void> | null = null;
+  const restoreOnce = (): Promise<void> => (restoring ??= (async () => {
+    if (!restoreNeeded) return;
+    await writeKeymap(device, original);
+    if ((await readKeymap(device)) !== original) throw new Error('keymap restore verification failed');
+    restoreNeeded = false;
+  })());
+
+  const onSignal = (signal: NodeJS.Signals): void => {
+    restoreOnce().finally(() => {
+      if (exitOnSignal) process.exit(signal === 'SIGINT' ? 130 : 143);
+    });
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
+  try {
+    if (restoreNeeded) {
+      await writeKeymap(device, next);
+      if ((await readKeymap(device)) !== next) throw new Error('temporary keymap verification failed');
+    }
+    return await fn();
+  } finally {
+    try {
+      await restoreOnce();
+    } finally {
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+    }
+  }
+}
+
 export function deviceLayerIndex(status: unknown): number | null {
   if (typeof status !== 'object' || status === null || !('layer_index' in status)) return null;
   return typeof status.layer_index === 'number' ? status.layer_index : null;
+}
+
+export function deviceProfileIndex(status: unknown): number | null {
+  if (typeof status !== 'object' || status === null || !('profile_index' in status)) return null;
+  return typeof status.profile_index === 'number' ? status.profile_index : null;
 }

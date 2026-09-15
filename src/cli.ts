@@ -12,6 +12,7 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys set <slot> <state> [label]   set one slot (slot 0..${INTEGRATION_SLOT_COUNT - 1})
   agentkeys status                       show all slots
   agentkeys reset                        set every slot to idle
+  agentkeys demo                         show a 30-second all-agentic color demo
   agentkeys list-states                  list valid state names
   agentkeys log                          follow the daemon log
 
@@ -125,6 +126,10 @@ async function main(argv: string[]): Promise<void> {
 
     case 'reset':
       await request('POST', '/reset');
+      return;
+
+    case 'demo':
+      await request('POST', '/demo');
       return;
 
     case 'list-states':
