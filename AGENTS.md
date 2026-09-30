@@ -10,6 +10,11 @@ invoke the commit helper.
 
 `scripts/restart-agent.sh` will not work in the sandbox. Run it with unsandboxed
 execution so `launchctl` can restart the LaunchAgent in the user's GUI domain.
+If the command tool offers an explicit unsandboxed execution mode, use it for
+`scripts/restart-agent.sh` from the repository root. Otherwise, ask the user to
+run `./scripts/restart-agent.sh` from the repository root in their normal macOS
+Terminal session (not the agent's sandboxed shell). Do not retry
+`launchctl` in the sandbox or use `sudo` to work around the restriction.
 The script only checks and kickstarts the `eu.okko.agentkeys` daemon; it does not
 stop input.app or write the keymap. Do not re-check the script before routine restarts.
 
