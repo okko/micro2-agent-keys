@@ -120,6 +120,10 @@ interface Session {
   nativeRequestCount: number;
   /** Transcript prompts not yet matched by authoritative native request insertion. */
   pendingNativePrompts: number;
+  /** Journal request count before the first unmatched native prompt. */
+  pendingNativePromptRequestCount: number;
+  /** Timestamp of the latest native prompt, used to reject stale journal completions. */
+  latestNativePromptAt: number | null;
   /** Surplus native request insertions that arrived before transcript prompts. */
   pendingNativePromptCredits: number;
   /** Reduced execution state for slot mapping (running/input/error/done). */
@@ -304,6 +308,8 @@ export class VSCodeIntegration {
         nativeSnapshot: nativeProjection.snapshot(),
         nativeRequestCount: nativeProjection.requestCount(),
         pendingNativePrompts: 0,
+        pendingNativePromptRequestCount: nativeProjection.requestCount(),
+        latestNativePromptAt: null,
         pendingNativePromptCredits: 0,
         run: emptyRun(),
         compatibility: { ...emptyCompatibility(), ...raw.compatibility },
@@ -336,6 +342,8 @@ export class VSCodeIntegration {
           nativeSnapshot: nativeProjection.snapshot(),
           nativeRequestCount: nativeProjection.requestCount(),
           pendingNativePrompts: 0,
+          pendingNativePromptRequestCount: nativeProjection.requestCount(),
+          latestNativePromptAt: null,
           pendingNativePromptCredits: 0,
           run: emptyRun(),
           compatibility: emptyCompatibility(),
@@ -594,6 +602,8 @@ export class VSCodeIntegration {
             nativeSnapshot: nativeProjection.snapshot(),
             nativeRequestCount: nativeProjection.requestCount(),
             pendingNativePrompts: 0,
+            pendingNativePromptRequestCount: nativeProjection.requestCount(),
+            latestNativePromptAt: null,
             pendingNativePromptCredits: 0,
             run: emptyRun(),
             compatibility: inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath),
@@ -626,6 +636,8 @@ export class VSCodeIntegration {
           journalOffset: session.journalOffset,
           journalIdentity: session.journalIdentity,
           pendingNativePrompts: session.pendingNativePrompts,
+          pendingNativePromptRequestCount: session.pendingNativePromptRequestCount,
+          latestNativePromptAt: session.latestNativePromptAt,
           pendingNativePromptCredits: session.pendingNativePromptCredits,
           run: cloneRun(session.run),
           compatibility: { ...session.compatibility },
@@ -666,6 +678,8 @@ export class VSCodeIntegration {
           session.journalOffset = checkpoint.journalOffset;
           session.journalIdentity = checkpoint.journalIdentity;
           session.pendingNativePrompts = checkpoint.pendingNativePrompts;
+          session.pendingNativePromptRequestCount = checkpoint.pendingNativePromptRequestCount;
+          session.latestNativePromptAt = checkpoint.latestNativePromptAt;
           session.pendingNativePromptCredits = checkpoint.pendingNativePromptCredits;
           session.run = checkpoint.run;
           session.compatibility = checkpoint.compatibility;
@@ -871,6 +885,18 @@ export class VSCodeIntegration {
     session.nativeRequestCount = requestCount;
     session.nativeSnapshot = current;
 
+    if (
+      !session.startupReplay &&
+      session.pendingNativePrompts > 0 &&
+      requestCount > session.pendingNativePromptRequestCount &&
+      current.terminal &&
+      session.latestNativePromptAt !== null
+    ) {
+      const completedAt = session.nativeProjection.completionTimestamp();
+      if (completedAt !== null && new Date(completedAt).getTime() >= session.latestNativePromptAt) {
+        session.pendingNativePrompts = 0;
+      }
+    }
     if (session.pendingNativePrompts > 0 || !current.requestId) return;
 
     const normalized = snapshotEvents(session.run, current, {
@@ -1047,7 +1073,12 @@ export class VSCodeIntegration {
     const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
     if (transition.prompt && session.source === SOURCE_NATIVE) {
+      if (session.pendingNativePrompts === 0) {
+        session.pendingNativePromptRequestCount = session.nativeRequestCount;
+      }
       session.pendingNativePrompts++;
+      const promptAt = Date.parse(event.timestamp ?? '');
+      session.latestNativePromptAt = Number.isNaN(promptAt) ? null : promptAt;
       if (session.pendingNativePromptCredits > 0) {
         const resolvedPrompts = Math.min(session.pendingNativePrompts, session.pendingNativePromptCredits);
         session.pendingNativePrompts -= resolvedPrompts;

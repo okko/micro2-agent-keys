@@ -851,7 +851,7 @@ test('native journal ignores an old completion until the prompted request is ins
   append(journalPath, {
     kind: 1,
     k: ['requests', 0, 'modelState'],
-    v: { value: 1, completedAt: 1785616801000 },
+    v: { value: 1, completedAt: Date.parse('2026-08-12T17:00:48.000Z') },
   });
   await integration.scan();
   assert.equal(integration.slots[0].state, 'running');
@@ -874,6 +874,40 @@ test('native journal ignores an old completion until the prompted request is ins
   await integration.scan();
   assert.equal(integration.slots[0].state, 'done');
   assert.deepEqual(observed, ['running', 'done']);
+});
+
+test('native journal completion settles surplus Autopilot prompts for the latest request', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const cwd = path.join(files.directory, 'Autopilot project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  const integration = new VSCodeIntegration({ ...files, scanIntervalMs: 60_000 });
+  await integration.start();
+  t.after(() => integration.stop());
+
+  append(
+    eventsPath,
+    event('user.message', {}, '2026-08-12T17:00:47.019Z'),
+    event('assistant.turn_start', { turnId: 'autopilot-turn' }, '2026-08-12T17:00:47.120Z'),
+    event('assistant.turn_end', { turnId: 'autopilot-turn' }, '2026-08-12T17:00:48.000Z'),
+    event('user.message', {}, '2026-08-12T17:00:49.000Z')
+  );
+  append(journalPath, {
+    kind: 2,
+    k: ['requests'],
+    v: [{ requestId: 'autopilot-request', response: [], modelState: { value: 0 } }],
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  append(journalPath, {
+    kind: 1,
+    k: ['requests', 1, 'modelState'],
+    v: { value: 1, completedAt: Date.parse('2026-08-12T17:00:50.000Z') },
+  });
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'done');
 });
 
 test('native journal can finish a running slot when request insertion arrives before transcript prompt', async (t) => {
