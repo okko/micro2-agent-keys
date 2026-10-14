@@ -737,9 +737,7 @@ function agentHostTerminal(turn: AgentHostTurn | undefined): ChatExecutionSnapsh
   return 'complete';
 }
 
-/** Projects the source-independent Agent Host chat protocol state. The protocol
- * state is not currently present in session.db, so callers apply a complete
- * snapshot whenever an authoritative protocol source becomes available. */
+/** Projects reducer-maintained AHP chat state into the keyboard's execution states. */
 export class AgentHostChatProjection {
   private state: AgentHostChatState | null = null;
 

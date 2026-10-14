@@ -49,6 +49,7 @@ gets no logging for free.
 |---|---|---|
 | `AGENTKEYS_PORT` | daemon, CLI | HTTP port, default `8787` |
 | `AGENTKEYS_LOG` | daemon, probe, layertest, mixedlayertest, backlighttest | redirect output to a file |
+| `AGENTKEYS_VSCODE_USER_DATA` | AHP observer | VS Code user-data directory containing `agent-host/local-endpoint`; defaults to the macOS stable Code directory |
 | `AGENTKEYS_TEST_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
 | `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
 | `AGENTKEYS_PHASE_MS` | backlighttest, ag1819test | per-phase observation window |

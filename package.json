@@ -25,6 +25,7 @@
     "test": "npm run build --silent && node --test test/*.test.mjs test/*.test.js"
   },
   "dependencies": {
+    "@microsoft/agent-host-protocol": "^1.0.0",
     "node-hid": "^3.4.0",
     "ws": "^8.21.3"
   },

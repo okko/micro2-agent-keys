@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import type { AgentHostStateSource } from './agent-host.js';
+import type { AgentHostSession, AgentHostStateSource } from './agent-host.js';
 import { INTEGRATION_SLOT_COUNT } from './states.js';
 import {
   AgentHostChatProjection,
@@ -30,6 +30,8 @@ import {
   RESOURCE_SCHEME,
   SESSION_ID,
   buildSessionUrl,
+  copilotSessionResource,
+  copilotSessionSdkId,
   exactOpenCompatibility,
   launchUrl,
   nativeSessionActive,
@@ -89,9 +91,14 @@ export interface VSCodeSlot {
   runError?: string | null;
   /** Last consumed transcript byte offset associated with this slot. */
   eventOffset?: number;
+  /** Authoritative observation source; absent for legacy filesystem sessions. */
+  observation?: 'ahp';
 }
 
 interface Session {
+  observation?: 'ahp';
+  /** SDK transcript alias, retained when AHP takes over observation. */
+  sdkSessionId?: string;
   /** Canonical VS Code chat session UUID (validated by {@link SESSION_ID}). */
   id: string;
   /** Absolute workspace path for the session, used for labels and exact-session URLs. */
@@ -145,6 +152,7 @@ interface Session {
  * merged into tracked {@link Session} state.
  */
 interface Candidate {
+  observation?: 'ahp';
   /** Canonical VS Code chat session UUID (validated by {@link SESSION_ID}). */
   id: string;
   /** Absolute workspace path resolved from workspace metadata/URI. */
@@ -164,6 +172,8 @@ interface Candidate {
 }
 
 interface PersistedSession {
+  observation?: 'ahp';
+  sdkSessionId?: string;
   id: string;
   cwd?: string | null;
   eventsPath: string;
@@ -188,6 +198,7 @@ export interface VSCodeIntegrationOptions {
   root?: string;
   nativeRoot?: string;
   statePath?: string;
+  agentHostUserDataPath?: string;
   enabledSlots?: Iterable<number>;
   agentHostSource?: AgentHostStateSource;
   onSlot?: (slot: VSCodeSlot) => void | Promise<void>;
@@ -224,6 +235,7 @@ export interface DoctorInfo {
 }
 
 export class VSCodeIntegration {
+  private readonly agentHostUserDataPath: string | undefined;
   root: string;
   nativeRoot: string;
   statePath: string;
@@ -243,6 +255,7 @@ export class VSCodeIntegration {
 
   /** Initializes integration paths, callbacks, and in-memory slot/session state. */
   constructor(options: VSCodeIntegrationOptions = {}) {
+    this.agentHostUserDataPath = options.agentHostUserDataPath;
     this.root =
       options.root ?? path.join(process.env.COPILOT_HOME ?? path.join(os.homedir(), '.copilot'), 'session-state');
     this.nativeRoot =
@@ -289,11 +302,15 @@ export class VSCodeIntegration {
     }
     for (const raw of saved.sessions ?? []) {
       if (!SESSION_ID.test(raw.id) || !Number.isInteger(raw.offset) || raw.offset < 0) continue;
-      const nativeProjection = nativeProjectionFromFile(raw.journalPath ?? null);
+      const nativeProjection = raw.observation === 'ahp'
+        ? new NativeChatProjection() : nativeProjectionFromFile(raw.journalPath ?? null);
       this.sessions.set(raw.id, {
+        observation: raw.observation,
+        sdkSessionId: raw.sdkSessionId ??
+          (raw.observation !== 'ahp' && raw.source !== SOURCE_NATIVE ? raw.id : undefined),
         id: raw.id,
         cwd: raw.cwd ?? '',
-        eventsPath: raw.source === SOURCE_NATIVE ? raw.eventsPath : this.eventsPath(raw.id),
+        eventsPath: raw.observation === 'ahp' ? '' : raw.source === SOURCE_NATIVE ? raw.eventsPath : this.eventsPath(raw.id),
         journalPath: raw.journalPath ?? null,
         source: raw.source ?? SOURCE_COPILOT_CLI,
         resource: raw.resource ?? `${RESOURCE_SCHEME}:/${raw.id}`,
@@ -326,8 +343,11 @@ export class VSCodeIntegration {
       const sessionId = raw.sessionId as string;
       let session = this.sessions.get(sessionId);
       if (!session) {
-        const nativeProjection = nativeProjectionFromFile(raw.journalPath ?? null);
+        const nativeProjection = raw.observation === 'ahp'
+          ? new NativeChatProjection() : nativeProjectionFromFile(raw.journalPath ?? null);
         session = {
+          observation: raw.observation,
+          sdkSessionId: raw.observation !== 'ahp' && raw.source !== SOURCE_NATIVE ? sessionId : undefined,
           id: sessionId,
           cwd: raw.cwd ?? '',
           eventsPath: raw.eventsPath ?? this.eventsPath(sessionId),
@@ -368,6 +388,7 @@ export class VSCodeIntegration {
       session.run = emptyRun();
       this.sessions.set(session.id, session);
       this.slots[index] = {
+        observation: session.observation,
         slot: index,
         sessionId: session.id,
         cwd: session.cwd,
@@ -392,6 +413,16 @@ export class VSCodeIntegration {
         journalIdentity,
         nativeNeedsInput,
       };
+      if (session.observation === 'ahp' && (raw.state === 'running' || raw.state === 'input')) {
+        session.run.active = true;
+        session.run.error = 'agent-host-state-unavailable';
+        const restoredSlot = this.slots[index];
+        if (restoredSlot) {
+          restoredSlot.state = 'error';
+          restoredSlot.runError = session.run.error;
+          restoredSlot.stateChangedAt = new Date().toISOString();
+        }
+      }
     }
   }
 
@@ -407,6 +438,8 @@ export class VSCodeIntegration {
       schemaVersion: SCHEMA_VERSION,
       slots: this.slots,
       sessions: [...this.sessions.values()].map((session) => ({
+        observation: session.observation,
+        sdkSessionId: session.sdkSessionId,
         id: session.id,
         cwd: session.cwd,
         eventsPath: session.eventsPath,
@@ -434,7 +467,7 @@ export class VSCodeIntegration {
     this.load();
     this.started = true;
     this.agentHostSource?.start(
-      (sessionId, state) => this.applyAgentHostChatState(sessionId, state).then(() => undefined),
+      (sessionId, state, session) => this.applyAgentHostChatState(sessionId, state, session).then(() => undefined),
       (sessionIds) => this.markAgentHostStateUnavailable(sessionIds)
     );
     try {
@@ -525,6 +558,7 @@ export class VSCodeIntegration {
       for (const file of files) {
         const id = path.basename(file, '.jsonl');
         if (file !== `${id}.jsonl` || !SESSION_ID.test(id)) continue;
+        if (this.sessions.get(id)?.observation === 'ahp' || this.agentHostSessionForSdk(id)) continue;
         const eventsPath = path.join(transcripts, file);
         const chatPath = path.join(directory, 'chatSessions', file);
         try {
@@ -565,11 +599,27 @@ export class VSCodeIntegration {
       } catch {
         // Root does not exist yet; native candidates may still be usable.
       }
+      const sdkCandidates = ids
+        .filter((id) => this.sessions.get(id)?.observation !== 'ahp')
+        .map((id) => this.admit(id)).filter((candidate): candidate is Candidate => candidate !== null);
+      if (sdkCandidates.some((candidate) => !this.agentHostSessionForSdk(candidate.id) &&
+          this.sessions.get(candidate.id)?.offset !== fs.statSync(candidate.eventsPath).size)) {
+        for (const session of [...this.sessions.values()]) {
+          if (session.observation === 'ahp') await this.reconcileAgentHostAlias(session);
+        }
+      }
       const candidatesById = new Map(
         this.nativeCandidates(initial).map((candidate) => [candidate.id, candidate] as const)
       );
-      for (const candidate of ids.map((id) => this.admit(id)).filter((c): c is Candidate => c !== null)) {
+      for (const candidate of sdkCandidates.filter((candidate) => !this.agentHostSessionForSdk(candidate.id))) {
         candidatesById.set(candidate.id, candidate);
+      }
+      for (const session of this.sessions.values()) {
+        if (session.observation !== 'ahp') continue;
+        candidatesById.set(session.id, {
+          id: session.id, cwd: session.cwd, source: session.source, resource: session.resource,
+          eventsPath: '', journalPath: null, observation: 'ahp',
+        });
       }
       const candidates = [...candidatesById.values()];
       if (!candidates.length && !fs.existsSync(this.root) && !fs.existsSync(this.nativeRoot)) {
@@ -578,8 +628,17 @@ export class VSCodeIntegration {
       const admittedIds = new Set<string>();
       for (const admitted of candidates) {
         const { id } = admitted;
+        if (admitted.source === SOURCE_COPILOT_CLI && this.agentHostSessionForSdk(id)) continue;
         admittedIds.add(id);
         let session = this.sessions.get(id);
+        if (session?.observation === 'ahp') {
+          session.missingScans = 0;
+          if (session.startupReplay) {
+            session.startupReplay = null;
+            startupSlots.add(session.boundSlot ?? -1);
+          }
+          continue;
+        }
         if (!session) {
           const stat = fs.statSync(admitted.eventsPath);
           const nativeProjection = initial
@@ -587,6 +646,7 @@ export class VSCodeIntegration {
             : new NativeChatProjection();
           session = {
             id,
+            sdkSessionId: admitted.source === SOURCE_COPILOT_CLI ? id : undefined,
             cwd: admitted.cwd,
             eventsPath: admitted.eventsPath,
             journalPath: admitted.journalPath ?? null,
@@ -618,8 +678,11 @@ export class VSCodeIntegration {
           session.cwd = admitted.cwd;
           session.eventsPath = admitted.eventsPath;
           session.journalPath = admitted.journalPath ?? null;
+          session.sdkSessionId = admitted.source === SOURCE_COPILOT_CLI ? id : undefined;
+          if (session.source !== SOURCE_COPILOT_CLI || admitted.source !== SOURCE_COPILOT_CLI) {
+            session.resource = admitted.resource;
+          }
           session.source = admitted.source;
-          session.resource = admitted.resource;
           if (!session.compatibility.producer) {
             session.compatibility = inspectCompatibility(admitted.eventsPath, admitted.source, admitted.journalPath);
           }
@@ -730,7 +793,7 @@ export class VSCodeIntegration {
       for (const slot of this.slots) {
         if (!slot || !slot.sessionId || admittedIds.has(slot.sessionId)) continue;
         const session = this.sessions.get(slot.sessionId);
-        if (!session) continue;
+        if (!session || session.observation === 'ahp') continue;
         if (initial) {
           session.boundSlot = null;
           this.slots[slot.slot] = null;
@@ -762,7 +825,7 @@ export class VSCodeIntegration {
       this.scanning = false;
       this.agentHostSource?.setSessions(
         [...this.sessions.values()]
-          .filter((session) => session.source === SOURCE_COPILOT_CLI && session.boundSlot !== null)
+          .filter((session) => (session.observation === 'ahp' || session.source === SOURCE_COPILOT_CLI) && session.boundSlot !== null)
           .map((session) => session.id)
       );
     }
@@ -770,6 +833,7 @@ export class VSCodeIntegration {
 
     /** Reads newly appended transcript events and applies them to a tracked session. */
   async readAppended(session: Session): Promise<void> {
+    if (session.observation === 'ahp') return;
     const stat = fs.statSync(session.eventsPath);
     const identity = `${stat.dev}:${stat.ino}`;
     if (session.identity && session.identity !== identity) {
@@ -821,6 +885,7 @@ export class VSCodeIntegration {
 
   /** Reads newly appended native journal patches and reconciles authoritative state. */
   async readJournalAppended(session: Session): Promise<void> {
+    if (session.observation === 'ahp') return;
     if (!session.journalPath) return;
     const stat = fs.statSync(session.journalPath);
     const identity = `${stat.dev}:${stat.ino}`;
@@ -942,22 +1007,140 @@ export class VSCodeIntegration {
     return events;
   }
 
-  /** Applies one complete Agent Host protocol chat snapshot. The persisted
-   * source is not available yet; its adapter can feed this method directly. */
-  async applyAgentHostChatState(sessionId: string, state: unknown): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    if (!session || session.source !== SOURCE_COPILOT_CLI || session.boundSlot === null) return false;
+  private agentHostSessionForSdk(sdkSessionId: string): Session | undefined {
+    return [...this.sessions.values()].find((session) =>
+      session.observation === 'ahp' && session.id !== sdkSessionId && session.sdkSessionId === sdkSessionId
+    );
+  }
+
+  private async reconcileAgentHostAlias(session: Session): Promise<{ rebound: boolean; released: number[] } | null> {
+    if (session.source !== SOURCE_COPILOT_CLI || !session.resource.startsWith(`${RESOURCE_SCHEME}:/`)) return null;
+    session.sdkSessionId ??= await copilotSessionSdkId(session.resource, this.agentHostUserDataPath) ?? undefined;
+    if (!session.sdkSessionId || session.sdkSessionId === session.id) return null;
+    const alias = this.sessions.get(session.sdkSessionId);
+    if (!alias || alias.source !== SOURCE_COPILOT_CLI ||
+        (alias.observation === 'ahp' && alias.resource !== session.resource)) return null;
+    const bindings = [session.boundSlot, alias.boundSlot]
+      .filter((index): index is number => index !== null).sort((left, right) => left - right);
+    const previous = session.boundSlot;
+    const doneAt = previous === null ? null : this.slots[previous]?.doneAt;
+    session.boundSlot = bindings[0] ?? null;
+    alias.boundSlot = null;
+    this.sessions.delete(alias.id);
+    const retained = session.boundSlot === null ? null : this.slots[session.boundSlot];
+    if (retained) {
+      retained.sessionId = session.id;
+      retained.observation = 'ahp';
+      retained.source = session.source;
+      retained.resource = session.resource;
+      retained.eventsPath = '';
+      retained.journalPath = null;
+      retained.state = runState(session.run);
+      retained.runError = session.run.error;
+      retained.lastEventAt = session.lastEventAt;
+      retained.doneAt = doneAt ?? null;
+      retained.eventOffset = session.offset;
+      retained.stateChangedAt = new Date().toISOString();
+    }
+    this.log(`Merged VS Code SDK session ${alias.id} into Agent Host session ${session.id}`);
+    const released = bindings.slice(1);
+    for (const index of released) this.slots[index] = null;
+    return { rebound: previous !== session.boundSlot, released };
+  }
+
+  /** Applies authoritative AHP state, including sessions discovered without local transcripts. */
+  async applyAgentHostChatState(
+    sessionId: string, state: unknown, descriptor?: AgentHostSession
+  ): Promise<boolean> {
+    if (!SESSION_ID.test(sessionId)) return false;
+    let session = this.sessions.get(sessionId);
+    if (!session) {
+      if (!descriptor || !path.isAbsolute(descriptor.cwd)) return false;
+      const nativeProjection = new NativeChatProjection();
+      session = {
+        id: sessionId, cwd: descriptor.cwd, eventsPath: '', journalPath: null,
+        source: descriptor.resource.startsWith('vscode-chat-session:') ? SOURCE_NATIVE : SOURCE_COPILOT_CLI,
+        resource: descriptor.resource, offset: 0, identity: null, journalOffset: 0, journalIdentity: null,
+        nativeProjection, nativeSnapshot: nativeProjection.snapshot(), nativeRequestCount: 0,
+        pendingNativePrompts: 0, pendingNativePromptRequestCount: 0, latestNativePromptAt: null,
+        pendingNativePromptCredits: 0, run: emptyRun(), compatibility: emptyCompatibility(),
+        boundSlot: null, missingScans: 0, lastEventAt: null, startupReplay: null,
+      };
+      this.sessions.set(sessionId, session);
+    }
+    session.observation = 'ahp';
+    session.eventsPath = '';
+    session.journalPath = null;
+    session.startupReplay = null;
+    if (descriptor) {
+      session.cwd = descriptor.cwd;
+      session.resource = descriptor.resource;
+    }
+    const merged = await this.reconcileAgentHostAlias(session);
+    const rebound = merged?.rebound ?? false;
+    const publishReleased = async (): Promise<void> => {
+      if (this.scanning) return;
+      for (const index of merged?.released ?? []) {
+        if (this.slots[index] === null) {
+          await this.onSlot({ slot: index, state: 'idle', stateChangedAt: new Date().toISOString() });
+        }
+      }
+    };
+    session.compatibility.supported = true;
+    session.compatibility.producer = 'agent-host-protocol';
     const projection = new AgentHostChatProjection();
     projection.apply(state);
     const current = projection.snapshot();
-    if (!current.requestId) return false;
+    const newRequest = current.requestId !== session.run.requestId;
+    let allocated = false;
+    if (current.active && newRequest && session.boundSlot === null) {
+      allocated = this.allocate(session) !== null;
+    }
+    const slot = session.boundSlot === null ? null : this.slots[session.boundSlot];
+    if (slot) {
+      slot.observation = 'ahp';
+      slot.eventsPath = '';
+      slot.journalPath = null;
+      slot.resource = session.resource;
+      slot.cwd = session.cwd;
+      slot.label = path.basename(session.cwd);
+      if (newRequest) slot.doneAt = null;
+    }
+    if (!current.requestId) {
+      session.run = emptyRun();
+      session.lastEventAt = new Date().toISOString();
+      if (slot) {
+        const changed = slot.state !== 'idle' || slot.runError !== null;
+        slot.state = 'idle';
+        slot.runError = null;
+        slot.doneAt = null;
+        slot.lastEventAt = session.lastEventAt;
+        if (changed || rebound) {
+          slot.stateChangedAt = session.lastEventAt;
+          if (!this.scanning) await this.onSlot({ ...slot });
+        }
+      }
+      await publishReleased();
+      this.save();
+      return false;
+    }
+    session.compatibility.sawPrompt = true;
+    if (current.terminal) session.compatibility.sawSessionEnd = true;
 
     const normalized = snapshotEvents(session.run, current, {
       restarted: session.run.error === 'agent-host-state-unavailable',
       incompatibilities: this.incompatibilityEvents(session, current),
     });
-    if (normalized.length === 0) return false;
+    if (normalized.length === 0) {
+      if (rebound && slot && !this.scanning) await this.onSlot({ ...slot });
+      await publishReleased();
+      this.save();
+      return false;
+    }
+    const previousState = slot?.state;
     await this.applyNormalizedEvents(session, normalized, new Date().toISOString());
+    if ((rebound || allocated) && slot && slot.state === previousState && !this.scanning) await this.onSlot({ ...slot });
+    await publishReleased();
     this.save();
     return true;
   }
@@ -970,7 +1153,7 @@ export class VSCodeIntegration {
       const session = this.sessions.get(sessionId);
       if (
         !session ||
-        session.source !== SOURCE_COPILOT_CLI ||
+        session.observation !== 'ahp' ||
         session.boundSlot === null ||
         !session.run.active
       ) continue;
@@ -1069,6 +1252,7 @@ export class VSCodeIntegration {
 
   /** Applies one transcript- or hook-derived event to session and bound-slot state. */
   async applyEvent(session: Session, event: VSCodeEvent): Promise<void> {
+    if (session.observation === 'ahp' || this.agentHostSessionForSdk(session.id)) return;
     updateCompatibility(session.compatibility, event, session.source);
     const transition = reduceEvent(session.run, event, session.source, session.cwd);
     session.run = transition.run;
@@ -1128,7 +1312,7 @@ export class VSCodeIntegration {
       | undefined;
     if (!hook || !SESSION_ID.test(hook.sessionId ?? '')) return false;
     const session = this.sessions.get(hook.sessionId as string);
-    if (!session || session.source !== SOURCE_NATIVE || session.boundSlot === null) return false;
+    if (!session || session.observation === 'ahp' || session.source !== SOURCE_NATIVE || session.boundSlot === null) return false;
     const timestamp = typeof hook.timestamp === 'string' ? hook.timestamp : new Date().toISOString();
     if (
       hook.toolName === 'vscode_askQuestions' &&
@@ -1212,7 +1396,7 @@ export class VSCodeIntegration {
     this.enabledSlots = next;
     this.agentHostSource?.setSessions(
       [...this.sessions.values()]
-        .filter((session) => session.source === SOURCE_COPILOT_CLI && session.boundSlot !== null)
+        .filter((session) => (session.observation === 'ahp' || session.source === SOURCE_COPILOT_CLI) && session.boundSlot !== null)
         .map((session) => session.id)
     );
     if (this.started) this.save();
@@ -1270,7 +1454,15 @@ export class VSCodeIntegration {
       this.save();
       throw new Error(`project path does not exist: ${slot.cwd}`);
     }
-    const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource);
+    const resource = session.sdkSessionId
+      ? await copilotSessionResource(session.sdkSessionId, this.agentHostUserDataPath)
+      : slot.resource;
+    if (resource && resource !== slot.resource) {
+      session.resource = resource;
+      slot.resource = resource;
+      this.save();
+    }
+    const url = buildSessionUrl(slot.cwd, slot.sessionId, resource);
     await this.launch(url);
     const current = this.slots[index];
     if (current?.sessionId === sessionId) {
@@ -1279,7 +1471,7 @@ export class VSCodeIntegration {
         this.slots[index] = null;
         this.agentHostSource?.setSessions(
           [...this.sessions.values()]
-            .filter((candidate) => candidate.source === SOURCE_COPILOT_CLI && candidate.boundSlot !== null)
+            .filter((candidate) => (candidate.observation === 'ahp' || candidate.source === SOURCE_COPILOT_CLI) && candidate.boundSlot !== null)
             .map((candidate) => candidate.id)
         );
         await this.onSlot({ slot: index, state: 'idle', stateChangedAt: new Date().toISOString() });
@@ -1322,7 +1514,10 @@ export class VSCodeIntegration {
     ).length;
     const exactOpen = exactOpenCompatibility();
     return {
-      ready: this.started && (rootReadable || nativeRootReadable) && verifiedLifecycleSessions > 0 && exactOpen.available,
+      ready: this.started && (
+        [...this.sessions.values()].some((session) => session.observation === 'ahp') ||
+        (rootReadable || nativeRootReadable) && verifiedLifecycleSessions > 0
+      ) && exactOpen.available,
       sessionStateRoot: this.root,
       rootReadable,
       nativeSessionRoot: this.nativeRoot,
@@ -1338,7 +1533,7 @@ export class VSCodeIntegration {
         slot: slot.slot,
         state: slot.state,
         sessionId: slot.sessionId ?? null,
-        eventsReadable: slot.sessionId
+        eventsReadable: slot.observation === 'ahp' ? null : slot.sessionId
           ? fs.existsSync(slot.eventsPath ?? this.sessions.get(slot.sessionId)?.eventsPath ?? '')
           : null,
         projectExists: slot.cwd ? fs.existsSync(slot.cwd) : null,

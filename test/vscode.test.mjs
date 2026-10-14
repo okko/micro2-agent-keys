@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { VSCodeIntegration } from '../dist/vscode.js';
-import { buildSessionUrl, exactOpenSupported, nativeSessionResource } from '../dist/vscode-app.js';
+import { buildSessionUrl, copilotSessionResource, copilotSessionSdkId, exactOpenSupported, nativeSessionResource } from '../dist/vscode-app.js';
 import { workspaceMetadata } from '../dist/vscode-session-files.js';
 import { EFFECT } from '../dist/oai.js';
 import { INTEGRATION_SLOT_COUNT, STATES } from '../dist/states.js';
@@ -33,8 +34,21 @@ function fixture() {
     directory,
     root,
     nativeRoot,
+    agentHostUserDataPath: path.join(directory, 'Code'),
     statePath: path.join(directory, 'state', 'vscode.json'),
   };
+}
+
+function createHostBacking(userDataPath, hostId, sdkId) {
+  const directory = path.join(userDataPath, 'agentSessionData', hostId);
+  fs.mkdirSync(directory, { recursive: true });
+  const database = path.join(directory, 'session.db');
+  execFileSync('/usr/bin/sqlite3', [
+    database,
+    `CREATE TABLE session_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL); ` +
+    `INSERT INTO session_metadata VALUES ('defaultChatProviderData', '{"sdkSessionId":"${sdkId}"}');`,
+  ]);
+  return database;
 }
 
 function createSession(root, id, cwd) {
@@ -140,8 +154,8 @@ class FakeAgentHostStateSource {
     this.sessions = [...sessionIds];
   }
 
-  async emit(sessionId, state) {
-    await this.handler(sessionId, state);
+  async emit(sessionId, state, descriptor) {
+    await this.handler(sessionId, state, descriptor);
   }
 
   async emitUnavailable(...sessionIds) {
@@ -152,6 +166,313 @@ class FakeAgentHostStateSource {
     this.stopped = true;
   }
 }
+
+function protocolDescriptor(id, cwd, resource = `agent-host-copilotcli:/${id}`) {
+  return { id, cwd, resource, chatResource: `ahp-chat:/${id}` };
+}
+
+for (const first of ['ahp', 'transcript']) {
+  test(`SDK transcripts and AHP use one slot when ${first} arrives first`, async (t) => {
+    const files = fixture();
+    const cwd = path.join(files.directory, 'project');
+    fs.mkdirSync(cwd);
+    createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+    const source = new FakeAgentHostStateSource();
+    const observed = [];
+    const launched = [];
+    const options = {
+      ...files, agentHostSource: source, scanIntervalMs: 60_000,
+      onSlot: (slot) => observed.push(slot),
+      launch: async (url) => launched.push(url),
+    };
+    const integration = new VSCodeIntegration(options);
+    let restarted;
+    t.after(() => {
+      integration.stop();
+      restarted?.stop();
+      fs.rmSync(files.directory, { recursive: true, force: true });
+    });
+    await integration.start();
+    const descriptor = protocolDescriptor(IDS[1], cwd);
+    const state = { turns: [], activeTurn: {
+      id: 'turn', responseParts: [{ kind: 'inputRequest', request: { id: 'question', purpose: 'askUser' } }],
+    } };
+    if (first === 'ahp') await source.emit(IDS[1], state, descriptor);
+    const eventsPath = createSession(files.root, IDS[0], cwd);
+    append(eventsPath, event('user.message'));
+    await integration.scan();
+    if (first === 'transcript') await source.emit(IDS[1], state, descriptor);
+    const assertSingleBinding = (instance) => {
+      const bindings = instance.publicSlots().filter((slot) => slot.sessionId);
+      assert.equal(bindings.length, 1);
+      assert.equal(bindings[0].slot, 0);
+      assert.equal(bindings[0].sessionId, IDS[1]);
+      assert.equal(bindings[0].state, 'input');
+      assert.equal(bindings[0].observation, 'ahp');
+      assert.equal(instance.sessions.has(IDS[0]), false);
+      assert.equal(instance.sessions.get(IDS[1]).sdkSessionId, IDS[0]);
+    };
+    assertSingleBinding(integration);
+    assert.equal(observed.some((slot) => slot.slot === 1 && slot.sessionId), false);
+    append(eventsPath, event('user.message'), event('session.error'));
+    createNativeSession(files.nativeRoot, IDS[0], cwd);
+    await integration.scan();
+    assertSingleBinding(integration);
+    assert.deepEqual(source.sessions, [IDS[1]]);
+    await integration.open(0);
+    assert.equal(new URL(launched.at(-1)).searchParams.get('session'), descriptor.resource);
+    integration.stop();
+
+    const nextSource = new FakeAgentHostStateSource();
+    restarted = new VSCodeIntegration({ ...options, agentHostSource: nextSource });
+    await restarted.start();
+    assert.equal(restarted.slots[0].state, 'error');
+    await nextSource.emit(IDS[1], state, descriptor);
+    await restarted.scan();
+    assertSingleBinding(restarted);
+    await nextSource.emitUnavailable(IDS[1]);
+    assert.equal(restarted.slots[0].runError, 'agent-host-state-unavailable');
+    await restarted.scan();
+    assert.equal(restarted.publicSlots().filter((slot) => slot.sessionId).length, 1);
+    await restarted.resetSlots();
+    await nextSource.emit(IDS[1], state, descriptor);
+    await restarted.scan();
+    assert.equal(restarted.publicSlots().some((slot) => slot.sessionId), false);
+  });
+}
+
+test('late SDK identity metadata repairs persisted duplicate slots without resetting other chats', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const source = new FakeAgentHostStateSource();
+  const integration = new VSCodeIntegration({ ...files, agentHostSource: source, scanIntervalMs: 60_000 });
+  let restarted;
+  const observed = [];
+  t.after(() => {
+    integration.stop();
+    restarted?.stop();
+    fs.rmSync(files.directory, { recursive: true, force: true });
+  });
+  await integration.start();
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+  const descriptor = protocolDescriptor(IDS[1], cwd);
+  const state = { turns: [], activeTurn: { id: 'turn', responseParts: [] } };
+  await source.emit(IDS[1], state, descriptor);
+  await source.emit(IDS[2], state, protocolDescriptor(IDS[2], cwd));
+  assert.deepEqual(integration.publicSlots().slice(0, 3).map((slot) => slot.sessionId), IDS.slice(0, 3));
+  integration.stop();
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+
+  const nextSource = new FakeAgentHostStateSource();
+  restarted = new VSCodeIntegration({
+    ...files, agentHostSource: nextSource, scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+  });
+  await restarted.start();
+  await nextSource.emit(IDS[1], state, descriptor);
+  await restarted.scan();
+  assert.equal(restarted.slots[0].sessionId, IDS[1]);
+  assert.equal(restarted.slots[0].state, 'running');
+  assert.equal(restarted.slots[1], null);
+  assert.equal(restarted.slots[2].sessionId, IDS[2]);
+  assert.ok(observed.some((slot) => slot.slot === 1 && slot.state === 'idle' && !slot.sessionId));
+  assert.equal(restarted.sessions.has(IDS[0]), false);
+  const saved = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  assert.deepEqual(saved.slots.filter(Boolean).map((slot) => slot.sessionId), [IDS[1], IDS[2]]);
+});
+
+test('new transcript activity retries late identity metadata without waiting for another AHP action', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const source = new FakeAgentHostStateSource();
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files, agentHostSource: source, scanIntervalMs: 60_000, onSlot: (slot) => observed.push(slot),
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  const state = { turns: [], activeTurn: {
+    id: 'turn', responseParts: [{ kind: 'inputRequest', request: { id: 'question', purpose: 'askUser' } }],
+  } };
+  await source.emit(IDS[1], state, protocolDescriptor(IDS[1], cwd));
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+  assert.equal(integration.slots[1].sessionId, IDS[0]);
+  observed.length = 0;
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  append(eventsPath, event('session.error'));
+  await integration.scan();
+  assert.equal(integration.slots[0].sessionId, IDS[1]);
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[1], null);
+  assert.deepEqual(observed.map((slot) => [slot.slot, slot.state]), [[1, 'idle']]);
+  await integration.scan();
+  assert.equal(integration.publicSlots().filter((slot) => slot.sessionId).length, 1);
+});
+
+test('an unchanged AHP snapshot publishes both a transferred binding and the freed duplicate key', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const source = new FakeAgentHostStateSource();
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files, agentHostSource: source, scanIntervalMs: 60_000, onSlot: (slot) => observed.push(slot),
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+  const descriptor = protocolDescriptor(IDS[1], cwd);
+  const state = { turns: [], activeTurn: {
+    id: 'turn', responseParts: [{ kind: 'inputRequest', request: { id: 'question', purpose: 'askUser' } }],
+  } };
+  await source.emit(IDS[1], state, descriptor);
+  observed.length = 0;
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  await source.emit(IDS[1], state, descriptor);
+  assert.equal(integration.slots[0].sessionId, IDS[1]);
+  assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[1], null);
+  assert.deepEqual(observed.map((slot) => [slot.slot, slot.state]), [[0, 'input'], [1, 'idle']]);
+});
+
+test('AHP discovers and binds actual work without transcripts, hooks, SQLite, or journals', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  fs.rmdirSync(files.root);
+  fs.rmdirSync(files.nativeRoot);
+  const source = new FakeAgentHostStateSource();
+  const observed = [];
+  const integration = new VSCodeIntegration({
+    ...files, agentHostSource: source, scanIntervalMs: 60_000,
+    onSlot: (slot) => observed.push(slot),
+    nativeSessionActive: () => assert.fail('AHP must not query SQLite'),
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  const descriptor = protocolDescriptor(IDS[0], cwd);
+  await source.emit(IDS[0], { turns: [] }, descriptor);
+  assert.equal(integration.slots[0], null, 'an empty browsed session must not allocate');
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'ahp-turn', responseParts: [] },
+  }, descriptor);
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(observed.at(-1).state, 'running');
+  assert.equal(integration.slots[0].observation, 'ahp');
+  assert.equal(integration.slots[0].eventsPath, '');
+  assert.equal(integration.doctor().bindings[0].eventsReadable, null);
+  await integration.scan();
+  assert.equal(integration.slots[0].state, 'running');
+
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'ahp-turn', responseParts: [
+      { kind: 'inputRequest', request: { id: 'question', purpose: 'askUser' } },
+    ] },
+  }, descriptor);
+  assert.equal(integration.slots[0].state, 'input');
+  await source.emit(IDS[0], { turns: [{ id: 'ahp-turn', state: 'complete' }] }, descriptor);
+  assert.equal(integration.slots[0].state, 'done');
+  const saved = JSON.parse(fs.readFileSync(files.statePath, 'utf8'));
+  assert.equal(saved.sessions[0].observation, 'ahp');
+
+  integration.stop();
+  const restarted = new VSCodeIntegration({ ...files, agentHostSource: new FakeAgentHostStateSource(), scanIntervalMs: 60_000 });
+  t.after(() => restarted.stop());
+  await restarted.start();
+  assert.equal(restarted.slots[0].sessionId, IDS[0]);
+  await restarted.applyAgentHostChatState(IDS[0], {
+    turns: [], activeTurn: { id: 'second-turn', responseParts: [] },
+  }, descriptor);
+  assert.equal(restarted.slots[0].state, 'running');
+});
+
+test('AHP-covered native sessions ignore legacy files, SQLite checks, and hooks even after source loss', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const { eventsPath, journalPath } = createNativeSession(files.nativeRoot, IDS[0], cwd);
+  let sqliteChecks = 0;
+  const source = new FakeAgentHostStateSource();
+  const integration = new VSCodeIntegration({
+    ...files, agentHostSource: source, scanIntervalMs: 60_000,
+    nativeSessionActive: () => { sqliteChecks++; return true; },
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'native-ahp-turn', responseParts: [] },
+  }, protocolDescriptor(IDS[0], cwd, nativeSessionResource(IDS[0])));
+  assert.equal(integration.slots[0].state, 'running');
+  append(eventsPath, event('session.error', { message: 'stale transcript error' }));
+  append(journalPath, { kind: 2, k: ['requests', 0, 'modelState'], v: { value: 3 } });
+  await integration.scan(true);
+  assert.equal(sqliteChecks, 0);
+  assert.equal(integration.slots[0].state, 'running');
+  assert.equal(await integration.applyHook({
+    sessionId: IDS[0], hookEventName: 'PreToolUse', toolName: 'vscode_askQuestions', toolUseId: 'legacy-tool',
+  }), false);
+  await source.emitUnavailable(IDS[0]);
+  fs.unlinkSync(eventsPath);
+  fs.unlinkSync(journalPath);
+  await integration.scan();
+  assert.equal(integration.slots[0].runError, 'agent-host-state-unavailable');
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'native-ahp-turn', responseParts: [] },
+  });
+  assert.equal(integration.slots[0].state, 'running');
+});
+
+test('AHP catalog history and repeated state updates do not allocate after a reset', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const source = new FakeAgentHostStateSource();
+  const integration = new VSCodeIntegration({ ...files, agentHostSource: source, scanIntervalMs: 60_000 });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  const descriptor = protocolDescriptor(IDS[0], cwd);
+  await source.emit(IDS[0], { turns: [{ id: 'historical-turn', state: 'complete' }] }, descriptor);
+  assert.equal(integration.slots[0], null);
+  const active = { turns: [], activeTurn: { id: 'new-turn', responseParts: [] } };
+  await source.emit(IDS[0], active, descriptor);
+  assert.equal(integration.slots[0].state, 'running');
+  await integration.resetSlots();
+  await source.emit(IDS[0], active, descriptor);
+  assert.equal(integration.slots[0], null);
+  await source.emit(IDS[0], { ...active, activeTurn: { id: 'next-turn', responseParts: [] } }, descriptor);
+  assert.equal(integration.slots[0].state, 'running');
+});
+
+test('empty authoritative AHP snapshots clear stale state and active restart bindings await the host', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  const source = new FakeAgentHostStateSource();
+  const integration = new VSCodeIntegration({ ...files, agentHostSource: source, scanIntervalMs: 60_000 });
+  const descriptor = protocolDescriptor(IDS[0], cwd);
+  await integration.start();
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'turn', responseParts: [] },
+  }, descriptor);
+  integration.stop();
+  const nextSource = new FakeAgentHostStateSource();
+  const restarted = new VSCodeIntegration({ ...files, agentHostSource: nextSource, scanIntervalMs: 60_000 });
+  t.after(() => { restarted.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await restarted.start();
+  assert.equal(restarted.slots[0].state, 'error');
+  assert.equal(restarted.slots[0].runError, 'agent-host-state-unavailable');
+  await nextSource.emit(IDS[0], { turns: [] }, descriptor);
+  assert.equal(restarted.slots[0].state, 'idle');
+  assert.equal(restarted.slots[0].runError, null);
+});
 
 test('Agent Host unknown tool statuses set a bound slot to incompatible red', async (t) => {
   const files = fixture();
@@ -298,6 +619,7 @@ test('wires bound Agent Host sessions to authoritative protocol state', async (t
     },
   });
   assert.equal(integration.slots[0].state, 'input');
+  assert.equal(integration.slots[0].doneAt, null);
   await source.emit(IDS[0], {
     turns: [{ id: 'cancelled-turn', state: 'cancelled', responseParts: [] }],
   });
@@ -1014,6 +1336,172 @@ test('builds an encoded exact-session URL', () => {
   const url = buildSessionUrl('/tmp/Prøject space', IDS[0]);
   assert.match(url, /^vscode:\/\/file\/tmp\/Pr%C3%B8ject%20space\?/);
   assert.equal(new URL(url).searchParams.get('session'), `agent-host-copilotcli:/${IDS[0]}`);
+});
+
+test('resolves SDK chat IDs to their owning host sessions and preserves legacy IDs', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  assert.equal(await copilotSessionResource(IDS[0], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[0]}`);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  createHostBacking(files.agentHostUserDataPath, IDS[2], IDS[1]);
+  assert.equal(await copilotSessionResource(IDS[0], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[1]}`);
+  assert.equal(await copilotSessionSdkId(`agent-host-copilotcli:/${IDS[1]}`, files.agentHostUserDataPath), IDS[0]);
+  assert.equal(await copilotSessionSdkId(`agent-host-copilotcli:/${IDS[3]}`, files.agentHostUserDataPath), null);
+  assert.equal(await copilotSessionResource(IDS[1], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[2]}`);
+  assert.equal(await copilotSessionResource(IDS[3], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[3]}`);
+  await assert.rejects(copilotSessionResource("invalid'id", files.agentHostUserDataPath), /invalid VS Code session id/);
+});
+
+test('host-link resolution fails explicitly for corrupt or ambiguous backing metadata', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const database = createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  createHostBacking(files.agentHostUserDataPath, IDS[2], IDS[0]);
+  await assert.rejects(copilotSessionResource(IDS[0], files.agentHostUserDataPath), /ambiguous VS Code host session/);
+  fs.writeFileSync(database, 'not a database');
+  await assert.rejects(copilotSessionResource(IDS[0], files.agentHostUserDataPath), /not a database/);
+  await assert.rejects(copilotSessionSdkId(`agent-host-copilotcli:/${IDS[1]}`, files.agentHostUserDataPath), /not a database/);
+  await assert.rejects(copilotSessionSdkId("agent-host-copilotcli:/invalid'id", files.agentHostUserDataPath), /invalid VS Code host session/);
+});
+
+test('resolves additional chats with their exact chat fragment instead of the default transcript', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const directory = path.join(files.agentHostUserDataPath, 'User', 'globalStorage');
+  fs.mkdirSync(directory, { recursive: true });
+  const session = `copilotcli:/${IDS[1]}`;
+  const chat = `ahp-chat://${IDS[2]}/${Buffer.from(session).toString('base64url')}`;
+  execFileSync('/usr/bin/sqlite3', [
+    path.join(directory, 'agent-host.db'),
+    `CREATE TABLE session_chats (session_uri TEXT, chat_uri TEXT, provider_data TEXT); ` +
+    `INSERT INTO session_chats VALUES ('${session}', '${chat}', '{"sdkSessionId":"${IDS[0]}"}');`,
+  ]);
+  const resource = await copilotSessionResource(IDS[0], files.agentHostUserDataPath);
+  assert.equal(resource, `agent-host-copilotcli:/${IDS[1]}#${IDS[2]}`);
+  assert.equal(await copilotSessionSdkId(resource, files.agentHostUserDataPath), IDS[0]);
+  assert.equal(await copilotSessionSdkId(`agent-host-copilotcli:/${IDS[1]}`, files.agentHostUserDataPath), null);
+  assert.equal(new URL(buildSessionUrl('/tmp/project', IDS[0], resource)).searchParams.get('session'), resource);
+  assert.equal(await copilotSessionResource(IDS[3], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[3]}`);
+});
+
+test('legacy host catalogs without the new chat table still use default-chat backings', async (t) => {
+  const files = fixture();
+  t.after(() => fs.rmSync(files.directory, { recursive: true, force: true }));
+  const directory = path.join(files.agentHostUserDataPath, 'User', 'globalStorage');
+  fs.mkdirSync(directory, { recursive: true });
+  execFileSync('/usr/bin/sqlite3', [
+    path.join(directory, 'agent-host.db'), 'CREATE TABLE sessions (session_uri TEXT);',
+  ]);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  assert.equal(await copilotSessionResource(IDS[0], files.agentHostUserDataPath), `agent-host-copilotcli:/${IDS[1]}`);
+});
+
+test('failed host-link resolution does not launch or acknowledge a completed chat', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'project');
+  fs.mkdirSync(cwd);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  createHostBacking(files.agentHostUserDataPath, IDS[2], IDS[0]);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const integration = new VSCodeIntegration({
+    ...files, scanIntervalMs: 60_000, launch: async () => assert.fail('ambiguous chat must not launch'),
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  append(eventsPath, event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  await integration.scan();
+  await assert.rejects(integration.open(0), /ambiguous VS Code host session/);
+  assert.equal(integration.slots[0].state, 'done');
+});
+
+test('opens new filesystem chats through their host identity before and after restart', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'New chat project');
+  fs.mkdirSync(cwd);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const launched = [];
+  const options = { ...files, scanIntervalMs: 60_000, launch: async (url) => launched.push(url) };
+  const integration = new VSCodeIntegration(options);
+  let restarted;
+  t.after(() => {
+    integration.stop();
+    restarted?.stop();
+    fs.rmSync(files.directory, { recursive: true, force: true });
+  });
+  await integration.start();
+  append(eventsPath, event('user.message'), event('hook.end', { hookType: 'sessionEnd' }));
+  await integration.scan();
+  await integration.open(0);
+  const resource = `agent-host-copilotcli:/${IDS[1]}`;
+  assert.equal(new URL(launched[0]).searchParams.get('session'), resource);
+  assert.equal(integration.slots[0].resource, resource);
+  assert.equal(integration.slots[0].state, 'idle');
+  await integration.scan();
+  assert.equal(integration.sessions.get(IDS[0]).resource, resource);
+  integration.stop();
+
+  restarted = new VSCodeIntegration(options);
+  await restarted.start();
+  await restarted.open(0);
+  assert.equal(new URL(launched[1]).searchParams.get('session'), resource);
+  assert.equal(restarted.slots[0].sessionId, IDS[0]);
+});
+
+test('AHP session resources are already host identities and must not be remapped as SDK IDs', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'AHP project');
+  fs.mkdirSync(cwd);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  const source = new FakeAgentHostStateSource();
+  const launched = [];
+  const integration = new VSCodeIntegration({
+    ...files, agentHostSource: source, scanIntervalMs: 60_000,
+    launch: async (url) => launched.push(url),
+  });
+  t.after(() => { integration.stop(); fs.rmSync(files.directory, { recursive: true, force: true }); });
+  await integration.start();
+  const descriptor = protocolDescriptor(IDS[0], cwd);
+  await source.emit(IDS[0], {
+    turns: [], activeTurn: { id: 'turn', responseParts: [] },
+  }, descriptor);
+  await integration.open(0);
+  assert.equal(new URL(launched[0]).searchParams.get('session'), descriptor.resource);
+  assert.equal(integration.slots[0].state, 'running');
+});
+
+test('filesystem bindings retain their SDK link identity when AHP takes over observation', async (t) => {
+  const files = fixture();
+  const cwd = path.join(files.directory, 'SDK project');
+  fs.mkdirSync(cwd);
+  createHostBacking(files.agentHostUserDataPath, IDS[1], IDS[0]);
+  const eventsPath = createSession(files.root, IDS[0], cwd);
+  const launched = [];
+  const options = {
+    ...files, scanIntervalMs: 60_000, launch: async (url) => launched.push(url),
+  };
+  const integration = new VSCodeIntegration(options);
+  let restarted;
+  t.after(() => {
+    integration.stop();
+    restarted?.stop();
+    fs.rmSync(files.directory, { recursive: true, force: true });
+  });
+  await integration.start();
+  append(eventsPath, event('user.message'));
+  await integration.scan();
+  await integration.applyAgentHostChatState(IDS[0], {
+    turns: [], activeTurn: { id: 'ahp-turn', responseParts: [] },
+  }, protocolDescriptor(IDS[0], cwd));
+  assert.equal(integration.slots[0].observation, 'ahp');
+  await integration.open(0);
+  assert.equal(new URL(launched[0]).searchParams.get('session'), `agent-host-copilotcli:/${IDS[1]}`);
+  integration.stop();
+
+  restarted = new VSCodeIntegration({ ...options, agentHostSource: new FakeAgentHostStateSource() });
+  await restarted.start();
+  await restarted.open(0);
+  assert.equal(new URL(launched[1]).searchParams.get('session'), `agent-host-copilotcli:/${IDS[1]}`);
 });
 
 test('enables exact-session opening for every VS Code version', () => {
@@ -1943,6 +2431,7 @@ test('opening acknowledges a completed session without forgetting it', async (t)
   await integration.scan();
 
   await integration.open(0);
+  assert.equal(new URL(launched[0]).searchParams.get('session'), `agent-host-copilotcli:/${IDS[0]}`);
   assert.equal(integration.slots[0].sessionId, IDS[0]);
   assert.equal(integration.sessions.get(IDS[0]).boundSlot, 0);
   assert.equal(integration.publicSlots()[0].state, 'idle');

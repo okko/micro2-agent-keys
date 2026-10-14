@@ -2,7 +2,29 @@
 
 1. **Discover VS Code sessions**
 
-    The daemon watches both Agent Host and native Copilot Chat sessions:
+   The primary observer uses `@microsoft/agent-host-protocol/client` over VS Code's
+   authenticated local Unix WebSocket. It subscribes to `ahp-root://`, pages through
+   `listSessions`, and follows `root/sessionAdded`, `root/sessionSummaryChanged`, and
+   `root/sessionRemoved`. Session working directories and advertised chat resources
+   supply discovery metadata; no transcript, hook, SQLite database, or journal is
+   required for a protocol-exposed session.
+
+   Active and already-bound sessions are subscribed to their `ahp-chat` channels.
+   Browsed or historical idle sessions do not allocate keys or trigger bulk chat
+   subscriptions. Root notifications expose later activity without repeatedly
+   fetching the catalog. For older catalogs without chat resources, the default
+   channel is derived from the backend session URI.
+
+   Copilot SDK transcript UUIDs can differ from their owning AHP session UUIDs.
+   Optional, read-only chat backing metadata connects those identities: an AHP
+   session records its SDK alias, and the filesystem observer ignores that alias,
+   including native mirrors. If both identities were already bound, they merge
+   under the AHP identity, retaining the lowest occupied key and releasing only
+   the duplicate. The alias is persisted across restarts. Missing metadata is
+   retried on subsequent AHP updates or uncovered transcript activity; it is not
+   required for protocol-only discovery.
+
+   Sessions not exposed by AHP retain the legacy fallback:
 
    ```text
    ~/.copilot/session-state/
@@ -18,14 +40,14 @@
     This prevents ordinary terminal Copilot sessions from taking slots. Native transcripts
     must have a matching persisted entry under the workspace's `chatSessions/` directory.
 
-   For each bound Agent Host session, the daemon reads VS Code's owner-only local endpoint
+   Independently of slot bindings, the daemon reads VS Code's owner-only local endpoint
    registry under the active user-data directory. It supports both the legacy shared
    `metadata.json` array and current per-instance `entries/*.json` files, ignores dead endpoint
    owners, and connects to each live editor endpoint until one serves the session. The
    WebSocket upgrade uses the registry bearer token over the published Unix socket; the token
    is never logged.
 
-   At the same time, VS Code's preview agent hooks notify the daemon immediately before
+   Only for uncovered native Chat sessions, VS Code's preview agent hooks notify the daemon immediately before
    and after `vscode_askQuestions`, avoiding the native Chat transcript's buffered writes.
    Generic `PostToolUse` or `PermissionDenied` events clear external-file approval state
    without forwarding tool input. Lifecycle hooks reconcile execution state without
@@ -33,16 +55,18 @@
    blockers. The `chat.useHooks` setting must be enabled; it defaults to enabled in the
    verified VS Code version.
 
-For the evidence and rationale behind this hybrid file-plus-hook model, see
-[`docs/findings.md`](docs/findings.md), section "VS Code chat telemetry findings".
+For the historical evidence behind the native fallback, see
+[`findings.md`](./findings.md), section "VS Code chat telemetry findings".
 
 
 2. **Wait for actual work**
 
    Creating or browsing a session does nothing.
 
-   When its event file records `userPromptSubmitted` or `user.message`, the daemon knows
-   the user submitted a prompt.
+   A new active AHP turn proves actual work and can allocate a key immediately, including
+   when reconnecting to existing work. Completed catalog history alone cannot allocate.
+   Resetting slots does not reallocate the same turn on its next state update; a new turn
+   is required. The legacy fallback still recognizes `userPromptSubmitted` or `user.message`.
 
 3. **Allocate a slot**
 
@@ -73,9 +97,21 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
    - unresolved native response part, Agent Host `InputRequest`, or blocking Agent Host
      tool status -> `input`
    - session or turn error -> `error`
-   - Agent Host `sessionEnd` or native Chat request `result` -> `done`
+   - AHP terminal turn or fallback native Chat request `result` -> `done`
 
-    Native Chat's `vscode_askQuestions` transition comes from the installed
+   AHP subscriptions deliver one initial snapshot, followed by sequenced actions applied
+   with the package's shared `chatReducer`. Actions at or below that channel's snapshot
+   sequence are ignored, including duplicate replay. Actions arriving during subscription
+   are buffered behind the snapshot. There is no re-subscription per action and no custom
+   implementation of the protocol reducer.
+
+   Once AHP serves a session, `observation: "ahp"` is persisted. Transcript reads,
+   native journal reconciliation, SQLite active-session checks, and hook-derived state
+   are disabled for that session, including after connection loss and daemon restart.
+   Legacy sources cannot overwrite authoritative input, completion, or error state.
+   Hooks remain installed only to cover native sessions not exposed through AHP.
+
+   In that fallback, native Chat's `vscode_askQuestions` transition comes from the installed
     `PreToolUse`/`PostToolUse` hooks. Transcript tool requests identify explicit network,
    unsandboxed, and outside-workspace file access candidates before execution. Explicit
    network and unsandboxed requests enter `input` immediately, and native execution starts
@@ -102,15 +138,14 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
    records an `incompatible:*` run error, and the daemon logs only the session ID,
    request ID, source, response-part kind, unknown state/status token, and VS Code
    version. Prompt text, tool input, paths, and answers are not logged.
-   Agent Host sessions use the live Agent Host Protocol as their authoritative state source.
-   After `initialize`, the daemon subscribes to the default `ahp-chat` channel derived from
-   `copilotcli:/<session-id>`. The initial complete `ChatState` snapshot is applied directly.
-   Later protocol actions are coalesced into fresh `subscribe` snapshots, avoiding a second
-   implementation of VS Code's chat reducer. Endpoint closure or replacement drops ownership;
-   an active bound session turns red with `agent-host-state-unavailable`, and the normal
-   bounded scan reconnects and obtains a new complete snapshot that restores its state.
-   Terminal sessions are not changed by source loss. `session.db` is not used as a chat-state
-   source.
+   Endpoint closure or replacement drops ownership; an active bound session turns red with
+   `agent-host-state-unavailable`. Reconnection uses the same client identity and requests
+   replay from the retained channel checkpoints. Missed actions are reduced locally; when
+   replay is unavailable, host-provided snapshots replace local state. The ephemeral catalog
+   is re-fetched after reconnect. Failed resumption is logged and retried with a fresh
+   handshake and snapshots. Completed sessions are not changed by source loss.
+   Unsupported chat actions also invalidate the feed rather than silently preserving
+   stale state. Endpoint tokens, tool arguments, prompts, and answers are not logged.
 
    Polling is deliberately bounded to protect CPU use and battery life. No polling
    interval may be shorter than 100 ms, and periodic scans are configured so a
@@ -121,7 +156,10 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
 
 5. **Recover after restart**
 
-   The daemon replays each bound event file:
+   AHP-bound slots retain identity without consulting legacy files. Previously active
+   bindings start red (`agent-host-state-unavailable`) until the host supplies authoritative
+   state. A fresh daemon obtains current snapshots; a transport reconnect can replay actions.
+   The native fallback replays each bound event file:
 
    - unresolved question or permission -> `input`
    - unfinished turn or tool -> `running`
@@ -140,8 +178,27 @@ For the evidence and rationale behind this hybrid file-plus-hook model, see
    Pressing a physical key constructs an exact-session VS Code URL containing:
 
    - the project path;
-    - `agent-host-copilotcli:/<session-id>` for Agent Host; or
-    - VS Code's encoded `vscode-chat-session://local/...` resource for native Chat.
+   - `agent-host-copilotcli:/<host-session-id>` for Agent Host; or
+   - VS Code's encoded `vscode-chat-session://local/...` resource for native Chat.
+
+   New Agent Host default chats can have an SDK transcript ID different from their
+   owning host session ID. For filesystem-backed bindings, opening reads VS Code's
+   persisted `agentSessionData/<host-session-id>/session.db` metadata
+   (`defaultChatProviderData.sdkSessionId`) to resolve the owning session. Additional
+   chats use the `session_chats` provider data in `User/globalStorage/agent-host.db`
+   and preserve their chat ID as a resource fragment, so opening does not switch to
+   the default transcript. This uses
+   the same identity as working `agent-host-session://copilotcli/<host-session-id>`
+   links, while preserving the project-window routing of `vscode://file?...session=`.
+   Legacy sessions without a backing mapping keep their original ID. Bindings created
+   from SDK transcripts retain that SDK identity across AHP takeover and daemon
+   restarts, so a coinciding host ID cannot redirect their links. Directly AHP-discovered
+   resources are already host identities and native Chat resources remain unchanged;
+   neither is reinterpreted as an SDK ID. Mapping failures are reported rather than
+   opening a different or generic chat. These lookups run asynchronously. Opening
+   an SDK-backed chat resolves its current host resource; discovery also reads the
+   exact host chat's SDK identity to avoid allocating a second key for its transcript.
+   Once that alias is known, state-observation polling does not repeat the lookup.
 
    VS Code focuses the relevant project window and opens the exact transcript there.
   Opening a green `done` session acknowledges it by turning its key white, but keeps

@@ -10,6 +10,19 @@ const test = require('node:test');
 
 const SESSION_ID = '10000000-0000-4000-8000-000000000000';
 
+function isolatedVSCodeEnvironment() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-vscode-'));
+  return {
+    directory,
+    env: {
+      AGENTKEYS_VSCODE_USER_DATA: directory,
+      AGENTKEYS_VSCODE_STATE: path.join(directory, 'state.json'),
+      AGENTKEYS_VSCODE_WORKSPACE_STORAGE: path.join(directory, 'workspaceStorage'),
+      COPILOT_HOME: path.join(directory, 'copilot'),
+    },
+  };
+}
+
 async function freePort() {
   const server = net.createServer();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -40,17 +53,22 @@ async function stop(child) {
 }
 
 test('daemon reports the emitted build id and device state', async (t) => {
+  const vscode = isolatedVSCodeEnvironment();
   const port = await freePort();
   const child = spawn(process.execPath, ['dist/daemon.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
+      ...vscode.env,
       AGENTKEYS_NO_DEVICE: '1',
       AGENTKEYS_PORT: String(port),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  t.after(() => stop(child));
+  t.after(async () => {
+    await stop(child);
+    fs.rmSync(vscode.directory, { recursive: true, force: true });
+  });
 
   const response = await waitFor(async () => {
     const current = await fetch(`http://127.0.0.1:${port}/build`);
@@ -82,11 +100,13 @@ test('daemon reports the emitted build id and device state', async (t) => {
 });
 
 test('daemon shutdown closes an incomplete HTTP request', async () => {
+  const vscode = isolatedVSCodeEnvironment();
   const port = await freePort();
   const child = spawn(process.execPath, ['dist/daemon.js'], {
     cwd: path.join(__dirname, '..'),
     env: {
       ...process.env,
+      ...vscode.env,
       AGENTKEYS_NO_DEVICE: '1',
       AGENTKEYS_PORT: String(port),
     },
@@ -120,6 +140,7 @@ test('daemon shutdown closes an incomplete HTTP request', async () => {
       child.kill('SIGKILL');
       await new Promise((resolve) => child.once('exit', resolve));
     }
+    fs.rmSync(vscode.directory, { recursive: true, force: true });
   }
 });
 
@@ -171,6 +192,7 @@ test('daemon restart replays a permission wait and subsequent completion', async
         AGENTKEYS_NO_DEVICE: '1',
         AGENTKEYS_PORT: String(port),
         AGENTKEYS_VSCODE_STATE: statePath,
+        AGENTKEYS_VSCODE_USER_DATA: directory,
         AGENTKEYS_VSCODE_WORKSPACE_STORAGE: nativeRoot,
         COPILOT_HOME: copilotHome,
       },

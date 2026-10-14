@@ -55,7 +55,8 @@ accepts. Keep Input.app running so its key macros continue to work.
 flowchart LR
     subgraph vsc["VS Code"]
         VS["Agent Host / Copilot Chat"]
-        subgraph ws["workspace storage"]
+        AHP["AHP root / chat channels"]
+        subgraph ws["uncovered native Chat fallback"]
             vscdb["state.vscdb\n(SQLite)"]
             jsonl["chatSessions/ & transcripts/\n(JSONL files)"]
         end
@@ -67,9 +68,11 @@ flowchart LR
 
     VS -.->|writes| vscdb
     VS -.->|writes| jsonl
-    vscdb -->|sqlite3 read| daemon
-    jsonl -->|file tail| daemon
-    VS -->|hooks HTTP| daemon
+    VS -->|authoritative state| AHP
+    AHP -->|snapshot + sequenced actions| daemon
+    vscdb -->|fallback active-session check| daemon
+    jsonl -->|fallback file tail| daemon
+    VS -->|fallback hooks HTTP| daemon
     scripts -->|shell| cli
     cli -->|HTTP| daemon
     daemon <-->|USB HID JSON-RPC| keyboard
@@ -198,7 +201,14 @@ directory has to be on your `PATH`; the script says so if it is not. The CLI is 
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
 the symlink and the LaunchAgent both point at it.
 
-The installer also writes `~/.copilot/hooks/agentkeys.json` for VS Code integration.
+The VS Code observer uses `@microsoft/agent-host-protocol` for discovery, snapshots,
+ordered state actions, and reconnect replay. Sessions served by AHP no longer use
+transcripts, journals, SQLite checks, or hooks for state observation. The installer
+still writes `~/.copilot/hooks/agentkeys.json` for native Chat sessions not exposed
+through AHP. See [integration details](docs/vscode-integration-details.md).
+Chat buttons open both legacy and new Agent Host sessions: filesystem-backed SDK
+chat IDs are resolved to VS Code's owning host session before opening, while native
+Chat and AHP-provided session links retain their exact resources.
 
 The tiny `AgentKeys.app` is just the `node` binary in a signed bundle so that it
 meets the macOS requirement to have **Input Monitoring** permissions.
