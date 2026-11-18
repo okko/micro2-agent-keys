@@ -111,7 +111,7 @@ completion by returning it to white, while keeping the shortcut bound so you can
 conversation. Opening a red key returns it to white and releases the failed binding so the slot can
 be reused.
 
-`scripts/install-agent.sh` installs the daemon providing all the features: VS Code hook configuration, CLI and HTTP API. Use
+`scripts/install-agent.sh` installs the daemon, AHP-based VS Code integration, CLI and HTTP API. Use
 `agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
 from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
 `agentkeys doctor vscode` to check the detected VS Code integration.
@@ -201,14 +201,18 @@ directory has to be on your `PATH`; the script says so if it is not. The CLI is 
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
 the symlink and the LaunchAgent both point at it.
 
-The VS Code observer uses `@microsoft/agent-host-protocol` for discovery, snapshots,
-ordered state actions, and reconnect replay. Sessions served by AHP no longer use
-transcripts, journals, SQLite checks, or hooks for state observation. The installer
-still writes `~/.copilot/hooks/agentkeys.json` for native Chat sessions not exposed
-through AHP. See [integration details](docs/vscode-integration-details.md).
-Chat buttons open both legacy and new Agent Host sessions: filesystem-backed SDK
-chat IDs are resolved to VS Code's owning host session before opening, while native
-Chat and AHP-provided session links retain their exact resources.
+The VS Code integration tracks Agent Host Protocol (AHP) sessions.
+`@microsoft/agent-host-protocol` provides discovery, snapshots, ordered state actions,
+and reconnect replay.
+There are no transcript, journal, SQLite, or hook fallbacks.
+The installer removes the old AgentKeys-owned hook configuration and runner.
+Sessions not exposed through AHP are no longer tracked; existing AHP bindings survive
+migration, while legacy bindings are discarded.
+
+Chat buttons open the exact host-advertised session resource in its project window
+using `vscode://file/...?session=...`, without translating SDK IDs through databases.
+See [integration details](docs/vscode-integration-details.md) for the current contract
+since VS Code 1.146.
 
 The tiny `AgentKeys.app` is just the `node` binary in a signed bundle so that it
 meets the macOS requirement to have **Input Monitoring** permissions.
@@ -253,7 +257,6 @@ POST /slots/:index          <- { "state": "running", "label": "optional" }
 POST /reset
 GET  /integrations/vscode/slots
 GET  /integrations/vscode/doctor
-POST /integrations/vscode/hooks
 POST /integrations/vscode/slots/reset
 POST /integrations/vscode/slots/:index/open
 ```

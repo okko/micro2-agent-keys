@@ -1,5 +1,9 @@
 # VS Code integration residual blind spots
 
+> Historical assessment of the former mixed native/AHP integration. Native tracking
+> and fallback support have been removed; see the [current AHP-only architecture](vscode-integration-details.md).
+> This document is retained to explain the historical evidence, not current support.
+
 This records the forward-compatibility and source-availability limits that remain after
 the VS Code human-input plan. Runtime integration and exact transcript opening are not
 version-gated. The real evidence corpus is still anchored to VS Code 1.131.0 and must not

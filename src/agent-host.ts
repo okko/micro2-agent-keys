@@ -135,10 +135,6 @@ export function readLocalAgentHostEndpoints(registryPath: string): LocalAgentHos
   return [...endpoints.values()].sort((left, right) => left.key.localeCompare(right.key));
 }
 
-export function agentHostChatResource(sessionId: string): string {
-  return `ahp-chat://default/${Buffer.from(`copilotcli:/${sessionId}`).toString('base64url')}`;
-}
-
 // The browser transport cannot open VS Code's authenticated Unix sockets.
 class UnixSocketTransport implements AhpTransport {
   private readonly frames: TransportFrame[] = [];
@@ -202,20 +198,17 @@ function chatState(snapshot: Snapshot, channel: string): ChatState {
 
 function catalogSession(summary: SessionSummary): AgentHostSession | null {
   const resource = summary.resource;
-  let id = resource.slice(resource.lastIndexOf('/') + 1);
-  if (resource.startsWith('vscode-chat-session://local/')) id = Buffer.from(id, 'base64url').toString();
+  const id = resource.slice(resource.lastIndexOf('/') + 1);
   if (!SESSION_ID.test(id)) return null;
   const cwdUri = summary.workingDirectories?.[0] ?? summary.project?.uri;
   if (!cwdUri || !cwdUri.startsWith('file:')) return null;
   const cwd = fileURLToPath(cwdUri);
   if (!path.isAbsolute(cwd)) return null;
-  const openResource = resource.startsWith('vscode-chat-session:') || resource.startsWith('agent-host-')
+  if (!summary.defaultChat) throw new Error('Agent Host session does not advertise its default chat');
+  const openResource = resource.startsWith('agent-host-')
     ? resource
-    : resource.startsWith('ahp-session:')
-      ? `agent-host-${summary.provider}:/${id}`
-      : `agent-host-${resource}`;
-  const chatResource = summary.defaultChat ??
-    `ahp-chat://default/${Buffer.from(resource).toString('base64url')}`;
+    : resource.replace(/^[^:]+:/, `agent-host-${summary.provider}:`);
+  const chatResource = summary.defaultChat;
   return { id, cwd, resource: openResource, chatResource };
 }
 
@@ -263,9 +256,6 @@ class EndpointConnection {
           this.observations.has(session.chatResource)) {
         wanted.set(session.chatResource, { id: session.id, descriptor: session });
       }
-    }
-    for (const id of this.targets) {
-      if (!this.catalog.has(id)) wanted.set(agentHostChatResource(id), { id });
     }
     for (const [channel, observation] of this.observations) {
       if (wanted.has(channel)) continue;
@@ -555,6 +545,7 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
   }
 
   setSessions(sessionIds: readonly string[]): void {
+    if (sessionIds.length === this.desiredSessions.size && sessionIds.every((id) => this.desiredSessions.has(id))) return;
     this.desiredSessions = new Set(sessionIds);
     if (this.handler) this.reconcileEndpoints();
   }

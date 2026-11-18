@@ -13,11 +13,15 @@ const DEFAULT_APPS = [
 ];
 const BUNDLE_CONTRACTS = [
   {
+    relativePath: 'out/mainImpl.js',
+    tokens: ['vscode:openChatSession', 'copilotCliSession'],
+  },
+  {
     relativePath: 'out/vs/workbench/workbench.desktop.main.js',
     tokens: [
-      'questionCarousel',
-      'elicitationSerialized',
-      'toolInvocationSerialized',
+      'vscode:openChatSession',
+      'agent-host-',
+      'defaultChat',
       'pending-confirmation',
       'pending-result-confirmation',
       'auth-required',
@@ -32,6 +36,10 @@ const BUNDLE_CONTRACTS = [
   {
     relativePath: 'out/vs/platform/agentHost/node/agentHostMain.js',
     tokens: [
+      'defaultChat',
+      'ahp-chat:',
+      'root/sessionAdded',
+      'root/sessionSummaryChanged',
       'pending-confirmation',
       'pending-result-confirmation',
       'auth-required',
@@ -109,7 +117,9 @@ export function findVscodeApp(explicitApp, candidates = DEFAULT_APPS) {
 export function readVscodeBuild(appPath) {
   const resources = path.join(appPath, 'Contents', 'Resources', 'app');
   const packagePath = path.join(resources, 'package.json');
+  const productPath = path.join(resources, 'product.json');
   let packageJson;
+  let productJson;
   try {
     packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
   } catch (error) {
@@ -118,7 +128,12 @@ export function readVscodeBuild(appPath) {
   if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
     throw new Error(`VS Code metadata has no version: ${packagePath}`);
   }
-  const commit = packageJson.distro ?? packageJson.commit ?? null;
+  try {
+    productJson = JSON.parse(fs.readFileSync(productPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`cannot read VS Code metadata at ${productPath}: ${error.message}`);
+  }
+  const commit = productJson.commit ?? null;
   return { appPath, resources, version: packageJson.version, commit };
 }
 

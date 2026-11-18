@@ -1,5 +1,9 @@
 # Reliable human-input state tracking
 
+> Historical plan for the former mixed native/AHP integration. Its native tracking and
+> all-version support claims are superseded by the [AHP-only architecture](vscode-integration-details.md).
+> Evidence below remains tied to the build that produced it.
+
 ## Status
 
 Done for the externally observable production surface validated on VS Code 1.131.x.

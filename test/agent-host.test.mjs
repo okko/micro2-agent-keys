@@ -7,7 +7,6 @@ import test from 'node:test';
 import { WebSocketServer } from 'ws';
 import {
   LocalAgentHostStateSource,
-  agentHostChatResource,
   readLocalAgentHostEndpoints,
 } from '../dist/agent-host.js';
 
@@ -60,13 +59,6 @@ test('reads live legacy and per-instance Agent Host endpoint metadata', (t) => {
   );
 });
 
-test('builds the default AHP chat channel from the backend session URI', () => {
-  assert.equal(
-    agentHostChatResource(SESSION_ID),
-    `ahp-chat://default/${Buffer.from(`copilotcli:/${SESSION_ID}`).toString('base64url')}`
-  );
-});
-
 async function hostFixture(t, options = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-agent-host-source-'));
   const socketPath = path.join(os.tmpdir(), `agentkeys-ahp-${process.pid}-${Date.now()}.sock`);
@@ -77,12 +69,16 @@ async function hostFixture(t, options = {}) {
   const states = [];
   const unavailable = [];
   const logs = [];
-  const channel = agentHostChatResource(SESSION_ID);
+  const channel = 'ahp-chat:/11111111-1111-4111-8111-111111111111';
   let state = {
     resource: channel, title: '', modifiedAt: '2026-10-14T09:00:00Z', status: 8,
     activeTurn: { id: 'turn-1', responseParts: [] }, turns: [],
   };
-  let catalog = options.catalog ?? [];
+  let catalog = options.catalog ?? (options.discoveryOnly ? [] : [{
+    resource: `ahp-session:/${SESSION_ID}`, provider: 'copilotcli',
+    workingDirectories: ['file:///tmp/agentkeys-project'], defaultChat: channel,
+    title: '', status: 8, createdAt: '', modifiedAt: '',
+  }]);
   let replay = [];
   let seq = 10;
 
@@ -191,6 +187,13 @@ async function hostFixture(t, options = {}) {
         params: { channel: 'ahp-root://', session, changes },
       }));
     },
+    removeSession(session) {
+      catalog = catalog.filter((entry) => entry.resource !== session);
+      for (const client of webSockets.clients) client.send(JSON.stringify({
+        jsonrpc: '2.0', method: 'root/sessionRemoved',
+        params: { channel: 'ahp-root://', session },
+      }));
+    },
   };
 }
 
@@ -228,6 +231,7 @@ test('subscribes once and applies ordered actions using the shared chat reducer'
   assert.equal(states[2].state.status, 8);
 
   source.setSessions([]);
+  host.removeSession(`ahp-session:/${SESSION_ID}`);
   await waitFor(
     () => requests.some((request) => request.method === 'unsubscribe'),
     'removing a bound session did not unsubscribe its chat channel'
@@ -313,4 +317,11 @@ test('unknown chat actions fail closed without logging payloads or endpoint cred
   await waitFor(() => host.unavailable.includes(SESSION_ID), 'unknown action did not invalidate state');
   assert.ok(host.logs.some((line) => line.includes('state failed')));
   assert.ok(host.logs.every((line) => !line.includes('private-input') && !line.includes('source-test-token')));
+});
+
+test('does not fabricate a legacy chat channel for a target absent from the host catalog', async (t) => {
+  const host = await hostFixture(t, { catalog: [] });
+  await waitFor(() => host.requests.some((request) => request.method === 'listSessions'), 'catalog request missing');
+  assert.equal(host.requests.some((request) => request.method === 'subscribe'), false);
+  assert.equal(host.states.length, 0);
 });

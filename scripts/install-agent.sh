@@ -8,15 +8,12 @@ APP="$ROOT/AgentKeys.app/Contents/MacOS/AgentKeys"
 LABEL="eu.okko.agentkeys"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 BINDIR="$HOME/.local/bin"
-HOOKDIR="$HOME/.copilot/hooks"
-HOOKFILE="$HOOKDIR/agentkeys.json"
-HOOKRUNNER="$BINDIR/agentkeys-vscode-hook"
 VSCODERESET="$BINDIR/agentkeys-reset-vscode-slots"
 
 [ -x "$APP" ] || { echo "run scripts/make-app.sh first" >&2; exit 1; }
 (cd "$ROOT" && npm run build --silent)
 
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys" "$BINDIR" "$HOOKDIR"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys" "$BINDIR"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -102,66 +99,14 @@ echo "Input Monitoring: verified (keyboard connected)"
 ln -sfn "$ROOT/dist/cli.js" "$BINDIR/agentkeys"
 ln -sfn "$ROOT/scripts/reset-vscode-slots.sh" "$VSCODERESET"
 
-cat > "$HOOKRUNNER" <<RUNNER
-#!/bin/sh
-exec "$APP" "$ROOT/dist/vscode-hook.js"
-RUNNER
-chmod 755 "$HOOKRUNNER"
-
-cat > "$HOOKFILE" <<'HOOKS'
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ],
-    "PostToolUse": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ],
-    "PermissionDenied": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ],
-    "SessionStart": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ],
-    "SessionEnd": [
-      {
-        "type": "command",
-        "command": "~/.local/bin/agentkeys-vscode-hook",
-        "timeout": 2
-      }
-    ]
-  }
-}
-HOOKS
+# Remove only the hook files owned by earlier AgentKeys installations.
+rm -f "$HOME/.copilot/hooks/agentkeys.json" "$BINDIR/agentkeys-vscode-hook"
 
 echo "loaded $LABEL"
 echo "log: $HOME/.local/state/agentkeys/daemon.log"
 echo "cli: $BINDIR/agentkeys"
 echo "VS Code slot reset: $VSCODERESET"
-echo "VS Code hooks: $HOOKFILE"
+echo "VS Code integration: AHP only (no hooks)"
 
 case ":$PATH:" in
   *":$BINDIR:"*) ;;
