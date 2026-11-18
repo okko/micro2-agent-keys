@@ -310,6 +310,53 @@ test('idle catalog entries subscribe only when activity starts and advertised ch
   assert.equal(host.requests.filter((request) => request.method === 'listSessions').length, 1);
 });
 
+for (const stage of ['initial catalog', 'root update']) {
+  test(`sessions without a default chat do not disrupt other sessions during ${stage}`, async (t) => {
+    const pendingId = '00000000-0000-4000-8000-000000000001';
+    const pending = {
+      resource: `ahp-session:/${pendingId}`, provider: 'copilotcli',
+      workingDirectories: ['file:///tmp/pending-project'],
+      title: '', status: 8, createdAt: '', modifiedAt: '',
+    };
+    const valid = {
+      ...pending, resource: `ahp-session:/${SESSION_ID}`,
+      defaultChat: 'ahp-chat:/11111111-1111-4111-8111-111111111111',
+    };
+    const host = await hostFixture(t, {
+      discoveryOnly: true,
+      catalog: stage === 'initial catalog' ? [pending, valid] : [valid],
+    });
+    await waitFor(() => host.states.length === 1, 'valid session was not tracked');
+    assert.equal(host.states[0].sessionId, SESSION_ID);
+    if (stage === 'root update') host.setCatalog([pending, valid]);
+
+    // A subsequent root update confirms the catalog consumer survived the incomplete entry.
+    host.summaryChanged(valid.resource, { workingDirectories: ['file:///tmp/updated-project'] });
+    await waitFor(
+      () => host.states.some(({ descriptor }) => descriptor.cwd === '/tmp/updated-project'),
+      'valid session stopped receiving catalog updates'
+    );
+    assert.equal(host.requests.filter(({ method }) => method === 'subscribe').length, 1);
+    assert.ok(host.states.every(({ sessionId }) => sessionId === SESSION_ID));
+    host.action(questionAction());
+    await waitFor(() => host.states.some(({ state }) => state.status === 24), 'valid chat action was lost');
+
+    host.summaryChanged(pending.resource, { defaultChat: 'ahp-chat:/newly-advertised-chat' });
+    await waitFor(
+      () => host.states.some(({ sessionId }) => sessionId === pendingId),
+      'session was not tracked after advertising its chat'
+    );
+    assert.equal(
+      host.states.find(({ sessionId }) => sessionId === pendingId).descriptor.chatResource,
+      'ahp-chat:/newly-advertised-chat'
+    );
+    assert.equal(host.requests.filter(({ method }) => method === 'initialize').length, 1);
+    assert.equal(host.requests.filter(({ method }) => method === 'reconnect').length, 0);
+    assert.deepEqual(host.unavailable, []);
+    assert.deepEqual(host.logs, []);
+  });
+}
+
 test('unknown chat actions fail closed without logging payloads or endpoint credentials', async (t) => {
   const host = await hostFixture(t);
   await waitFor(() => host.states.length === 1, 'initial snapshot missing');

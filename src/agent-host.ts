@@ -204,7 +204,7 @@ function catalogSession(summary: SessionSummary): AgentHostSession | null {
   if (!cwdUri || !cwdUri.startsWith('file:')) return null;
   const cwd = fileURLToPath(cwdUri);
   if (!path.isAbsolute(cwd)) return null;
-  if (!summary.defaultChat) throw new Error('Agent Host session does not advertise its default chat');
+  if (!summary.defaultChat) return null;
   const openResource = resource.startsWith('agent-host-')
     ? resource
     : resource.replace(/^[^:]+:/, `agent-host-${summary.provider}:`);

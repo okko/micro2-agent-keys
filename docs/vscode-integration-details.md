@@ -39,6 +39,8 @@ Source anchors at the investigated commit:
    WebSocket connection. Never log connection tokens.
 2. Subscribe to the root session catalog. Follow active sessions and retained slot
    bindings using the catalog's exact `defaultChat`; never guess a chat channel.
+   Entries without `defaultChat` are skipped until a later catalog update advertises
+   it; other sessions on the endpoint continue to be tracked.
 3. Use the protocol package's reducer for snapshots, ordered actions, and reconnect
    replay. Project its current chat state into running, input, done, idle, or error.
 4. Build the editor resource by replacing only the backend scheme with
