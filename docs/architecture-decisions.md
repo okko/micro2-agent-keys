@@ -77,33 +77,17 @@ recovery, or establish all five key states. It remains a possible diagnostic or
 foreground-only corroborating signal, but it is not an alternative runtime architecture
 for AgentKeys and runtime correctness must not depend on it.
 
-### Option 2: Observe persisted state, hooks, and live protocol snapshots
+### Option 2: Observe live Agent Host Protocol state
 
-The daemon can reconstruct state from interfaces that preserve session identity and are
-available outside the renderer:
-
-- native Chat transcripts identify prompts, requests, tools, errors, and session IDs;
-- the native chat-session journal records the latest request, response parts,
-  confirmations, completion, and unresolved blockers;
-- preview hooks provide timely native question, permission, and lifecycle transitions
-  when persisted writes lag;
-- Agent Host persisted events support discovery and replay;
-- complete live Agent Host Protocol snapshots provide the authoritative current Agent
-  Host state without reimplementing its reducer.
-
-These sources require a typed projection and compatibility checks, so they are more
-complex than reading one CSS class. In return, they cover non-rendered sessions, retain
-stable identities, survive restarts, distinguish outcomes, and expose unknown shapes
-that can be handled explicitly.
+AHP exposes a session catalog, exact chat resources, complete state snapshots, ordered
+actions, and reconnect replay outside the renderer. The protocol package maintains the
+state; AgentKeys projects it into key states, including non-rendered sessions.
 
 ### Decision
 
-Use persisted transcript and journal records, low-latency hooks, and live Agent Host
-Protocol snapshots as the VS Code observation architecture. Treat journal or protocol
-state as authoritative; hooks may make a transition timely but must be reconciled with
-an authoritative snapshot. Do not use DOM elements, CSS classes, or toolbar visibility
-as production state inputs. Background-session coverage is a hard architectural
-requirement, not a desirable extension to foreground observation.
+Use AHP exclusively for discovery and state; sessions not exposed through AHP are unsupported.
+Do not use DOM elements, CSS classes, or toolbar visibility as production state inputs.
+Background-session coverage remains a hard requirement.
 
 Model the desired behavior using VS Code's semantic distinction:
 
@@ -114,17 +98,17 @@ needsHumanInput = active && !busy && an unresolved human-input blocker exists
 ```
 
 The implementation does not claim direct access to those internal model properties. It
-derives their relevant behavior from externally observable records and fails closed as
+derives their relevant behavior from protocol state and fails closed as
 `error` when VS Code reports a waiting state whose response form is unknown.
 
 ### Outcome
 
-The chosen architecture is implemented in `src/vscode.ts`, `src/vscode-chat-state.ts`,
-`src/vscode-session-files.ts`, `src/vscode-app.ts`, and `src/vscode-hook.ts`. Native Chat
-uses a journal projection plus transcript and hook
-correlation. Agent Host uses persisted events for discovery and recovery and complete
-protocol snapshots for live state. Bound sessions remain observable when their chat
-widget is hidden, and unresolved blockers can be reconstructed after restart.
+The chosen architecture is implemented in `src/agent-host.ts`, `src/vscode.ts`,
+`src/vscode-chat-state.ts`, and `src/vscode-app.ts`. Bound sessions remain observable
+when their widget is hidden, and protocol snapshots restore blockers after restart.
+Exact opening uses the advertised host identity in the project-window `session` URL.
+See [integration details](vscode-integration-details.md) for the contract and upstream
+source anchors.
 
 The cost is a larger compatibility surface than a CSS observer. The project contains
 fixture-driven lifecycle tests, fail-closed handling for unknown waiting forms, and a

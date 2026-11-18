@@ -44,14 +44,9 @@ interface VSCodeSlotsResponse {
 
 interface DoctorResponse {
   ready: boolean;
-  rootReadable: boolean;
-  sessionStateRoot: string;
-  nativeRootReadable: boolean;
-  nativeSessionRoot: string;
-  resourceScheme: string;
+  observation: 'ahp';
   trackedSessions: number;
-  compatibleSessions: number;
-  verifiedLifecycleSessions: number;
+  availableSessions: number;
   exactOpenAvailable: boolean;
   vscodeVersion?: string | null;
   protocolRegistered: boolean;
@@ -176,11 +171,8 @@ async function main(argv: string[]): Promise<void> {
         const data = await request<DoctorResponse>('GET', '/integrations/vscode/doctor');
         console.log('daemon: reachable');
         console.log(`VS Code integration: ${data.ready ? 'ready' : 'not ready'}`);
-        console.log(`Agent Host sessions: ${data.rootReadable ? 'readable' : 'unavailable'} (${data.sessionStateRoot})`);
-        console.log(`native Chat sessions: ${data.nativeRootReadable ? 'readable' : 'unavailable'} (${data.nativeSessionRoot})`);
-        console.log(`Agent Host resource scheme: ${data.resourceScheme}`);
-        console.log(`tracked sessions: ${data.trackedSessions} (${data.compatibleSessions} compatible)`);
-        console.log(`verified lifecycles: ${data.verifiedLifecycleSessions}`);
+        console.log(`observation: ${data.observation}`);
+        console.log(`tracked sessions: ${data.trackedSessions} (${data.availableSessions} available from AHP)`);
         console.log(
           `exact open: ${data.exactOpenAvailable ? 'available' : 'unavailable'} (VS Code ${data.vscodeVersion ?? 'not found'})`
         );

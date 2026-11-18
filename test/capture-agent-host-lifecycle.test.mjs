@@ -3,6 +3,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   actionMatchesBlocker,
+  advertisedChatResource,
   blockerResolved,
   findScenarioBlocker,
   parseArgs,
@@ -13,6 +14,24 @@ import {
 } from '../scripts/dev/capture-agent-host-question.mjs';
 
 const SESSION_ID = '00000000-0000-4000-8000-000000000000';
+
+test('capture follows the advertised opaque chat through the paginated catalog', async () => {
+  const requests = [];
+  const resource = 'ahp-chat:/00000000-0000-4000-8000-111111111111';
+  const request = async (method, params) => {
+    assert.equal(method, 'listSessions');
+    requests.push(params.cursor);
+    return params.cursor
+      ? { items: [{ resource: `ahp-session:/${SESSION_ID}`, defaultChat: resource }] }
+      : { items: [], nextCursor: 'next' };
+  };
+  assert.equal(await advertisedChatResource(request, SESSION_ID), resource);
+  assert.deepEqual(requests, [undefined, 'next']);
+  await assert.rejects(advertisedChatResource(async () => ({ items: [] }), SESSION_ID), /absent/);
+  await assert.rejects(advertisedChatResource(async () => ({
+    items: [{ resource: `copilotcli:/${SESSION_ID}` }],
+  }), SESSION_ID), /does not advertise/);
+});
 
 function stateWith(part, status = 24) {
   return {

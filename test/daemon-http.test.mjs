@@ -48,10 +48,6 @@ function fakeApi({ vscode, ...overrides } = {}) {
     vscode: {
       publicSlots: () => [{ slot: 0, state: 'running' }],
       doctor: () => ({ ok: true }),
-      applyHook: async (body) => {
-        calls.push(['applyHook', body]);
-        return true;
-      },
       open: async (index) => {
         calls.push(['open', index]);
         return { slot: { slot: index }, url: `vscode://window/${index}` };
@@ -161,10 +157,6 @@ test('VS Code routes delegate to the integration', async () => {
   });
   assert.deepEqual(await (await fetch(`${base}/integrations/vscode/doctor`)).json(), { ok: true });
 
-  const hook = await post('/integrations/vscode/hooks', { kind: 'stop' });
-  assert.equal(hook.status, 202);
-  assert.deepEqual(await hook.json(), { ok: true, handled: true });
-
   const reset = await post('/integrations/vscode/slots/reset');
   assert.equal(reset.status, 200);
   assert.deepEqual(await reset.json(), { ok: true, slots: [{ slot: 0, state: 'idle' }] });
@@ -174,7 +166,6 @@ test('VS Code routes delegate to the integration', async () => {
   assert.deepEqual(await opened.json(), { ok: true, slot: { slot: 1 }, url: 'vscode://window/1' });
 
   assert.deepEqual(api.calls, [
-    ['applyHook', { kind: 'stop' }],
     ['resetVSCodeSlots'],
     ['open', 1],
   ]);

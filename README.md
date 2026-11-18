@@ -24,9 +24,9 @@ accepts. Keep Input.app running so its key macros continue to work.
 
 ## Why AgentKeys
 
-- **Stay focused in VS Code.** AgentKeys automatically tracks eligible VS Code Agent Host and
-  native Copilot Chat sessions as they begin work, wait for input, finish, or fail. A physical
-  key opens the exact project and transcript for its bound session, putting you back in context
+- **Stay focused in VS Code.** AgentKeys automatically tracks VS Code Agent Host Protocol
+  (AHP) sessions as they begin work, wait for input, finish, or fail. A physical
+  key opens the exact project and conversation for its bound session, putting you back in context
   with one press.
 - **See what needs attention first.** Breathing blue keys show active work, amber keys show
   sessions blocked on you, green keys show unread completion, and red keys surface failures.
@@ -54,25 +54,16 @@ accepts. Keep Input.app running so its key macros continue to work.
 ```mermaid
 flowchart LR
     subgraph vsc["VS Code"]
-        VS["Agent Host / Copilot Chat"]
+        VS["Agent Host"]
         AHP["AHP root / chat channels"]
-        subgraph ws["uncovered native Chat fallback"]
-            vscdb["state.vscdb\n(SQLite)"]
-            jsonl["chatSessions/ & transcripts/\n(JSONL files)"]
-        end
     end
     scripts["your scripts\n(no perms)"]
     cli["agentkeys CLI\n(no perms)"]
     daemon["AgentKeys daemon\n(holds System Input Monitoring grant)"]
     keyboard["Creator Micro 2\n(keyboard)"]
 
-    VS -.->|writes| vscdb
-    VS -.->|writes| jsonl
     VS -->|authoritative state| AHP
     AHP -->|snapshot + sequenced actions| daemon
-    vscdb -->|fallback active-session check| daemon
-    jsonl -->|fallback file tail| daemon
-    VS -->|fallback hooks HTTP| daemon
     scripts -->|shell| cli
     cli -->|HTTP| daemon
     daemon <-->|USB HID JSON-RPC| keyboard
@@ -80,7 +71,7 @@ flowchart LR
 
 The daemon owns this project's single HID connection and the macOS permission. Input.app
 continues to run alongside it; everything else in this project is an unprivileged HTTP
-client, so hooks, shell aliases and editor tasks need no special entitlement.
+client, so scripts, shell aliases and editor tasks need no special entitlement.
 
 Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array of
 per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
@@ -92,8 +83,8 @@ will reflect its current status as soon as you switch that layer to be the activ
 
 ## VS Code integration
 
-VS Code is the automatic path: after installation, AgentKeys discovers eligible VS Code Agent
-Host and native Copilot Chat sessions, assigns a free slot when real work starts, and keeps that
+VS Code is the automatic path: after installation, AgentKeys discovers local AHP
+sessions, assigns a free slot when real work starts, and keeps that
 key synchronized with the session's live state. Simply creating or browsing a session does not
 claim a key, so the hardware reflects active work rather than editor clutter.
 
@@ -106,12 +97,12 @@ from `AG00` through `AG19` to clear any lingering key state. No daemon restart i
 
 When a session needs an answer or approval, its key turns amber; active work breathes blue;
 completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
-VS Code project window and opens that exact chat transcript. Opening a green key acknowledges the
+VS Code project window and opens that exact conversation. Opening a green key acknowledges the
 completion by returning it to white, while keeping the shortcut bound so you can reopen the same
 conversation. Opening a red key returns it to white and releases the failed binding so the slot can
 be reused.
 
-`scripts/install-agent.sh` installs the daemon providing all the features: VS Code hook configuration, CLI and HTTP API. Use
+`scripts/install-agent.sh` installs the daemon, AHP-based VS Code integration, CLI and HTTP API. Use
 `agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
 from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
 `agentkeys doctor vscode` to check the detected VS Code integration.
@@ -201,14 +192,15 @@ directory has to be on your `PATH`; the script says so if it is not. The CLI is 
 HTTP client — it needs no permissions, and the checkout has to stay where it is because
 the symlink and the LaunchAgent both point at it.
 
-The VS Code observer uses `@microsoft/agent-host-protocol` for discovery, snapshots,
-ordered state actions, and reconnect replay. Sessions served by AHP no longer use
-transcripts, journals, SQLite checks, or hooks for state observation. The installer
-still writes `~/.copilot/hooks/agentkeys.json` for native Chat sessions not exposed
-through AHP. See [integration details](docs/vscode-integration-details.md).
-Chat buttons open both legacy and new Agent Host sessions: filesystem-backed SDK
-chat IDs are resolved to VS Code's owning host session before opening, while native
-Chat and AHP-provided session links retain their exact resources.
+The VS Code integration tracks Agent Host Protocol (AHP) sessions.
+`@microsoft/agent-host-protocol` provides discovery, snapshots, ordered state actions,
+and reconnect replay.
+Sessions must be exposed through AHP to be tracked.
+
+Chat buttons open the exact host-advertised session resource in its project window
+using `vscode://file/...?session=...`.
+See [integration details](docs/vscode-integration-details.md) for the current contract
+since VS Code 1.146.
 
 The tiny `AgentKeys.app` is just the `node` binary in a signed bundle so that it
 meets the macOS requirement to have **Input Monitoring** permissions.
@@ -238,7 +230,7 @@ agentkeys vscode open 0
 agentkeys doctor vscode
 ```
 
-Aliases exist so hooks can use their own vocabulary: `thinking`, `busy` and `working`
+Aliases let scripts use their own vocabulary: `thinking`, `busy` and `working`
 all mean `running`; `waiting`, `paused` and `blocked` mean `input`.
 
 ## HTTP API
@@ -253,7 +245,6 @@ POST /slots/:index          <- { "state": "running", "label": "optional" }
 POST /reset
 GET  /integrations/vscode/slots
 GET  /integrations/vscode/doctor
-POST /integrations/vscode/hooks
 POST /integrations/vscode/slots/reset
 POST /integrations/vscode/slots/:index/open
 ```
@@ -279,10 +270,8 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `AGENTKEYS_PORT` overrides the port for both daemon and CLI.
 - `AGENTKEYS_LOG` redirects daemon output to a file, needed when launched via
   LaunchServices, which discards stdout.
-- `COPILOT_HOME` overrides the Copilot data directory used by the VS Code integration.
 - `AGENTKEYS_VSCODE_USER_DATA` overrides the VS Code user-data directory used to discover
   authenticated local Agent Host protocol endpoints.
-- `AGENTKEYS_VSCODE_WORKSPACE_STORAGE` overrides the native VS Code workspace-storage directory.
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
 - `AGENTKEYS_TEST_LAYER` picks which layer the agent keys replace (1-based, default `1`) in tests.
 
@@ -294,9 +283,6 @@ agentkeys log
 
 ## Known issues
 
-- Native VS Code session completion may be delayed because AgentKeys relies on journal writes,
-  which VS Code may defer. VS Code currently provides no live, authoritative completion
-  notification for these sessions. The delay is generally below a few seconds, sometimes even ~ 15 s.
 - `~/.local/state/agentkeys/daemon.log` is not rotated automatically; log rotation is not yet
   implemented.
 
@@ -309,8 +295,7 @@ agentkeys log
 
 - [How the VS Code integration works](docs/vscode-integration-details.md)
 - [How to verify a monthly VS Code update](docs/vscode-update.md)
-- [VS Code evidence completion ledger](docs/archive-do-not-edit/vscode-plan-gaps-todo.md)
-- [VS Code residual blind spots](docs/vscode-plan-residual-blind-spots.md)
+- [VS Code human-input evidence and coverage limits](docs/vscode-human-input-evidence.md)
 - [How the daemon deployment is verified](docs/daemon-deployment.md)
 - [docs/hardware-safety.md](docs/hardware-safety.md) — **read before writing to the
   device.** How a two-process run once left it unresponsive, and the guardrails that now prevent that.

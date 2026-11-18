@@ -1,28 +1,20 @@
 # VS Code human-input evidence
 
-This records sanitized production evidence captured from Visual Studio Code 1.131.0,
-commit `d0fd3324a737f695bd14f2aee3ca92accd28870f`. The fixtures under
-`test/fixtures/vscode-human-input/` retain only structural states, enum outcomes,
-relative timing, and stable pseudonyms needed for correlation. Prompts, answers,
-commands, URLs, paths, credentials, tokens, account names, private content, and
-absolute timestamps are redacted.
+The AHP fixtures were captured from Visual Studio Code 1.131.0, commit
+`d0fd3324a737f695bd14f2aee3ca92accd28870f`. The 14 fixtures under
+`test/fixtures/vscode-human-input/` contain protocol snapshots and correlated actions.
+They retain structural states, enum outcomes, relative timing, and stable pseudonyms.
+Prompts, answers, commands, URLs, paths, credentials, tokens, account names, private
+content, and absolute timestamps are redacted.
 
-Coverage is exhaustive for externally observable outcomes available from this build's
-native transcript and journal, Agent Host event and state files, and live Agent Host
-protocol. Every outcome not backed by a real fixture has a build-locked upstream or
-provider limitation in the archived completion ledger at
-`docs/archive-do-not-edit/vscode-plan-gaps-todo.md`. No unsupported state is synthesized.
-Unknown waiting forms continue to fail closed.
+The manifest identifies observed outcomes and coverage gaps for that build. These
+records are not empirical proof for other VS Code versions. Unknown waiting forms
+fail closed; synthetic unit tests exercise additional protocol shapes but do not
+count as production evidence.
 
 ## Capture and validation
 
-Create sanitized fixtures with:
-
-```sh
-npm run dev:capture:vscode-fixture -- ...
-```
-
-Capture live Agent Host lifecycles with:
+Record a live AHP lifecycle:
 
 ```sh
 npm run dev:capture:vscode-ahp-lifecycle -- \
@@ -30,94 +22,69 @@ npm run dev:capture:vscode-ahp-lifecycle -- \
   --scenario <name>
 ```
 
-The lifecycle recorder supports isolated scenarios and passive `--session` attachment.
-It preserves only safe blocker structure, correlates UI actions by request, turn, or tool
-ID, and treats terminal state as authoritative when cancellation leaves an unresolved-
-looking historical response part.
+The recorder supports isolated scenarios and `--session <uuid>` attachment.
+Isolated scenarios create a session and invoke a model. Use `--no-resolve` for passive
+attachment; otherwise the selected resolution can answer or cancel the live blocker.
+It correlates actions by request, turn, or tool ID and treats terminal state as
+authoritative when cancellation leaves an unresolved-looking response part.
 
-The fixture tests reject home paths, file URIs, raw UUIDs, long opaque tokens, absolute
-timestamps, and files over 100 KB. Manifest measurements identify exact source records;
-tests recompute every duration rather than trusting prose.
+Sanitize the recorded protocol stream:
+
+```sh
+npm run dev:capture:vscode-fixture -- \
+  --session <uuid> \
+  --agent-host-protocol "$TMPDIR/agentkeys-lifecycle.jsonl" \
+  --output <fixture.json>
+```
+
+Use `--agent-host-protocol-lines` to select exact source lines and `--vscode-package`
+to identify the build that produced the capture. Missing or malformed input fails
+explicitly. Record the source commit in the manifest when adding evidence.
+
+Fixture tests reject home paths, file URIs, raw UUIDs, long opaque tokens, absolute
+timestamps, and files over 100 KB. They recompute all 15 manifest measurements from
+the referenced protocol records. Retained records preserve their original source-line
+numbers, capture-relative offsets, pseudonyms, and build provenance; selecting records
+does not rebase their timestamps or relabel their build.
 
 ## Observed lifecycles
 
-| Family | Real production evidence | Outcome |
+| Family | Protocol evidence | Outcomes |
 |---|---|---|
-| Native questions | unresolved and used `questionCarousel` records correlated with tool start/completion | submit and Skip |
-| Agent Host questions | status `24` unresolved input -> action -> status `8` or terminal `1` | submit and turn cancel |
-| Plan review | status `24` `request.planReview` -> correlated input response -> status `8` -> terminal `1` | reject, approve, and feedback followed by replacement approval |
-| Pre-tool approval | terminal, network, external-file, and contributed-tool permission requests; live pending confirmation for denial | approve, deny, confirmation-not-needed, and immediate controls |
-| Modified-files review | `modifiedFilesConfirmation` with status `24` -> correlated confirmation -> status `8` -> terminal `1` | approve and reject |
-| Feedback review | `agentFeedbackReviewConfirmation` with status `24` -> correlated confirmation -> status `8` -> terminal `1` | approve and reject |
-| Form elicitation | unresolved Agent Host input request -> `decline` response -> status `8` -> terminal `1` | decline |
-| URL elicitation | unresolved redacted URL request -> correlated response or turn cancellation | decline and cancel |
-| Native elicitation | final `elicitationSerialized.state` | accepted and rejected |
-| Authentication | status `24` tool with `auth-required`, reason `expired` -> correlated turn cancellation -> terminal `1` | expired-auth cancel |
-| Legacy confirmation | final native `confirmation` with `isUsed: true` | generic resolution only |
+| Questions | unresolved input, status `24`, followed by resolution and terminal state | submit and cancel |
+| Plan review | `request.planReview` with correlated input responses | reject, approve, feedback, replacement approval |
+| Pre-tool approval | `pending-confirmation` followed by a cancelled tool and resumed turn | deny |
+| Modified-files review | `modifiedFilesConfirmation` with correlated confirmation action | approve and reject |
+| Feedback review | `agentFeedbackReviewConfirmation` with correlated confirmation action | approve and reject |
+| Form elicitation | unresolved input followed by a decline response | decline |
+| URL elicitation | redacted URL request followed by response or turn cancellation | decline and cancel |
+| Authentication | `auth-required` tool with reason `expired` followed by turn cancellation | expired-auth cancel |
 
-Agent Host execution bits are interpreted independently of AgentKeys: `24` means waiting
-for input, `8` means an active running turn, and `1` means terminal/inactive. Waiting also
-requires the expected unresolved input request, non-auto-approved pending confirmation,
-pending result confirmation, or auth-required tool. Timing and tool names alone never
-establish a blocker.
+AHP execution bits are interpreted independently of AgentKeys: `24` means waiting
+for input, `8` means an active running turn, and `1` means terminal/inactive. Waiting
+also requires the expected unresolved input request or tool blocker. Timing and tool
+names alone never establish a blocker.
 
-## Measured waits
+Turn cancellation can transition directly from status `24` to terminal status `1`.
+Input parts can remain unresolved-looking after cancellation; correlated cancellation
+actions and terminal turn/tool state are authoritative.
 
-Human-delayed captures include native question submit (47,379 ms), native question Skip
-(39,866 ms), URL elicitation decline (72,700 ms), URL elicitation cancellation
-(26,512 ms), and expired-auth cancellation (187,070 ms). Permission waits include
-terminal (1,160,824 ms), external-file read (196,716 ms), contributed tool (16,984 ms),
-and network (5,008 ms).
+## Coverage limits
 
-The 1 ms URL and 27 ms contributed-tool permission pairs are immediate controls, not
-human waits. Recorder-driven protocol actions complete in 1-8 ms and are classified as
-immediate protocol controls. Their timing verifies ordering, not human behavior.
+The manifest's `unsupported` entries mean outcomes not covered by this production
+corpus, not necessarily outcomes the runtime cannot project.
 
-## Ordering and persistence
+- Pre-tool evidence covers denial, not general terminal/network approvals,
+  confirmation-not-needed, or edit-and-approve.
+- Post-tool result confirmation has protocol/reducer tests but no production capture.
+- Authentication evidence covers the `expired` reason and cancellation, not missing
+  credentials, insufficient scope, refresh, or successful authentication.
+- Questions cover submit and cancel, not Skip.
+- Elicitation covers form/URL decline and URL cancellation, not acceptance.
+- Waiting UI restoration across a VS Code window reload was not captured.
+- Protocol status and blocker structure are captured; visual rendering was not
+  separately screen-captured.
 
-Agent Host `events.jsonl` has timestamps and total order. Captured `preToolUse` and
-`preMcpToolCall` hooks establish boundaries, while `permission.requested` first identifies
-the permission gate. The same event can be immediately approved, so it is not sufficient
-waiting evidence by itself.
-
-The native journal has no per-record timestamp. Native question records establish
-unresolved/used structure, while the transcript supplies tool start/completion timing;
-cross-file first-arrival order cannot be reconstructed.
-
-Agent Host `session.db` contains inbox and todo state, not chat blockers. Permission
-history persists in `events.jsonl`; unresolved input requests and authoritative status
-transitions come from the live protocol. Captured lifecycles were not held open across a
-window reload, so restoration of a waiting UI is not claimed.
-
-Turn cancellation may transition directly from status `24` to terminal status `1`.
-Historical input parts can remain unresolved-looking after cancellation. The correlated
-`chat/turnCancelled` action and terminal turn/tool state are authoritative in that case.
-
-## Support matrix
-
-| Blocker family | Real evidence | Remaining build-locked limitation |
-|---|---|---|
-| Pre-tool approval | waiting, approve, deny, confirmation-not-needed, immediate controls | edit-and-approve has reducer support but no installed producer or distinct persisted outcome |
-| Post-tool approval | none | reducer contract exists, but no installed provider emits `requiresResultConfirmation` or a result-review action |
-| Authentication | expired-auth waiting and cancel | missing-auth, insufficient-scope, and authenticate are blocked by Agent Host/server authentication-state divergence |
-| Confirmation part | final generic resolution | no triggerable installed producer for waiting; selected button and cancel are not persisted distinctly |
-| Questions | native waiting/submit/Skip; Agent Host waiting/submit/cancel | native cancel is not persisted distinctly; Agent Host has no Skip producer or response kind |
-| Plan review | waiting, reject, approve, feedback, replacement review | none |
-| Elicitation | native accepted/rejected; Agent Host pending form/URL, decline, and cancel | none |
-| Modified-files review | waiting, approve, reject | none |
-| Feedback review | waiting, approve, reject | none |
-
-The expired authentication fixture proves only the observed `expired` reason and
-cancellation. It does not prove missing credentials, insufficient scope, token refresh,
-or successful authentication.
-
-## UI truth limits
-
-The human-delayed records were captured from visibly blocking production interactions,
-and completion or terminal records establish exit from the wait. Native persisted formats
-do not expose `ChatModel.hasActiveRequest` or `requestInProgress`; exact native model truth
-cannot be replayed from history. Agent Host fixtures retain live status and blocker
-structure, but their visual rendering was not separately screen-captured.
-
-Unsupported outcomes remain explicit diagnostics. They must not be inferred from elapsed
-time, labels, tool names, reducer capability, or a neighboring outcome.
+Do not infer missing outcomes from elapsed time, labels, tool names, reducer capability,
+or a neighboring outcome. Capture real production evidence when a producer becomes
+available or changes semantics, and retain its actual build identity.

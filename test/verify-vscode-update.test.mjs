@@ -37,7 +37,10 @@ test('discovers and reads an installed VS Code build', (t) => {
   fs.mkdirSync(resources, { recursive: true });
   fs.writeFileSync(path.join(resources, 'package.json'), JSON.stringify({
     version: '1.132.0',
-    distro: '0123456789abcdef0123456789abcdef01234567',
+    distro: 'distribution-repository-commit',
+  }));
+  fs.writeFileSync(path.join(resources, 'product.json'), JSON.stringify({
+    commit: '0123456789abcdef0123456789abcdef01234567',
   }));
 
   assert.equal(findVscodeApp(undefined, [missing, app]), app);

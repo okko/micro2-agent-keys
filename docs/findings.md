@@ -141,41 +141,15 @@ overwrite a newer transition.
 
 ## VS Code telemetry
 
-The effective telemetry model used by this project is:
+AHP provides the session catalog, exact chat channels, current state snapshots, ordered
+actions, and reconnect replay. The shared protocol reducer maintains chat state;
+AgentKeys projects unresolved input requests and tool confirmations into key states.
+Fresh snapshots restore authoritative state after restart. Unknown waiting forms or
+loss of an active session's host fail closed to red.
 
-- persisted Agent Host event streams are the source of truth for session discovery,
-  replay, recovery, and lifecycle state;
-- native VS Code Chat completion is derived from its persisted chat-session journal;
-- native transcript tool requests expose explicit network and unsandboxed flags, and
-  external-file requests can be identified by resolving their structured paths against
-  the session workspace. Path scope identifies a permission candidate, not an unresolved
-  blocker by itself;
-- the transcript writes `tool.execution_start` when the approval UI opens, not after the
-  user accepts, so a permissioned native start must retain input state;
-- generic approvals do not emit a verified pre-approval `PermissionRequest` hook.
-  `PostToolUse` or `PermissionDenied` clears input state as a fallback without forwarding
-  tool input. The hook ID's `__vscode-<number>` suffix is removed to correlate it with the
-  transcript tool-call ID, and transcript completion remains a final fallback;
-- the persisted journal provides the approval-response boundary. A waiting pre-execution
-  record has `isConfirmed: null`, `isComplete: true`, and no `terminalCommandState`;
-  a waiting post-execution result approval has `isConfirmed: { type: 5 }`. Other populated
-  confirmation values are resolved, and terminal calls also gain a command state after the
-  user responds. Process creation and `PreToolUse` are not response signals because both may
-  occur before the user accepts;
-- journal records for external reads omit access flags, so records whose tool-call IDs are
-  already pending from the transcript are also interpreted. An unconfirmed record opens
-  the blocker; an already confirmed record remains running. Each confirmation clears only
-  its matching request, preserving other parallel approval waits;
-- unconfirmed journal records recover approval waits across restarts;
-- automatic outside-sandbox retry waits use `PermissionRequest`, `PostToolUse`, and
-  `PermissionDenied` hooks for the internal terminal-confirmation tool; the hook runner
-  forwards only a SHA-256 command fingerprint;
-- native live input prompts require preview hook events for timely
-  `PreToolUse`/`PostToolUse` tracking;
-- lifecycle hook events clear stale native-chat state between runs.
-
-This combination prevents agent slots from retaining stale input state while preserving
-file-based recovery after restarts.
+The advertised editor resource opens the exact conversation in its project window.
+See [integration details](vscode-integration-details.md) and
+[production evidence](vscode-human-input-evidence.md) for contracts and coverage limits.
 
 ## Not established
 

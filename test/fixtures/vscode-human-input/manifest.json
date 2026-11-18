@@ -12,89 +12,8 @@
   },
   "fixtures": [
     {
-      "file": "native-question.json",
-      "sources": [
-        "native-transcript",
-        "native-journal"
-      ],
-      "observed": [
-        "questions.native.waiting",
-        "questions.native.submit"
-      ]
-    },
-    {
-      "file": "native-question-skip.json",
-      "sources": [
-        "native-transcript",
-        "native-journal"
-      ],
-      "observed": [
-        "questions.native.waiting",
-        "questions.native.skip"
-      ]
-    },
-    {
-      "file": "native-outcomes.json",
-      "sources": [
-        "native-journal"
-      ],
-      "observed": [
-        "pre-tool-approval.confirmation-not-needed",
-        "pre-tool-approval.approve",
-        "elicitation.accepted",
-        "elicitation.rejected"
-      ]
-    },
-    {
-      "file": "native-denied.json",
-      "sources": [
-        "native-journal"
-      ],
-      "observed": [
-        "pre-tool-approval.deny"
-      ]
-    },
-    {
-      "file": "native-legacy-confirmation.json",
-      "sources": [
-        "native-journal"
-      ],
-      "observed": [
-        "confirmation-part.resolved"
-      ]
-    },
-    {
-      "file": "agent-host-permissions.json",
-      "sources": [
-        "agent-host-events",
-        "agent-host-state"
-      ],
-      "observed": [
-        "pre-tool-approval.terminal.waiting",
-        "pre-tool-approval.network.waiting",
-        "pre-tool-approval.external-file.waiting",
-        "pre-tool-approval.approve",
-        "pre-tool-approval.immediate-event-control"
-      ]
-    },
-    {
-      "file": "agent-host-contributed-tool.json",
-      "sources": [
-        "agent-host-events",
-        "agent-host-state"
-      ],
-      "observed": [
-        "pre-tool-approval.generic-contributed-tool.waiting",
-        "pre-tool-approval.approve",
-        "hooks.pre-tool-use.order",
-        "hooks.pre-mcp-tool-call.order"
-      ]
-    },
-    {
       "file": "agent-host-question.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -107,8 +26,6 @@
     {
       "file": "agent-host-tool-deny.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -121,8 +38,6 @@
     {
       "file": "agent-host-plan-reject.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -135,8 +50,6 @@
     {
       "file": "agent-host-question-submit.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -149,8 +62,6 @@
     {
       "file": "agent-host-plan-approve.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -163,8 +74,6 @@
     {
       "file": "agent-host-plan-feedback.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -179,8 +88,6 @@
     {
       "file": "agent-host-modified-files-deny.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -193,8 +100,6 @@
     {
       "file": "agent-host-modified-files-approve.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -207,8 +112,6 @@
     {
       "file": "agent-host-feedback-review-deny.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -221,8 +124,6 @@
     {
       "file": "agent-host-feedback-review-approve.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -235,8 +136,6 @@
     {
       "file": "agent-host-elicitation-form-decline.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -249,8 +148,6 @@
     {
       "file": "agent-host-elicitation-url-decline.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -263,8 +160,6 @@
     {
       "file": "agent-host-elicitation-url-cancel.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -276,8 +171,6 @@
     {
       "file": "agent-host-auth-expired-cancel.json",
       "sources": [
-        "agent-host-events",
-        "agent-host-state",
         "agent-host-protocol"
       ],
       "observed": [
@@ -292,19 +185,14 @@
       "id": "pre-tool-approval",
       "status": "partial",
       "observed": [
-        "terminal",
-        "network",
-        "external-file",
-        "generic-contributed-tool",
-        "approve",
-        "deny",
-        "agent-host-deny",
-        "confirmation-not-needed",
-        "immediate-approval-controls"
+        "agent-host-deny"
       ],
       "unsupported": [
-        "edit-and-approve",
-        "agent-host-edit-outcome"
+        "terminal",
+        "network",
+        "approve",
+        "confirmation-not-needed",
+        "edit-and-approve"
       ]
     },
     {
@@ -331,30 +219,14 @@
       ]
     },
     {
-      "id": "confirmation-part",
-      "status": "partial",
-      "observed": [
-        "resolved"
-      ],
-      "unsupported": [
-        "waiting",
-        "selected-button",
-        "cancel"
-      ]
-    },
-    {
       "id": "questions",
       "status": "partial",
       "observed": [
-        "native-waiting",
-        "native-submit",
-        "native-skip",
         "agent-host-waiting",
         "agent-host-cancel",
         "agent-host-submit"
       ],
       "unsupported": [
-        "native-cancel",
         "agent-host-skip"
       ]
     },
@@ -372,16 +244,16 @@
     },
     {
       "id": "elicitation",
-      "status": "complete",
+      "status": "partial",
       "observed": [
-        "accepted",
-        "rejected",
         "pending-form",
         "pending-url",
         "decline",
         "cancel"
       ],
-      "unsupported": []
+      "unsupported": [
+        "accept"
+      ]
     },
     {
       "id": "modified-files-review",
@@ -405,142 +277,6 @@
     }
   ],
   "measurements": [
-    {
-      "id": "questions.native.wait",
-      "fixture": "native-question.json",
-      "start": {
-        "source": "native-transcript",
-        "sourceLine": 290,
-        "type": "tool.execution_start"
-      },
-      "end": {
-        "source": "native-transcript",
-        "sourceLine": 291,
-        "type": "tool.execution_complete"
-      },
-      "correlationPath": "data.toolCallId",
-      "elapsedMs": 47379,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "questions.native.skip",
-      "fixture": "native-question-skip.json",
-      "start": {
-        "source": "native-transcript",
-        "sourceLine": 655,
-        "type": "tool.execution_start"
-      },
-      "end": {
-        "source": "native-transcript",
-        "sourceLine": 656,
-        "type": "tool.execution_complete"
-      },
-      "correlationPath": "data.toolCallId",
-      "elapsedMs": 39866,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "pre-tool-approval.terminal.wait",
-      "fixture": "agent-host-permissions.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 807,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 808,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 1160824,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "pre-tool-approval.network.wait",
-      "fixture": "agent-host-permissions.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 64,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 65,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 5008,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "pre-tool-approval.external-file.wait",
-      "fixture": "agent-host-permissions.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 2397,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 2399,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 196716,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "pre-tool-approval.contributed-tool.wait",
-      "fixture": "agent-host-contributed-tool.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 201,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 207,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 16984,
-      "classification": "observed-human-wait"
-    },
-    {
-      "id": "pre-tool-approval.contributed-tool.immediate-control",
-      "fixture": "agent-host-contributed-tool.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 200,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 204,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 27,
-      "classification": "immediate-approval-control"
-    },
-    {
-      "id": "pre-tool-approval.url.immediate-control",
-      "fixture": "agent-host-permissions.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 2396,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 2398,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 1,
-      "classification": "immediate-approval-control"
-    },
     {
       "id": "questions.agent-host.cancel",
       "fixture": "agent-host-question.json",
@@ -573,23 +309,6 @@
       },
       "correlationPath": "state.activeTurn.id",
       "elapsedMs": 5,
-      "classification": "immediate-protocol-control"
-    },
-    {
-      "id": "pre-tool-approval.agent-host.permission-event-deny",
-      "fixture": "agent-host-tool-deny.json",
-      "start": {
-        "source": "agent-host-events",
-        "sourceLine": 24,
-        "type": "permission.requested"
-      },
-      "end": {
-        "source": "agent-host-events",
-        "sourceLine": 25,
-        "type": "permission.completed"
-      },
-      "correlationPath": "data.requestId",
-      "elapsedMs": 8,
       "classification": "immediate-protocol-control"
     },
     {
@@ -824,29 +543,6 @@
       "endCorrelationPath": "action.turnId",
       "elapsedMs": 187070,
       "classification": "observed-human-wait"
-    }
-  ],
-  "derivedFacts": [
-    {
-      "id": "pre-tool-approval.external-file.outside-working-directory",
-      "fixture": "agent-host-permissions.json",
-      "record": {
-        "source": "agent-host-events",
-        "sourceLine": 2397,
-        "type": "permission.requested"
-      },
-      "captureField": "pathScope",
-      "expected": "outside-working-directory"
-    },
-    {
-      "id": "agent-host-state.table-inventory",
-      "fixture": "agent-host-permissions.json",
-      "source": "agent-host-state",
-      "expectedTables": [
-        "inbox_entries",
-        "todo_deps",
-        "todos"
-      ]
     }
   ]
 }

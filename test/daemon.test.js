@@ -7,6 +7,8 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const http = require('node:http');
+const { WebSocketServer } = require('ws');
 
 const SESSION_ID = '10000000-0000-4000-8000-000000000000';
 
@@ -17,8 +19,6 @@ function isolatedVSCodeEnvironment() {
     env: {
       AGENTKEYS_VSCODE_USER_DATA: directory,
       AGENTKEYS_VSCODE_STATE: path.join(directory, 'state.json'),
-      AGENTKEYS_VSCODE_WORKSPACE_STORAGE: path.join(directory, 'workspaceStorage'),
-      COPILOT_HOME: path.join(directory, 'copilot'),
     },
   };
 }
@@ -125,7 +125,7 @@ test('daemon shutdown closes an incomplete HTTP request', async () => {
       socket.once('error', reject);
     });
     socket.write(
-      'POST /integrations/vscode/hooks HTTP/1.1\r\n' +
+      'POST /slots/0 HTTP/1.1\r\n' +
         `Host: 127.0.0.1:${port}\r\n` +
         'Content-Type: application/json\r\n' +
         'Content-Length: 100\r\n\r\n{}'
@@ -144,42 +144,38 @@ test('daemon shutdown closes an incomplete HTTP request', async () => {
   }
 });
 
-test('daemon restart replays a permission wait and subsequent completion', async (t) => {
+test('daemon restart restores AHP subscriptions and authoritative completion', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-'));
-  const copilotHome = path.join(directory, 'copilot');
-  const nativeRoot = path.join(directory, 'workspaceStorage');
-  const sessionDirectory = path.join(copilotHome, 'session-state', SESSION_ID);
   const cwd = path.join(directory, 'project');
   const statePath = path.join(directory, 'state.json');
-  const eventsPath = path.join(sessionDirectory, 'events.jsonl');
-  fs.mkdirSync(sessionDirectory, { recursive: true });
-  fs.mkdirSync(nativeRoot);
   fs.mkdirSync(cwd);
-  fs.writeFileSync(
-    path.join(sessionDirectory, 'workspace.yaml'),
-    `id: ${SESSION_ID}\ncwd: ${cwd}\nclient_name: vscode-agent-host\n`
-  );
-  fs.writeFileSync(
-    eventsPath,
-    [
-      JSON.stringify({
-        type: 'session.start',
-        data: { producer: 'copilot-agent', version: 1, copilotVersion: '1.0.73' },
-        timestamp: '2026-08-01T09:59:57.000Z',
-      }),
-      JSON.stringify({
-        type: 'hook.start',
-        data: { hookType: 'userPromptSubmitted' },
-        timestamp: '2026-08-01T09:59:58.000Z',
-      }),
-      JSON.stringify({
-        type: 'hook.end',
-        data: { hookType: 'sessionEnd' },
-        timestamp: '2026-08-01T09:59:59.000Z',
-      }),
-      '',
-    ].join('\n')
-  );
+  const socketPath = path.join(os.tmpdir(), `agentkeys-daemon-${process.pid}.sock`);
+  const channel = 'ahp-chat:/20000000-0000-4000-8000-000000000000';
+  const host = http.createServer();
+  const sockets = new WebSocketServer({ server: host });
+  const startedAt = '2026-11-17T10:00:00Z';
+  let state = { resource: channel, turns: [], activeTurn: { id: 'turn', startedAt, responseParts: [] } };
+  sockets.on('connection', (socket) => socket.on('message', (data) => {
+    const request = JSON.parse(data.toString());
+    let result;
+    if (request.method === 'initialize') result = { protocolVersion: '1.0.0', serverSeq: 1, snapshots: [] };
+    else if (request.method === 'listSessions') result = { items: [{
+      resource: `ahp-session:/${SESSION_ID}`, provider: 'copilotcli', defaultChat: channel,
+      workingDirectories: [require('node:url').pathToFileURL(cwd).toString()],
+      title: '', status: 8, createdAt: '', modifiedAt: '',
+    }] };
+    else if (request.method === 'subscribe') result = { snapshot: {
+      resource: channel, state, fromSeq: 1,
+    } };
+    if (result) socket.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }));
+  }));
+  await new Promise((resolve) => host.listen(socketPath, resolve));
+  const registry = path.join(directory, 'agent-host', 'local-endpoint', 'entries');
+  fs.mkdirSync(registry, { recursive: true });
+  fs.writeFileSync(path.join(registry, 'host.json'), JSON.stringify({
+    type: 'editor', schemaVersion: 2, pid: process.pid, instanceId: 'test',
+    protocolVersion: '1.0.0', connectionToken: 'test-token', endpoint: { type: 'socket', path: socketPath },
+  }));
   const port = await freePort();
   let child;
   let output = '';
@@ -193,8 +189,6 @@ test('daemon restart replays a permission wait and subsequent completion', async
         AGENTKEYS_PORT: String(port),
         AGENTKEYS_VSCODE_STATE: statePath,
         AGENTKEYS_VSCODE_USER_DATA: directory,
-        AGENTKEYS_VSCODE_WORKSPACE_STORAGE: nativeRoot,
-        COPILOT_HOME: copilotHome,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -210,53 +204,28 @@ test('daemon restart replays a permission wait and subsequent completion', async
 
   t.after(async () => {
     await stop(child);
+    for (const socket of sockets.clients) socket.terminate();
+    await new Promise((resolve) => sockets.close(resolve));
+    await new Promise((resolve) => host.close(resolve));
+    fs.rmSync(socketPath, { force: true });
     fs.rmSync(directory, { recursive: true, force: true });
   });
 
   start();
   await waitFor(slots);
-  fs.appendFileSync(
-    eventsPath,
-    [
-      JSON.stringify({ type: 'user.message', data: {}, timestamp: '2026-08-01T10:00:00.000Z' }),
-      JSON.stringify({
-        type: 'assistant.turn_start',
-        data: { turnId: 'turn-1' },
-        timestamp: '2026-08-01T10:00:01.000Z',
-      }),
-      '',
-    ].join('\n')
-  );
   await waitFor(async () => (await slots())[0].state === 'running');
   await stop(child);
 
-  fs.appendFileSync(
-    eventsPath,
-    JSON.stringify({
-      type: 'permission.requested',
-      data: { requestId: 'permission-1' },
-      timestamp: '2026-08-01T10:00:02.000Z',
-    }) + '\n'
-  );
+  state = { ...state, activeTurn: { id: 'turn', startedAt, responseParts: [
+    { kind: 'inputRequest', request: { id: 'question', purpose: 'askUser', questions: [] } },
+  ] } };
   start();
   await waitFor(async () => (await slots())[0].state === 'input');
-
-  fs.appendFileSync(
-    eventsPath,
-    [
-      JSON.stringify({
-        type: 'permission.completed',
-        data: { requestId: 'permission-1' },
-        timestamp: '2026-08-01T10:00:03.000Z',
-      }),
-      JSON.stringify({
-        type: 'hook.end',
-        data: { hookType: 'sessionEnd' },
-        timestamp: '2026-08-01T10:00:04.000Z',
-      }),
-      '',
-    ].join('\n')
-  );
+  for (const socket of sockets.clients) socket.send(JSON.stringify({
+    jsonrpc: '2.0', method: 'action', params: {
+      channel, serverSeq: 2, action: { type: 'chat/turnComplete', turnId: 'turn', duration: 100 },
+    },
+  }));
   await waitFor(async () => (await slots())[0].state === 'done');
   assert.equal(output.includes('uncaught:'), false, output);
 });

@@ -4,10 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import WebSocket from 'ws';
-import {
-  agentHostChatResource,
-  readLocalAgentHostEndpoints,
-} from '../../dist/agent-host.js';
+import { readLocalAgentHostEndpoints } from '../../dist/agent-host.js';
 
 const DEFAULT_REGISTRY = path.join(
   os.homedir(),
@@ -501,6 +498,23 @@ export function resolutionAction(resolution, activeTurn, blocker) {
   return null;
 }
 
+export async function advertisedChatResource(request, sessionId) {
+  const cursors = new Set();
+  let cursor;
+  do {
+    const result = await request('listSessions', { channel: 'ahp-root://', limit: 100, cursor });
+    const summary = result.items.find((item) => item.resource.slice(item.resource.lastIndexOf('/') + 1) === sessionId);
+    if (summary) {
+      if (!summary.defaultChat) throw new Error('Agent Host session does not advertise its default chat');
+      return summary.defaultChat;
+    }
+    cursor = result.nextCursor;
+    if (cursor && cursors.has(cursor)) throw new Error('Agent Host repeated a catalog cursor');
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  throw new Error('session is absent from the Agent Host catalog');
+}
+
 export async function main() {
   const options = parseArgs(process.argv.slice(2));
   const output = path.resolve(options.output);
@@ -510,7 +524,7 @@ export async function main() {
 
   const sessionId = options.session ?? randomUUID();
   const sessionChannel = `copilotcli:/${sessionId}`;
-  const chatChannel = agentHostChatResource(sessionId);
+  let chatChannel;
   const clientId = `agentkeys-evidence-${process.pid}-${randomUUID()}`;
   let socket;
   let requestId = 0;
@@ -652,6 +666,7 @@ export async function main() {
         config: SCENARIOS[options.scenario].config,
       });
     }
+    chatChannel = await advertisedChatResource(request, sessionId);
     const initial = await request('subscribe', { channel: chatChannel });
     if (!initial?.snapshot?.state) throw new Error('chat subscription returned no snapshot');
     process.stdout.write(`${sessionId}\t${options.scenario}\n`);

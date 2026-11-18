@@ -1,9 +1,9 @@
 # Verifying a VS Code update
 
 VS Code ships monthly. AgentKeys does not require a repository update for every VS Code
-release: runtime tracking is version-independent and unknown waiting states fail closed.
+release: compatible AHP state is tracked and unknown waiting states fail closed.
 Run one read-only command after VS Code updates to check that the installed build still
-contains every protocol and persistence marker AgentKeys consumes. This is a structural
+contains the selected AHP and exact-opening markers AgentKeys consumes. This is a structural
 smoke test: it does not prove unchanged semantics or detect a new producer that reuses an
 existing marker.
 
@@ -36,7 +36,8 @@ different build.
 ### 1. Installed build identity
 
 The verifier locates VS Code Stable, falling back to VS Code Insiders, and reads the
-version and commit from the installed application's `package.json`. This identifies the
+version from the installed application's `package.json` and source commit from
+`product.json` (not the distribution repository's `distro` field). This identifies the
 actual build being checked rather than relying on the command-line launcher or an update
 channel label.
 
@@ -50,10 +51,11 @@ Automation may set `VSCODE_APP` instead. An explicit `--app` argument takes prec
 
 ### 2. Installed bundle contracts
 
-The verifier reads the installed workbench and Agent Host bundles and requires the
+The verifier reads the installed main-process, workbench, and Agent Host bundles and requires the
 structural tokens used by AgentKeys. These cover:
 
-- native question, elicitation, and serialized tool response parts;
+- project-window session dispatch (`vscode:openChatSession`) and URL parsing;
+- AHP default-chat identity and root catalog notifications;
 - Agent Host waiting statuses: `pending-confirmation`,
   `pending-result-confirmation`, and `auth-required`;
 - input, tool-confirmation, result-confirmation, authentication, and turn-cancellation
@@ -71,8 +73,8 @@ update, or observed UI behavior indicates such a change.
 
 ### 3. AgentKeys build and tests
 
-The command runs the full `npm test` suite. This compiles TypeScript and checks native
-and Agent Host projections, blocker identity, fail-closed behavior, restart handling,
+The command runs the full `npm test` suite. This compiles TypeScript and checks AHP
+projections, blocker identity, fail-closed behavior, restart handling, exact opening,
 captured-protocol parity, fixture structure, and the local MCP evidence providers.
 
 `--skip-tests` exists only to develop the verifier itself. A run using it is not a
@@ -118,7 +120,7 @@ the `code` launcher or an executable inside the bundle.
 ### Installed metadata cannot be read
 
 Confirm that the application is a complete VS Code installation and that
-`Contents/Resources/app/package.json` is readable. A partial update should be completed
+`Contents/Resources/app/package.json` and `product.json` are readable. A partial update should be completed
 or reinstalled before AgentKeys compatibility is assessed.
 
 ### A bundle or contract token is missing
@@ -126,11 +128,10 @@ or reinstalled before AgentKeys compatibility is assessed.
 Treat this as a real compatibility investigation:
 
 1. Record the installed version and commit printed by the verifier.
-2. Inspect the owning source anchors listed in `docs/vscode-plan.md`: native chat model
-   state, tool invocation state, `chatAwaitsUserInput`, Agent Host input/tool state, and
-   native chat persistence.
+2. Inspect the owning source anchors in [integration details](vscode-integration-details.md):
+   project URL parsing, editor-resource registration, and Agent Host input/tool state.
 3. Determine whether the contract was renamed, moved, removed, or semantically changed.
-4. Update `src/vscode-chat-state.ts`, `src/vscode-session-files.ts`, `src/vscode.ts`, or
+4. Update `src/vscode-chat-state.ts`, `src/vscode-app.ts`, `src/vscode.ts`, or
    `src/agent-host.ts` only if the
    production contract changed.
 5. Add a focused synthetic unit test for the new shape while preserving fail-closed
@@ -173,5 +174,5 @@ above.
 For such a change, keep old fixtures under their original VS Code version and add a new
 versioned evidence set or deliberately migrate the manifest only with complete fresh
 coverage. The capture commands and evidence rules are documented in
-`docs/vscode-human-input-evidence.md`; the limitations of the current evidence build are
-recorded in `docs/archive-do-not-edit/vscode-plan-gaps-todo.md`.
+[VS Code human-input evidence](vscode-human-input-evidence.md), including the coverage
+limits of the evidence build.

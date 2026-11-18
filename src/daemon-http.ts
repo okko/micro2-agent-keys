@@ -9,7 +9,7 @@ const MAX_BODY = 4096;
 const MAX_LABEL = 64;
 
 /** The subset of the VS Code integration the routes reach for. */
-type VSCodeRoutes = Pick<VSCodeIntegration, 'publicSlots' | 'doctor' | 'applyHook' | 'open'>;
+type VSCodeRoutes = Pick<VSCodeIntegration, 'publicSlots' | 'doctor' | 'open'>;
 
 /**
  * Everything the routes may touch. The daemon keeps the HID handle and the slot array to itself
@@ -100,16 +100,6 @@ async function handle(api: DaemonApi, req: http.IncomingMessage, res: http.Serve
 
   if (req.method === 'GET' && url.pathname === '/integrations/vscode/doctor') {
     return send(res, 200, api.vscode.doctor());
-  }
-
-  if (req.method === 'POST' && url.pathname === '/integrations/vscode/hooks') {
-    let body: unknown;
-    try {
-      body = JSON.parse((await readBody(req)) || '{}');
-    } catch {
-      return send(res, 400, { error: 'invalid JSON' });
-    }
-    return send(res, 202, { ok: true, handled: await api.vscode.applyHook(body) });
   }
 
   if (req.method === 'POST' && url.pathname === '/integrations/vscode/slots/reset') {

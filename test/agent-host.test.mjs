@@ -7,7 +7,6 @@ import test from 'node:test';
 import { WebSocketServer } from 'ws';
 import {
   LocalAgentHostStateSource,
-  agentHostChatResource,
   readLocalAgentHostEndpoints,
 } from '../dist/agent-host.js';
 
@@ -34,13 +33,13 @@ function endpoint(overrides = {}) {
   };
 }
 
-test('reads live legacy and per-instance Agent Host endpoint metadata', (t) => {
+test('reads live shared and per-instance Agent Host endpoint metadata', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-agent-host-registry-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const entries = path.join(directory, 'entries');
   fs.mkdirSync(entries);
   fs.writeFileSync(path.join(directory, 'metadata.json'), JSON.stringify([
-    endpoint({ instanceId: 'legacy' }),
+    endpoint({ instanceId: 'shared' }),
     endpoint({ instanceId: 'dead', pid: 999_999_999 }),
     { schemaVersion: 1, type: 'editor', pid: process.pid },
   ]));
@@ -56,14 +55,7 @@ test('reads live legacy and per-instance Agent Host endpoint metadata', (t) => {
 
   assert.deepEqual(
     readLocalAgentHostEndpoints(directory).map(({ instanceId }) => instanceId).sort(),
-    ['current', 'legacy']
-  );
-});
-
-test('builds the default AHP chat channel from the backend session URI', () => {
-  assert.equal(
-    agentHostChatResource(SESSION_ID),
-    `ahp-chat://default/${Buffer.from(`copilotcli:/${SESSION_ID}`).toString('base64url')}`
+    ['current', 'shared']
   );
 });
 
@@ -77,12 +69,16 @@ async function hostFixture(t, options = {}) {
   const states = [];
   const unavailable = [];
   const logs = [];
-  const channel = agentHostChatResource(SESSION_ID);
+  const channel = 'ahp-chat:/11111111-1111-4111-8111-111111111111';
   let state = {
     resource: channel, title: '', modifiedAt: '2026-10-14T09:00:00Z', status: 8,
     activeTurn: { id: 'turn-1', responseParts: [] }, turns: [],
   };
-  let catalog = options.catalog ?? [];
+  let catalog = options.catalog ?? (options.discoveryOnly ? [] : [{
+    resource: `ahp-session:/${SESSION_ID}`, provider: 'copilotcli',
+    workingDirectories: ['file:///tmp/agentkeys-project'], defaultChat: channel,
+    title: '', status: 8, createdAt: '', modifiedAt: '',
+  }]);
   let replay = [];
   let seq = 10;
 
@@ -191,6 +187,13 @@ async function hostFixture(t, options = {}) {
         params: { channel: 'ahp-root://', session, changes },
       }));
     },
+    removeSession(session) {
+      catalog = catalog.filter((entry) => entry.resource !== session);
+      for (const client of webSockets.clients) client.send(JSON.stringify({
+        jsonrpc: '2.0', method: 'root/sessionRemoved',
+        params: { channel: 'ahp-root://', session },
+      }));
+    },
   };
 }
 
@@ -228,6 +231,7 @@ test('subscribes once and applies ordered actions using the shared chat reducer'
   assert.equal(states[2].state.status, 8);
 
   source.setSessions([]);
+  host.removeSession(`ahp-session:/${SESSION_ID}`);
   await waitFor(
     () => requests.some((request) => request.method === 'unsubscribe'),
     'removing a bound session did not unsubscribe its chat channel'
@@ -271,7 +275,7 @@ test('accepts authoritative reconnect snapshots when replay is unavailable', asy
   assert.equal(host.states[1].state.status, 24);
 });
 
-test('discovers catalog sessions without filesystem targets and follows root notifications', async (t) => {
+test('discovers catalog sessions and follows root notifications', async (t) => {
   const host = await hostFixture(t, { discoveryOnly: true, paginated: true });
   await waitFor(() => host.requests.some((request) => request.params.cursor === 'page-2'), 'catalog pagination missing');
   host.setCatalog([{
@@ -306,6 +310,53 @@ test('idle catalog entries subscribe only when activity starts and advertised ch
   assert.equal(host.requests.filter((request) => request.method === 'listSessions').length, 1);
 });
 
+for (const stage of ['initial catalog', 'root update']) {
+  test(`sessions without a default chat do not disrupt other sessions during ${stage}`, async (t) => {
+    const pendingId = '00000000-0000-4000-8000-000000000001';
+    const pending = {
+      resource: `ahp-session:/${pendingId}`, provider: 'copilotcli',
+      workingDirectories: ['file:///tmp/pending-project'],
+      title: '', status: 8, createdAt: '', modifiedAt: '',
+    };
+    const valid = {
+      ...pending, resource: `ahp-session:/${SESSION_ID}`,
+      defaultChat: 'ahp-chat:/11111111-1111-4111-8111-111111111111',
+    };
+    const host = await hostFixture(t, {
+      discoveryOnly: true,
+      catalog: stage === 'initial catalog' ? [pending, valid] : [valid],
+    });
+    await waitFor(() => host.states.length === 1, 'valid session was not tracked');
+    assert.equal(host.states[0].sessionId, SESSION_ID);
+    if (stage === 'root update') host.setCatalog([pending, valid]);
+
+    // A subsequent root update confirms the catalog consumer survived the incomplete entry.
+    host.summaryChanged(valid.resource, { workingDirectories: ['file:///tmp/updated-project'] });
+    await waitFor(
+      () => host.states.some(({ descriptor }) => descriptor.cwd === '/tmp/updated-project'),
+      'valid session stopped receiving catalog updates'
+    );
+    assert.equal(host.requests.filter(({ method }) => method === 'subscribe').length, 1);
+    assert.ok(host.states.every(({ sessionId }) => sessionId === SESSION_ID));
+    host.action(questionAction());
+    await waitFor(() => host.states.some(({ state }) => state.status === 24), 'valid chat action was lost');
+
+    host.summaryChanged(pending.resource, { defaultChat: 'ahp-chat:/newly-advertised-chat' });
+    await waitFor(
+      () => host.states.some(({ sessionId }) => sessionId === pendingId),
+      'session was not tracked after advertising its chat'
+    );
+    assert.equal(
+      host.states.find(({ sessionId }) => sessionId === pendingId).descriptor.chatResource,
+      'ahp-chat:/newly-advertised-chat'
+    );
+    assert.equal(host.requests.filter(({ method }) => method === 'initialize').length, 1);
+    assert.equal(host.requests.filter(({ method }) => method === 'reconnect').length, 0);
+    assert.deepEqual(host.unavailable, []);
+    assert.deepEqual(host.logs, []);
+  });
+}
+
 test('unknown chat actions fail closed without logging payloads or endpoint credentials', async (t) => {
   const host = await hostFixture(t);
   await waitFor(() => host.states.length === 1, 'initial snapshot missing');
@@ -313,4 +364,11 @@ test('unknown chat actions fail closed without logging payloads or endpoint cred
   await waitFor(() => host.unavailable.includes(SESSION_ID), 'unknown action did not invalidate state');
   assert.ok(host.logs.some((line) => line.includes('state failed')));
   assert.ok(host.logs.every((line) => !line.includes('private-input') && !line.includes('source-test-token')));
+});
+
+test('does not subscribe to a target absent from the host catalog', async (t) => {
+  const host = await hostFixture(t, { catalog: [] });
+  await waitFor(() => host.requests.some((request) => request.method === 'listSessions'), 'catalog request missing');
+  assert.equal(host.requests.some((request) => request.method === 'subscribe'), false);
+  assert.equal(host.states.length, 0);
 });
