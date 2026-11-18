@@ -81,13 +81,11 @@ for AgentKeys and runtime correctness must not depend on it.
 
 AHP exposes a session catalog, exact chat resources, complete state snapshots, ordered
 actions, and reconnect replay outside the renderer. The protocol package maintains the
-state; AgentKeys projects it into key states. This covers non-rendered sessions without
-reconstructing private databases, transcripts, or hooks.
+state; AgentKeys projects it into key states, including non-rendered sessions.
 
 ### Decision
 
-Use AHP exclusively for discovery and state. Remove legacy transcript/journal tracking,
-hooks, and SQLite identity lookup; sessions not exposed through AHP are unsupported.
+Use AHP exclusively for discovery and state; sessions not exposed through AHP are unsupported.
 Do not use DOM elements, CSS classes, or toolbar visibility as production state inputs.
 Background-session coverage remains a hard requirement.
 
@@ -108,9 +106,9 @@ derives their relevant behavior from protocol state and fails closed as
 The chosen architecture is implemented in `src/agent-host.ts`, `src/vscode.ts`,
 `src/vscode-chat-state.ts`, and `src/vscode-app.ts`. Bound sessions remain observable
 when their widget is hidden, and protocol snapshots restore blockers after restart.
-Exact opening uses the advertised host identity in the project-window `session` URL,
-not an SDK-to-host database scan. See [integration details](vscode-integration-details.md)
-for the VS Code 1.146 investigation and upstream source anchors.
+Exact opening uses the advertised host identity in the project-window `session` URL.
+See [integration details](vscode-integration-details.md) for the contract and upstream
+source anchors.
 
 The cost is a larger compatibility surface than a CSS observer. The project contains
 fixture-driven lifecycle tests, fail-closed handling for unknown waiting forms, and a

@@ -160,7 +160,7 @@ export class VSCodeIntegration {
       };
     }
     if (saved.schemaVersion === 1) {
-      this.log('Migrated VS Code bindings to AHP-only state; discarded legacy filesystem bindings');
+      this.log('Migrated VS Code binding state to schema 2; retained AHP sessions');
     }
   }
 

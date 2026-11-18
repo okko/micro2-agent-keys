@@ -115,8 +115,8 @@ function readJsonFile(filePath: string): unknown | null {
 
 export function readLocalAgentHostEndpoints(registryPath: string): LocalAgentHostEndpoint[] {
   const endpoints = new Map<string, LocalAgentHostEndpoint>();
-  const legacy = readJsonFile(path.join(registryPath, 'metadata.json'));
-  for (const value of Array.isArray(legacy) ? legacy : legacy ? [legacy] : []) {
+  const metadata = readJsonFile(path.join(registryPath, 'metadata.json'));
+  for (const value of Array.isArray(metadata) ? metadata : metadata ? [metadata] : []) {
     const endpoint = parseEndpoint(value);
     if (endpoint && isPidAlive(endpoint.pid)) endpoints.set(endpoint.key, endpoint);
   }

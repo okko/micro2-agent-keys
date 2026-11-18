@@ -33,13 +33,13 @@ function endpoint(overrides = {}) {
   };
 }
 
-test('reads live legacy and per-instance Agent Host endpoint metadata', (t) => {
+test('reads live shared and per-instance Agent Host endpoint metadata', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-agent-host-registry-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const entries = path.join(directory, 'entries');
   fs.mkdirSync(entries);
   fs.writeFileSync(path.join(directory, 'metadata.json'), JSON.stringify([
-    endpoint({ instanceId: 'legacy' }),
+    endpoint({ instanceId: 'shared' }),
     endpoint({ instanceId: 'dead', pid: 999_999_999 }),
     { schemaVersion: 1, type: 'editor', pid: process.pid },
   ]));
@@ -55,7 +55,7 @@ test('reads live legacy and per-instance Agent Host endpoint metadata', (t) => {
 
   assert.deepEqual(
     readLocalAgentHostEndpoints(directory).map(({ instanceId }) => instanceId).sort(),
-    ['current', 'legacy']
+    ['current', 'shared']
   );
 });
 
@@ -275,7 +275,7 @@ test('accepts authoritative reconnect snapshots when replay is unavailable', asy
   assert.equal(host.states[1].state.status, 24);
 });
 
-test('discovers catalog sessions without filesystem targets and follows root notifications', async (t) => {
+test('discovers catalog sessions and follows root notifications', async (t) => {
   const host = await hostFixture(t, { discoveryOnly: true, paginated: true });
   await waitFor(() => host.requests.some((request) => request.params.cursor === 'page-2'), 'catalog pagination missing');
   host.setCatalog([{
@@ -319,7 +319,7 @@ test('unknown chat actions fail closed without logging payloads or endpoint cred
   assert.ok(host.logs.every((line) => !line.includes('private-input') && !line.includes('source-test-token')));
 });
 
-test('does not fabricate a legacy chat channel for a target absent from the host catalog', async (t) => {
+test('does not subscribe to a target absent from the host catalog', async (t) => {
   const host = await hostFixture(t, { catalog: [] });
   await waitFor(() => host.requests.some((request) => request.method === 'listSessions'), 'catalog request missing');
   assert.equal(host.requests.some((request) => request.method === 'subscribe'), false);

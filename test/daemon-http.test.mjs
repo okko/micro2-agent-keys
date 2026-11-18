@@ -157,10 +157,6 @@ test('VS Code routes delegate to the integration', async () => {
   });
   assert.deepEqual(await (await fetch(`${base}/integrations/vscode/doctor`)).json(), { ok: true });
 
-  const hook = await post('/integrations/vscode/hooks', { kind: 'stop' });
-  assert.equal(hook.status, 404);
-  assert.deepEqual(await hook.json(), { error: 'not found' });
-
   const reset = await post('/integrations/vscode/slots/reset');
   assert.equal(reset.status, 200);
   assert.deepEqual(await reset.json(), { ok: true, slots: [{ slot: 0, state: 'idle' }] });

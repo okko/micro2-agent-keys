@@ -174,5 +174,5 @@ above.
 For such a change, keep old fixtures under their original VS Code version and add a new
 versioned evidence set or deliberately migrate the manifest only with complete fresh
 coverage. The capture commands and evidence rules are documented in
-`docs/vscode-human-input-evidence.md`; the limitations of the current evidence build are
-recorded in `docs/archive-do-not-edit/vscode-plan-gaps-todo.md`.
+[VS Code human-input evidence](vscode-human-input-evidence.md), including the coverage
+limits of the evidence build.

@@ -65,13 +65,13 @@ test('AHP alone discovers, tracks and opens the exact advertised host resource',
   assert.equal(f.integration.doctor().availableSessions, 1);
 });
 
-test('opening migrated AHP slots never consults obsolete SDK aliases or databases', async (t) => {
+test('schema migration retains AHP identities and excludes unrecognized observation sources', async (t) => {
   const f = fixture(t);
   fs.writeFileSync(f.config.statePath, JSON.stringify({
     schemaVersion: 1,
     sessions: [
-      { ...f.descriptor(), observation: 'ahp', sdkSessionId: IDS[3], offset: 0 },
-      { id: IDS[1], cwd: f.directory, source: 'native', offset: 0 },
+      { ...f.descriptor(), observation: 'ahp', extraMetadata: 'unused' },
+      { id: IDS[1], cwd: f.directory, observation: 'unknown' },
     ],
     slots: [
       { slot: 0, sessionId: IDS[0], observation: 'ahp', state: 'done' },
@@ -85,8 +85,8 @@ test('opening migrated AHP slots never consults obsolete SDK aliases or database
   const saved = JSON.parse(fs.readFileSync(f.config.statePath, 'utf8'));
   assert.equal(saved.schemaVersion, 2);
   assert.equal(saved.sessions.length, 1);
-  assert.equal('sdkSessionId' in saved.sessions[0], false);
-  assert.match(f.logs[0], /discarded legacy filesystem bindings/);
+  assert.equal('extraMetadata' in saved.sessions[0], false);
+  assert.match(f.logs[0], /Migrated VS Code binding state to schema 2; retained AHP sessions/);
 });
 
 test('opening preserves advertised provider and chat fragments with encoded project paths', async (t) => {
@@ -120,7 +120,7 @@ test('source loss fails active slots closed, preserves completed slots and recov
   assert.equal(f.integration.slots[0].state, 'done');
 });
 
-test('restart retains slot identities and waits for authoritative state without reading legacy files', async (t) => {
+test('restart retains slot identities and waits for authoritative AHP state', async (t) => {
   const f = fixture(t);
   await f.integration.start();
   await f.source.emit(IDS[0], active(), f.descriptor());

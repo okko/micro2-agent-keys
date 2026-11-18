@@ -18,7 +18,7 @@ export const STATES: Record<string, StateSpec> = {
 
 export const DEFAULT_STATE = 'idle';
 
-/** Aliases so hooks and scripts can use whatever word fits their vocabulary. */
+/** Aliases so scripts can use whatever word fits their vocabulary. */
 export const ALIASES: Record<string, string> = {
   off: 'idle',
   free: 'idle',

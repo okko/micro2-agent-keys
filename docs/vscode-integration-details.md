@@ -1,10 +1,8 @@
 # VS Code integration: AHP only
 
 AgentKeys supports sessions exposed by VS Code's local Agent Host Protocol (AHP).
-Older filesystem/native Chat tracking, journal replay, SQLite identity lookup, SDK
-aliases, preview hooks, and the HTTP hooks endpoint have been removed.
 
-## What changed in VS Code
+## Exact session opening
 
 Investigated against installed **VS Code 1.146.0**, commit
 [`69047191fc427f2f92828279aae1d90d8eeda7ab`](https://github.com/microsoft/vscode/tree/69047191fc427f2f92828279aae1d90d8eeda7ab),
@@ -16,16 +14,9 @@ The project-window URL contract is current:
 vscode://file/<absolute-project-path>?session=<encoded-editor-session-resource>
 ```
 
-Starting with VS Code 1.146,
-the old integration tried to resolve
-already-correct AHP identities through every session database. An unrelated database
-failed to open read-only, aborting the button action.
-
-The persistence model has also changed: `chats_v2` is authoritative from VS Code
-1.142, while `session_chats` is only a downgrade projection. Runtime session and chat
-URIs can differ from stored identities; the advertised default chat is now an opaque
-resource such as `ahp-chat:/<chat-uuid>`, not a resource clients should fabricate.
-AgentKeys now avoids that private persistence surface entirely.
+The host advertises the default chat as an opaque resource such as
+`ahp-chat:/<chat-uuid>`. Clients must use that resource rather than fabricate a channel
+from the session ID.
 
 Source anchors at the investigated commit:
 
@@ -35,8 +26,6 @@ Source anchors at the investigated commit:
   `handleChatSessionToOpen` sends `vscode:openChatSession` to the project window.
 - [Editor-resource registration](https://github.com/microsoft/vscode/blob/69047191fc427f2f92828279aae1d90d8eeda7ab/src/vs/platform/agentHost/browser/agentHostConnectionsService.ts):
   `registerSessionResource` changes the backend scheme to `agent-host-<provider>`.
-- [Catalog v2 contract](https://github.com/microsoft/vscode/blob/69047191fc427f2f92828279aae1d90d8eeda7ab/src/vs/platform/agentHost/node/agentHostChatCatalogV2.md):
-  authoritative catalog versus downgrade projection.
 - [SDK import link](https://github.com/microsoft/vscode/blob/69047191fc427f2f92828279aae1d90d8eeda7ab/src/vs/workbench/contrib/chat/browser/copilotCliSessionLink.ts):
   `copilotCliSession` can import/adopt a session and offer takeover. It is not a
   substitute for opening an already advertised exact resource.
@@ -62,7 +51,7 @@ sessions absent from the local AHP catalog are not supported.
 
 Unknown waiting/tool states fail red. Losing an active session's host also fails red;
 fresh protocol state restores it. Completed slots retain their outcome during a
-disconnect. No old-version fallback is attempted.
+disconnect.
 
 ## Bindings and persistence
 
@@ -74,11 +63,7 @@ disconnect. No old-version fallback is attempted.
 - Reset frees all bindings and publishes idle to all 20 firmware slots. Remembered
   request identities prevent the same turn from immediately rebinding.
 - Schema 2 retains slot identities and request/outcome checkpoints, not chat content.
-  Schema 1 migration preserves AHP sessions and drops legacy filesystem bindings.
   Active restored bindings wait for authoritative AHP state in the error state.
-- The installer removes only `~/.copilot/hooks/agentkeys.json` and
-  `~/.local/bin/agentkeys-vscode-hook`. It does not alter other hook configurations.
-- `POST /integrations/vscode/hooks` is removed and returns 404.
 
 Use `agentkeys doctor vscode` for AHP availability, installed version, exact-opening
 availability, and per-binding project/host availability. `agentkeys vscode slots`,
@@ -91,7 +76,6 @@ contracts and runs the full test suite, including AHP fixture replay, migration,
 reconnect, exact resource URLs, acknowledgement, reset, and daemon restart behavior.
 See [the update workflow](vscode-update.md).
 
-Historical native and AHP production fixtures retain their original provenance.
-Native fixtures are evidence of the old integration, not current runtime support.
+AHP production fixtures retain their original build provenance and captured records.
 Structural tests do not prove UI navigation; a real slot press must still open the
 intended conversation in the intended project window.

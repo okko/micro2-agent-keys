@@ -14,7 +14,6 @@ const BLOCKER_FAMILIES = [
   'pre-tool-approval',
   'post-tool-approval',
   'authentication',
-  'confirmation-part',
   'questions',
   'plan-review',
   'elicitation',
@@ -22,16 +21,8 @@ const BLOCKER_FAMILIES = [
   'feedback-review',
 ];
 const REQUIRED_OBSERVATIONS = [
-  'pre-tool-approval.terminal.waiting',
-  'pre-tool-approval.network.waiting',
-  'pre-tool-approval.external-file.waiting',
-  'pre-tool-approval.generic-contributed-tool.waiting',
-  'pre-tool-approval.approve',
-  'pre-tool-approval.deny',
-  'pre-tool-approval.confirmation-not-needed',
-  'questions.native.waiting',
-  'questions.native.submit',
-  'questions.native.skip',
+  'pre-tool-approval.external-file.waiting-model-truth',
+  'pre-tool-approval.agent-host.deny',
   'questions.agent-host.waiting',
   'questions.agent-host.cancel',
   'questions.agent-host.submit',
@@ -52,9 +43,6 @@ const REQUIRED_OBSERVATIONS = [
   'elicitation.agent-host.url.cancel',
   'authentication.agent-host.expired.waiting',
   'authentication.agent-host.cancel',
-  'confirmation-part.resolved',
-  'elicitation.accepted',
-  'elicitation.rejected',
 ];
 
 function readFixture(file) {
@@ -130,8 +118,8 @@ test('keeps every real fixture bounded and sanitized', () => {
     );
     assert.doesNotMatch(contents, /20\d\d-\d\d-\d\dT\d\d:/, entry.file);
 
-    const sources = new Set(fixture.sources.map(({ source }) => source));
-    for (const source of entry.sources) assert.ok(sources.has(source), `${entry.file}: ${source}`);
+    assert.deepEqual(entry.sources, ['agent-host-protocol'], entry.file);
+    assert.deepEqual(fixture.sources.map(({ source }) => source), entry.sources, entry.file);
     for (const source of fixture.sources) {
       for (const record of source.records ?? []) {
         assert.ok(Number.isInteger(record._capture?.sourceLine), `${entry.file}: source line`);
@@ -214,29 +202,9 @@ test('retains authoritative Agent Host question model truth', () => {
   assert.equal('response' in terminalInput, true);
 });
 
-test('retains a correlated native question skip', () => {
-  const fixture = readFixture('native-question-skip.json');
-  const transcript = fixture.sources.find(({ source }) => source === 'native-transcript');
-  const journal = fixture.sources.find(({ source }) => source === 'native-journal');
-  const [started, completed] = transcript.records;
-  const [tool, question] = journal.records[0].v;
-
-  assert.equal(started.type, 'tool.execution_start');
-  assert.equal(completed.type, 'tool.execution_complete');
-  assert.equal(started.data.toolName, 'vscode_askQuestions');
-  assert.equal(started.data.toolCallId, completed.data.toolCallId);
-  assert.equal(started.data.toolCallId, tool.toolCallId);
-  assert.equal(tool.toolCallId, question.resolveId);
-  assert.equal(question.kind, 'questionCarousel');
-  assert.equal(question.allowSkip, true);
-  assert.equal(question.isUsed, true);
-  assert.deepEqual(question.data, {});
-});
-
-test('correlates authoritative Agent Host tool denial with persisted events', () => {
+test('retains authoritative Agent Host tool denial through completion', () => {
   const fixture = readFixture('agent-host-tool-deny.json');
   const protocol = fixture.sources.find(({ source }) => source === 'agent-host-protocol');
-  const events = fixture.sources.find(({ source }) => source === 'agent-host-events');
   const [waiting, resolved, terminal] = protocol.records;
 
   assert.deepEqual(protocol.records.map(({ stage }) => stage), ['waiting', 'resolved', 'terminal']);
@@ -259,13 +227,6 @@ test('correlates authoritative Agent Host tool denial with persisted events', ()
     ['pending-confirmation', 'cancelled', 'cancelled']
   );
 
-  const requested = events.records.find(({ type }) => type === 'permission.requested');
-  const completed = events.records.find(({ type }) => type === 'permission.completed');
-  assert.equal(requested.data.permissionRequest.toolCallId, waitingTool.toolCallId);
-  assert.equal(completed.data.toolCallId, waitingTool.toolCallId);
-  assert.equal(requested.data.requestId, completed.data.requestId);
-  assert.equal(completed.data.result.kind, 'denied-interactively-by-user');
-  assert.equal(requested._capture.pathScope, 'outside-working-directory');
 });
 
 test('retains authoritative Agent Host plan-review model truth', () => {
@@ -546,21 +507,4 @@ test('retains authoritative expired-auth turn cancellation', () => {
   assert.equal(terminalTool.toolCallId, waitingTool.toolCallId);
   assert.equal(terminalTool.status, 'cancelled');
   assert.equal('auth' in terminalTool, false);
-});
-
-test('retains privacy-safe evidence for derived facts', () => {
-  const pathFact = manifest.derivedFacts.find(({ id }) => id.endsWith('outside-working-directory'));
-  const pathFixture = readFixture(pathFact.fixture);
-  const pathRecord = findRecord(pathFixture, pathFact.record);
-  assert.equal(pathRecord.type, pathFact.record.type);
-  assert.equal(pathRecord._capture[pathFact.captureField], pathFact.expected);
-
-  const tableFact = manifest.derivedFacts.find(({ id }) => id.endsWith('table-inventory'));
-  const tableFixture = readFixture(tableFact.fixture);
-  const state = tableFixture.sources.find(({ source }) => source === tableFact.source);
-  assert.deepEqual(state.tables.map(({ name }) => name), tableFact.expectedTables);
-  for (const table of state.tables) {
-    assert.ok(table.columns.length > 0, table.name);
-    assert.ok(table.columns.every((column) => typeof column.name === 'string'), table.name);
-  }
 });
