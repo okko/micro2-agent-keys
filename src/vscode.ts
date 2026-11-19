@@ -348,7 +348,7 @@ export class VSCodeIntegration {
     this.slots.fill(null);
     this.updateTargets();
     this.save();
-    for (let slot = 0; slot < INTEGRATION_SLOT_COUNT; slot++) {
+    for (const slot of this.enabledSlots) {
       await this.onSlot({ slot, state: 'idle', stateChangedAt: new Date().toISOString() });
     }
     return this.publicSlots();
@@ -358,7 +358,7 @@ export class VSCodeIntegration {
     if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
       throw new Error(`VS Code slot must be 0..${INTEGRATION_SLOT_COUNT - 1}`);
     }
-    if (!this.enabledSlots.has(index)) throw new Error(`VS Code slot ${index} is not mapped on the keyboard`);
+    if (!this.enabledSlots.has(index)) throw new Error(`VS Code slot ${index} is not activated`);
     const slot = this.slots[index];
     if (!slot?.sessionId || !slot.resource) throw new Error(`VS Code slot ${index} is unbound`);
     const session = this.sessions.get(slot.sessionId);

@@ -1,4 +1,4 @@
-import { EFFECT } from './oai.js';
+import { EFFECT } from './lighting.js';
 
 export const INTEGRATION_SLOT_COUNT = 20;
 

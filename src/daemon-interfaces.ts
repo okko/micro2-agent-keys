@@ -1,6 +1,6 @@
 /** One agent key on the keyboard: its lighting state plus the metadata `/state` reports. */
 export interface Slot {
-  /** Zero-based key index, used verbatim as the firmware thread id. */
+  /** Zero-based slot index, mapped to API Smart Action vscode00 through vscode19. */
   index: number;
   /** Key of the `STATES` table in states.ts; decides colour and effect. */
   state: string;

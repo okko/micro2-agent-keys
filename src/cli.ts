@@ -16,11 +16,12 @@ const USAGE = `agentkeys - drive the Creator Micro 2 agent keys
   agentkeys log                          follow the daemon log
 
   agentkeys vscode slots                 show automatic VS Code bindings
-  agentkeys vscode reset                 refresh mapped keys and free bindings
+  agentkeys vscode reset                 retry API keys and free bindings
   agentkeys vscode open <slot>           open an exact VS Code session
   agentkeys doctor vscode                check VS Code integration availability
 
 states: ${Object.keys(STATES).join(', ')}
+Only slots enabled by the configured key count are available.
 `;
 
 interface ApiSlot {
@@ -79,7 +80,7 @@ function printStatus(data: StatusResponse): void {
     : data.deviceError
       ? `keyboard: disconnected (${data.deviceError})`
       : data.deviceVisible === false
-        ? 'keyboard: disconnected (vendor HID interface not visible; check USB and Input Monitoring)'
+        ? 'keyboard: disconnected (no keyboard ready in Input; check Input.app and the connection)'
         : 'keyboard: disconnected';
   console.log(status);
   for (const slot of data.slots) {

@@ -1,15 +1,14 @@
 import * as fs from 'fs';
-import { Device, listDevices, type DeviceMessage, type NotifyHandler } from './device.js';
-import { setThreads, setZones, EFFECT, type ThreadInput } from './oai.js';
-import { STATES, INTEGRATION_SLOT_COUNT, DEFAULT_STATE } from './states.js';
+import { Device } from './device.js';
+import { type SlotLighting } from './lighting.js';
+import { STATES, DEFAULT_STATE } from './states.js';
+import { readConfig } from './config.js';
 import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
-import { readConfiguredAgentSlots } from './keymap.js';
 import { LocalAgentHostStateSource } from './agent-host.js';
 import { createServer, HOST, PORT, type DaemonApi } from './daemon-http.js';
 import type { Slot } from './daemon-interfaces.js';
 
 const RECONNECT_MS = 3000;
-const RECONCILE_MS = 250;
 const SHUTDOWN_TIMEOUT_MS = 4000;
 const BUILD_ID = fs.readFileSync(new URL('./build-id', import.meta.url), 'utf8').trim();
 
@@ -24,7 +23,10 @@ if (process.env.AGENTKEYS_LOG) {
   process.on('uncaughtException', (err) => write('uncaught:', err.stack));
 }
 
-const slots: Slot[] = Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => ({
+const config = readConfig();
+if (!config) throw new Error('AgentKeys key count is not configured; run node dist/configure.js or scripts/install-agent.sh');
+
+const slots: Slot[] = Array.from({ length: config.keyCount }, (_, index) => ({
   index,
   state: DEFAULT_STATE,
   label: null,
@@ -34,12 +36,9 @@ const slots: Slot[] = Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) 
 let device: Device | null = null;
 let connecting: Promise<void> | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
-let reconcileTimer: NodeJS.Timeout | null = null;
-let pushGeneration = 0;
+let reconnectDelay = RECONNECT_MS;
 const pendingPushes = new Set<Promise<void>>();
 let shuttingDown = false;
-let visibleDeviceCount = 0;
-let deviceVisibilityKnown = false;
 let deviceError: string | null = null;
 
 /** Writes an ISO-timestamped line to the daemon log. */
@@ -52,52 +51,24 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Translates a slot's state into the firmware thread payload that lights its key. */
-function threadFor(slot: Slot): ThreadInput {
+function lightingFor(slot: Slot): SlotLighting {
   const spec = STATES[slot.state];
   return { id: slot.index, color: spec.color, effect: spec.effect, speed: spec.speed ?? 0.5 };
 }
 
-/**
- * Sends slot lighting to the device: `changed` alone for latency, or every slot when omitted.
- * A successful partial write schedules a full re-send {@link RECONCILE_MS} later so a dropped
- * report cannot leave a key stale; a newer push or a device swap cancels it. Write failures are
- * logged and drop the device rather than rejecting, so callers never need to catch.
- * @returns a promise that settles once the write (and its error handling) is done.
- */
+/** The device coalesces pending states and waits for Input's lighting acknowledgements. */
 function push(changed?: Slot): Promise<void> {
   const current = device;
   if (!current) return Promise.resolve();
-  const generation = ++pushGeneration;
-  if (reconcileTimer) clearTimeout(reconcileTimer);
-  reconcileTimer = null;
   const targets = changed ? [changed] : slots;
-  const write = setThreads(current, targets.map(threadFor));
+  const write = current.setLighting(targets.map(lightingFor));
   const operation = write.then(
     () => {},
     async (err: unknown) => {
       log('push failed:', errorMessage(err));
+      deviceError = errorMessage(err);
       await dropDevice(current);
     }
-  );
-  void write.then(
-    () => {
-      if (shuttingDown || device !== current || generation !== pushGeneration) return;
-      reconcileTimer = setTimeout(() => {
-        reconcileTimer = null;
-        if (shuttingDown || device !== current || generation !== pushGeneration) return;
-        const reconciliation = setThreads(current, slots.map(threadFor)).then(
-          () => {},
-          async (err: unknown) => {
-            log('reconciliation failed:', errorMessage(err));
-            await dropDevice(current);
-          }
-        );
-        pendingPushes.add(reconciliation);
-        void reconciliation.finally(() => pendingPushes.delete(reconciliation));
-      }, RECONCILE_MS);
-    },
-    () => {}
   );
   pendingPushes.add(operation);
   void operation.finally(() => pendingPushes.delete(operation));
@@ -106,10 +77,7 @@ function push(changed?: Slot): Promise<void> {
 
 const vscode = new VSCodeIntegration({
   log,
-  enabledSlots:
-    process.env.AGENTKEYS_NO_DEVICE === '1'
-      ? Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => index)
-      : [],
+  enabledSlots: slots.map(({ index }) => index),
   agentHostSource: new LocalAgentHostStateSource({ log }),
   onSlot: async (binding: VSCodeSlot) => {
     if (shuttingDown) return;
@@ -121,36 +89,29 @@ const vscode = new VSCodeIntegration({
   },
 });
 
-/** Reads the live device keymap and applies its sparse AG indices to the VS Code integration. */
-async function refreshVSCodeSlots(current: Device): Promise<number[]> {
-  const enabledSlots = await readConfiguredAgentSlots(current);
-  await vscode.setEnabledSlots(enabledSlots);
-  log(`VS Code slots enabled from device keymap: ${enabledSlots.length ? enabledSlots.join(', ') : 'none'}`);
-  return enabledSlots;
-}
-
 /** Closes a failed handle and starts reconnecting; ignores handles already replaced. */
 async function dropDevice(current: Device): Promise<void> {
   if (device !== current) return;
   device = null;
-  pushGeneration++;
-  if (reconcileTimer) clearTimeout(reconcileTimer);
-  reconcileTimer = null;
   try {
     await current.close();
-  } catch {
-    // best effort close
+  } catch (err) {
+    log('Input close failed:', errorMessage(err));
   }
   scheduleReconnect();
 }
 
-/** Queues a single reconnect attempt {@link RECONNECT_MS} out; repeat calls are no-ops. */
+/** Back off while Input is unavailable instead of repeatedly opening its socket. */
 function scheduleReconnect(): void {
   if (shuttingDown || reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    connect().catch(() => scheduleReconnect());
-  }, RECONNECT_MS);
+    connect().catch((err: unknown) => {
+      log('Input connection failed:', errorMessage(err), '- keep Input.app running');
+      scheduleReconnect();
+    });
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
 }
 
 /** Connects unless already connected, sharing one in-flight attempt among concurrent callers. */
@@ -165,51 +126,20 @@ async function connect(): Promise<void> {
   }
 }
 
-/**
- * Opens the vendor HID interface, subscribes to AG00..AG19 key presses so they open the matching
- * VS Code window, blacks out the base lighting, and pushes current slot colours. Absence of the
- * device is not an error: it records {@link deviceError} and retries later.
- * @throws if opening the device or the initial lighting write fails.
- */
 async function connectDevice(): Promise<void> {
-  const candidates = listDevices();
-  const wasVisible = visibleDeviceCount > 0;
-  visibleDeviceCount = candidates.length;
-  const isVisible = visibleDeviceCount > 0;
-  if (!deviceVisibilityKnown || wasVisible !== isVisible) {
-    log(
-      isVisible
-        ? `vendor HID interface visible (${visibleDeviceCount})`
-        : 'vendor HID interface not visible; check USB and Input Monitoring permission'
-    );
-    deviceVisibilityKnown = true;
-  }
-  if (!candidates.length) {
-    deviceError = 'vendor HID interface not visible';
-    scheduleReconnect();
-    return;
-  }
-
-  let candidate: Device;
+  let candidate: Device | null = null;
   try {
-    candidate = await Device.open(candidates[0]);
-  } catch (err) {
-    deviceError = errorMessage(err);
-    throw err;
-  }
-  const onNotify: NotifyHandler = (message: DeviceMessage) => {
-    const key = message?.m === 'v.oai.hid' ? message.p?.k ?? null : null;
-    const pressed = message?.p?.act === 1;
-    const match = typeof key === 'string' ? key.match(/^AG([01]\d)$/) : null;
-    if (!pressed || !match) return;
-    vscode.open(Number(match[1])).catch((err: unknown) => log(`key ${key} open failed: ${errorMessage(err)}`));
-  };
-  candidate.onNotify = onNotify;
-  try {
-    await refreshVSCodeSlots(candidate);
-    await setZones(candidate, {
-      keys: { color: 0x000000, effect: EFFECT.off, brightness: 0 },
-      ambient: { color: 0x101010, effect: EFFECT.solid, brightness: 0.3 },
+    candidate = await Device.open({
+      log,
+      onKey: (slot) => {
+        if (shuttingDown) return;
+        void vscode.open(slot).catch((err: unknown) => log(`key vscode${String(slot).padStart(2, '0')} open failed: ${errorMessage(err)}`));
+      },
+      onFailure: (err) => {
+        deviceError = errorMessage(err);
+        log('Input connection failed:', deviceError);
+        if (candidate) void dropDevice(candidate);
+      },
     });
     if (shuttingDown) {
       await candidate.close();
@@ -217,14 +147,16 @@ async function connectDevice(): Promise<void> {
     }
     device = candidate;
     deviceError = null;
-    log('device connected');
+    reconnectDelay = RECONNECT_MS;
+    log('Input connected');
     await push();
   } catch (err) {
+    deviceError = errorMessage(err);
     if (device === candidate) device = null;
     try {
-      await candidate.close();
-    } catch {
-      // best effort close
+      await candidate?.close();
+    } catch (closeError) {
+      log('Input close failed:', errorMessage(closeError));
     }
     throw err;
   }
@@ -253,11 +185,9 @@ async function reset(): Promise<Slot[]> {
   return resetSlots;
 }
 
-/** Refreshes mapped AG indices from the connected keyboard, then frees every VS Code binding. */
+/** Retry newly mapped API keys and free every VS Code binding. */
 async function resetVSCodeSlots(): Promise<VSCodeSlot[]> {
-  const current = device;
-  if (!current) throw new Error('keyboard disconnected; cannot refresh VS Code slots');
-  await refreshVSCodeSlots(current);
+  device?.refreshLighting();
   return vscode.resetSlots();
 }
 
@@ -266,9 +196,11 @@ const api: DaemonApi = {
   vscode,
   log,
   status: () => ({
-    connected: Boolean(device),
-    deviceVisible: visibleDeviceCount > 0,
-    deviceError,
+    connected: device?.connected ?? false,
+    deviceVisible: device?.connected ?? false,
+    deviceError: device && !device.connected
+      ? 'No supported keyboard ready in Input; connect it and wait for Input to load it'
+      : deviceError,
   }),
   slots: () => slots,
   setSlot,
@@ -279,9 +211,8 @@ const api: DaemonApi = {
 const server = createServer(api);
 
 /**
- * Stops accepting requests, drains in-flight pushes, and closes the device so the firmware keeps
- * no stale lighting, then exits. Runs once per process; a {@link SHUTDOWN_TIMEOUT_MS} timer forces
- * exit if a HID write hangs.
+ * Stops accepting requests, drains pushes, and closes Input. Lighting is restored on reconnect.
+ * A deadline prevents an unresponsive connection from delaying launchd.
  */
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
@@ -294,9 +225,6 @@ async function shutdown(signal: string): Promise<void> {
 
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
-  if (reconcileTimer) clearTimeout(reconcileTimer);
-  reconcileTimer = null;
-  pushGeneration++;
   vscode.stop();
 
   await new Promise<void>((resolve) => {
@@ -339,7 +267,7 @@ void (async () => {
     try {
       await connect();
     } catch (err) {
-      log('connect failed:', errorMessage(err));
+      log('Input connection failed:', errorMessage(err), '- keep Input.app running');
       scheduleReconnect();
     }
   }

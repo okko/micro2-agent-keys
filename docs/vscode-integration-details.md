@@ -62,7 +62,7 @@ disconnect.
   done/idle binding. Never evict active, waiting, or failed work.
 - Opening green acknowledges completion to white and retains the shortcut.
   Opening red releases the binding only after successful URL launch.
-- Reset frees all bindings and publishes idle to all 20 firmware slots. Remembered
+- Reset frees all bindings and publishes idle only to the configured API Smart Action slots. Remembered
   request identities prevent the same turn from immediately rebinding.
 - Schema 2 retains slot identities and request/outcome checkpoints, not chat content.
   Active restored bindings wait for authoritative AHP state in the error state.

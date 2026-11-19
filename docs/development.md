@@ -1,160 +1,73 @@
-# Development notes
+# Development
 
-macOS-specific friction, and how to run things without breaking the keyboard.
-
-## Input Monitoring (TCC)
-
-This keyboard presents Generic Desktop / Keyboard interfaces alongside the vendor one,
-so macOS gates **all** access behind **Input Monitoring** — including the vendor page.
-Opening `nonExclusive` does **not** dodge it. This was confirmed, not assumed.
-
-The grant is attached to a **code signature**, so a bare `node` invocation can never
-hold it. Access therefore has to come from a signed application bundle.
-
-`AgentKeys.app` exists solely to hold that grant: it is the real `node` binary plus an
-`Info.plist` (`eu.okko.agentkeys`, `LSBackgroundOnly=true`), ad-hoc signed by
-`scripts/make-app.sh`.
-
-TCC cannot be scripted. Approve once under
-**System Settings → Privacy & Security → Input Monitoring**.
-
-Re-running `make-app.sh` after a Node upgrade changes the code hash, which invalidates
-the grant and requires re-approval. The script warns about this.
-
-## Launching
-
-**Running the bundle's binary directly from a shell fails even after the grant**,
-because the terminal becomes the responsible process:
+Use Node.js 22.4 or newer (global WebSocket support is required by InputKit).
 
 ```sh
-./AgentKeys.app/Contents/MacOS/AgentKeys dist/research/probe.js   # fails, (0xE00002E2) not permitted
+npm install
+npm run check
+npm test
 ```
 
-Go through LaunchServices or launchd so the grant is attributed to the bundle:
+Tests use fake clients and a local WebSocket server; no keyboard, Input approval or
+Keychain changes are required. Run the tests outside restricted sandboxes because
+they listen on loopback sockets.
+
+## Running
+
+Open Input.app and connect a supported device, then:
 
 ```sh
-open -n -a "$PWD/AgentKeys.app" \
-  --env AGENTKEYS_LOG="$PWD/probe.log" \
-  --args "$PWD/dist/research/probe.js"
+node dist/configure.js
+npm run daemon
 ```
 
-**LaunchServices discards stdout.** Anything launched this way must write its own log
-file. Note that `AGENTKEYS_LOG` is not global — it is implemented inside `src/daemon.ts`,
-`src/research/probe.ts` and `src/research/layertest.ts` individually. A new ad-hoc script
-gets no logging for free.
+Build first with `npm run build`. The configuration prompt saves the number of activated
+keys (1–20) in `~/.local/state/agentkeys/config.json`. A count of N enables consecutive
+identifiers from `vscode00` through `vscode(N-1)`; at least one key is required.
+The installer runs the same prompt and offers the saved count on subsequent installs.
+Restart the daemon after changing it. Even device-free daemon tests use an isolated
+configuration rather than implicitly enabling all keys.
+
+Approve AgentKeys in Input within 30 seconds on the first connection. Credentials
+are saved in macOS Keychain. No Input Monitoring grant is needed for AgentKeys.
+The daemon logs connection failures and retries with backoff while Input is unavailable.
+For unattended use, build the app bundle and install the LaunchAgent as described in
+the [README](../README.md#setup).
+
+The previous direct-device research tools have been removed. Configure keys in Input;
+do not bypass it or write device configuration from experimental tools.
 
 ## Environment variables
 
-| Variable | Used by | Meaning |
-|---|---|---|
-| `AGENTKEYS_PORT` | daemon, CLI | HTTP port, default `8787` |
-| `AGENTKEYS_LOG` | daemon, probe, layertest, mixedlayertest, backlighttest | redirect output to a file |
-| `AGENTKEYS_VSCODE_USER_DATA` | AHP observer | VS Code user-data directory containing `agent-host/local-endpoint`; defaults to the macOS stable Code directory |
-| `AGENTKEYS_TEST_LAYER` | daemon, layertest, mixedlayertest, backlighttest | which layer to install onto, **1-based**, default `1` |
-| `AGENTKEYS_HOLD_MS` | layertest, mixedlayertest | observation window, default `45000` |
-| `AGENTKEYS_PHASE_MS` | backlighttest, ag1819test | per-phase observation window |
+| Variable | Meaning |
+| --- | --- |
+| `AGENTKEYS_PORT` | HTTP port for daemon and CLI, default `8787` |
+| `AGENTKEYS_LOG` | Redirect daemon output to a file (needed for LaunchServices) |
+| `AGENTKEYS_VSCODE_USER_DATA` | VS Code user-data directory containing `agent-host/local-endpoint` |
+| `AGENTKEYS_VSCODE_STATE` | Persisted VS Code binding-state file |
+| `AGENTKEYS_NO_DEVICE=1` | Run HTTP/VS Code integration without connecting to Input, for tests |
 
-## Tools in `src/research/`
+## Verifying a restart
 
-| File | Writes to device? | Purpose |
-|---|---|---|
-| `probe.ts` | no | enumerate interfaces, read `sys.version` and `device.status` |
-| `layertest.ts` | **yes** | install the agent layer, set six colours, hold, restore |
-| `mixedlayertest.ts` | **yes** | install a layer mixing agent and ordinary keycodes, log `v.oai.hid` presses, restore |
-| `backlighttest.ts` | **yes** | A/B whether agent keycodes suppress the layer's own backlight |
-| `ag1819test.ts` | **yes** | one-time AG18/AG19 test on row 2; resets the keymap to the saved default afterward |
-| `keymap.ts` | **yes** | shared temporary keymap installation and restoration support |
-
-The application daemon is authored at `src/daemon.ts` and runs from `dist/daemon.js`.
-
-### Verifying a restart
-
-`npm run build` emits a unique build ID in `dist/build-id`. The daemon captures that ID
-at startup and returns it from `GET http://localhost:8787/build` as
-`{"buildId":"..."}`. After deployment or `scripts/restart-agent.sh`, run:
+`npm run build` emits a unique ID in `dist/build-id`. The running daemon reports its
+startup ID via `GET /build`. After restarting the LaunchAgent, run:
 
 ```sh
 scripts/verify-build.sh
 ```
 
-The script compares the endpoint with `dist/build-id`; a match proves that the
-responding daemon loaded the current build without relying on process counts or PIDs.
+See [deployment verification](daemon-deployment.md).
 
-### Running the layer test
+## Manual acceptance check
 
-```sh
-cd ~/git/micro2-agentkeys
-rm -f layertest.log
-open -n -a "$PWD/AgentKeys.app" \
-  --env AGENTKEYS_LOG="$PWD/layertest.log" \
-  --env AGENTKEYS_TEST_LAYER=3 \
-  --env AGENTKEYS_HOLD_MS=60000 \
-  --args "$PWD/dist/research/layertest.js"
-```
-
-Then wait and `cat layertest.log`. It refuses to start if the vendor app is running,
-takes the device lock, and restores the keymap on every exit path.
-
-### Running the AG18/AG19 test
-
-> **Warning:** this one-time test does not preserve the keymap that is currently on the
-> keyboard. When it finishes, it resets the keyboard to the saved default keymap. Export
-> or otherwise record any custom keymap before running it.
-
-Close the Work Louder Input app and switch to the layer to test. If your terminal has HID
-permission, run:
-
-```sh
-node dist/research/ag1819test.js
-```
-
-Otherwise, use the permitted app wrapper:
-
-```sh
-rm -f ag1819test.log
-open -n -a "$PWD/AgentKeys.app" \
-  --env AGENTKEYS_LOG="$PWD/ag1819test.log" \
-  --env AGENTKEYS_PHASE_MS=30000 \
-  --args "$PWD/dist/research/ag1819test.js"
-tail -f ag1819test.log
-```
-
-By default it temporarily replaces the active layer. Set `AGENTKEYS_TEST_LAYER` to target a
-different 1-based layer. Follow the prompts to confirm the two leftmost switches on the
-second row light individually, then press and release both. Through the app wrapper,
-each visual and input phase lasts `AGENTKEYS_PHASE_MS`. After the test, the keyboard is
-reset to the saved default keymap, not to the keymap that was active before the test.
-
-## Detecting the vendor app correctly
-
-Do **not** use `pgrep -f '/Applications/input.app'`. `pgrep -f` matches the whole
-argv, so it false-positives on any process that merely *mentions* the path — including
-your own shell script that contains the pattern as a literal. This produced a confusing
-phantom PID during testing.
-
-Match on the executable path instead:
-
-```sh
-ps -A -o pid=,comm= | grep '/Applications/input.app/'
-```
-
-Demonstrated difference, with a decoy process holding the string in argv:
-
-```
-old check, pgrep -f argv  -> 1 match(es)   <- false positive
-new check, ps -o comm=    -> 0 match(es)   <- correct
-```
-
-## Testing without hardware
-
-The restore is testable with a stub device that implements `call()` for
-`fs.read` / `fs.write`. That covers the dangerous path — including the failure path —
-without touching the keyboard. Assert that the final written text equals the pristine
-backup after `fn` throws.
-
-## Misc environment quirks
-
-- Python `mmap.mmap(open(p, "rb").fileno(), ...)` fails with `Bad file descriptor`
-  because the file object is garbage collected. Hold a reference to it.
-- macOS `pgrep` has no `-c`; use `| wc -l`.
-- zsh: quote `--include='*.ts'`; use `;` rather than `&&` after `rm`.
+1. Configure a key count of 2, map API Smart Actions `vscode00` and `vscode01` in Input,
+   restart the daemon and select their layer.
+2. Run `agentkeys set 0 running` and `agentkeys set 1 error`; verify the keys show
+   breathing blue and solid red independently.
+3. Bind VS Code sessions and press the keys; verify the correct sessions open.
+4. Switch layers, unplug/replug the keyboard, and restart Input. Check that the current
+   lighting returns and key events still work without another approval prompt.
+5. Remap a missing identifier within the configured count, then run `agentkeys vscode reset`; verify it
+   lights idle and the log no longer reports it missing.
+6. Confirm `agentkeys set 2 running` is rejected and only two slots appear in
+   `agentkeys status` and `agentkeys vscode slots`.

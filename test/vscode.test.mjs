@@ -221,7 +221,18 @@ test('sparse slots never evict active work and reuse inactive bindings', async (
   await f.integration.setEnabledSlots([19]);
   assert.equal(f.integration.slots[2], null);
   assert.deepEqual(f.source.sessions, [IDS[1]]);
-  await assert.rejects(f.integration.open(2), /not mapped/);
+  await assert.rejects(f.integration.open(2), /not activated/);
+});
+
+test('configured slots limit session allocation and reset lighting', async (t) => {
+  const f = fixture(t, { enabledSlots: [0, 1] });
+  await f.integration.start();
+  for (let index = 0; index < 3; index++) await f.source.emit(IDS[index], active(), f.descriptor(index));
+  assert.equal(f.integration.sessions.get(IDS[2]).boundSlot, null);
+  f.observed.length = 0;
+  await f.integration.resetSlots();
+  assert.deepEqual(f.observed.map(({ slot }) => slot), [0, 1]);
+  assert.ok(f.observed.every(({ state }) => state === 'idle'));
 });
 
 test('unknown waiting states fail closed and remain acknowledged until a new turn', async (t) => {
