@@ -119,11 +119,13 @@ from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
 The previous built-in agent bindings must be **replaced with API Smart Actions** in Input.
 AgentKeys does not migrate or overwrite your layers automatically.
 
-1. Open Input's **Smart Actions** panel and create a Smart Action.
-2. Select the **API** tab and enter an identifier from `vscode00` through `vscode19`.
-3. Save it and assign it to a key on your chosen layer.
-4. Repeat for your chosen count, using consecutive identifiers from `vscode00`.
-   Additional layers are optional; you only need to configure the number of keys you want.
+1. Open Input's **Keymap** section.
+2. In the Key Mapping menu click "+ New Smart Action" and define an action name "vs00",
+   Select the "API" tab as its type and set Identifier to "vscode00". Then press Save.
+3. Once you have saved the Smart Action API mappings, assign them each to a key on your
+   chosen layer.
+4. Repeat for your chosen count, using consecutive identifiers from `vscode00`. Usually
+   4-6 keys is enough. Identifiers are supported from `vscode00` through `vscode19`.
 
 | API identifier | AgentKeys slot |
 | --- | --- |
