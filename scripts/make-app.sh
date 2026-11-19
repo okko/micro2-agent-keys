@@ -1,6 +1,5 @@
 #!/bin/sh
-# Builds AgentKeys.app: a minimal bundle whose only job is to own the macOS
-# Input Monitoring grant that opening this keyboard requires.
+# Builds AgentKeys.app: a minimal background app bundle for the Node daemon.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,13 +8,10 @@ NODE_BIN="${NODE_BIN:-$(command -v node)}"
 
 [ -x "$NODE_BIN" ] || { echo "node not found" >&2; exit 1; }
 
-# The grant is tied to the code hash, so a changed node binary means re-granting.
-OLD_HASH="$(codesign -dvvv "$APP" 2>&1 | sed -n 's/^CDHash=//p' || true)"
-
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
-# TCC identifies the bundle, so the real node binary must live inside it.
+# Keep the launchd runtime independent of shell version-manager initialization.
 cp "$NODE_BIN" "$APP/Contents/MacOS/AgentKeys"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -37,10 +33,4 @@ PLIST
 codesign --force --sign - "$APP"
 codesign --verify --strict "$APP"
 
-NEW_HASH="$(codesign -dvvv "$APP" 2>&1 | sed -n 's/^CDHash=//p')"
 echo "built $APP"
-
-if [ -n "$OLD_HASH" ] && [ "$OLD_HASH" != "$NEW_HASH" ]; then
-  echo "warning: code hash changed, re-grant Input Monitoring for AgentKeys in System Settings → Privacy & Security → Input Monitoring" >&2
-  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-fi

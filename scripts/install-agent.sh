@@ -1,6 +1,5 @@
 #!/bin/sh
-# Registers the daemon as a LaunchAgent. launchd starts the app bundle directly,
-# so the process is its own responsible process and keeps the TCC grant.
+# Registers the daemon as a LaunchAgent using the app bundle's Node runtime.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,6 +11,7 @@ VSCODERESET="$BINDIR/agentkeys-reset-vscode-slots"
 
 [ -x "$APP" ] || { echo "run scripts/make-app.sh first" >&2; exit 1; }
 (cd "$ROOT" && npm run build --silent)
+node "$ROOT/dist/configure.js"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/agentkeys" "$BINDIR"
 
@@ -37,7 +37,7 @@ PLIST
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 
-# A bundle opened manually for the TCC prompt is not owned by launchd. Stop it
+# A bundle opened manually is not owned by launchd. Stop it
 # before bootstrapping, otherwise both processes race to bind the HTTP port.
 for pid in $(pgrep -x AgentKeys 2>/dev/null || true); do
   kill -TERM "$pid"
@@ -60,7 +60,8 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST"
 PORT="${AGENTKEYS_PORT:-8787}"
 DEVICE_STATE=""
 attempt=0
-while [ "$attempt" -lt 40 ]; do
+echo "Keep Input.app running and approve AgentKeys in Input within 30 seconds if prompted."
+while [ "$attempt" -lt 180 ]; do
   if DEVICE_STATE="$(curl --fail --silent "http://127.0.0.1:$PORT/state")" &&
     printf '%s' "$DEVICE_STATE" | node -e '
 const state = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
@@ -79,7 +80,7 @@ elif ! printf '%s' "$DEVICE_STATE" | node -e '
 const state = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
 if (state.connected === true) process.exit(0);
 const reason = state.deviceError || (state.deviceVisible === false
-  ? "vendor HID interface is not visible"
+  ? "no supported keyboard is ready in Input"
   : "connection did not complete");
 console.error(`error: daemon cannot access the keyboard: ${reason}`);
 process.exit(1);
@@ -90,11 +91,10 @@ else
 fi
 
 if [ "$verified" != true ]; then
-  echo "Connect the keyboard and allow AgentKeys in System Settings → Privacy & Security → Input Monitoring, then run this installer again." >&2
-  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent" || true
+  echo "Open Input.app, connect the keyboard, and approve AgentKeys in Input. Check the daemon log for authorization or Keychain errors, then retry." >&2
   exit 1
 fi
-echo "Input Monitoring: verified (keyboard connected)"
+echo "Input WebSocket: verified (keyboard connected)"
 
 ln -sfn "$ROOT/dist/cli.js" "$BINDIR/agentkeys"
 ln -sfn "$ROOT/scripts/reset-vscode-slots.sh" "$VSCODERESET"

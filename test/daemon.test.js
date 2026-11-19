@@ -12,11 +12,19 @@ const { WebSocketServer } = require('ws');
 
 const SESSION_ID = '10000000-0000-4000-8000-000000000000';
 
-function isolatedVSCodeEnvironment() {
+function configureKeys(home, keyCount) {
+  const configPath = path.join(home, '.local', 'state', 'agentkeys', 'config.json');
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify({ keyCount }));
+}
+
+function isolatedVSCodeEnvironment(keyCount = 20) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-vscode-'));
+  configureKeys(directory, keyCount);
   return {
     directory,
     env: {
+      HOME: directory,
       AGENTKEYS_VSCODE_USER_DATA: directory,
       AGENTKEYS_VSCODE_STATE: path.join(directory, 'state.json'),
     },
@@ -52,8 +60,9 @@ async function stop(child) {
   await new Promise((resolve) => child.once('exit', resolve));
 }
 
-test('daemon reports the emitted build id and device state', async (t) => {
-  const vscode = isolatedVSCodeEnvironment();
+for (const keyCount of [1, 6, 20]) {
+test(`daemon exposes only the ${keyCount} configured slots`, async (t) => {
+  const vscode = isolatedVSCodeEnvironment(keyCount);
   const port = await freePort();
   const child = spawn(process.execPath, ['dist/daemon.js'], {
     cwd: path.join(__dirname, '..'),
@@ -83,21 +92,39 @@ test('daemon reports the emitted build id and device state', async (t) => {
   assert.equal(state.connected, false);
   assert.equal(state.deviceVisible, false);
   assert.equal(state.deviceError, null);
-  assert.deepEqual(state.slots.map((slot) => slot.index), Array.from({ length: 20 }, (_, index) => index));
+  assert.deepEqual(state.slots.map((slot) => slot.index), Array.from({ length: keyCount }, (_, index) => index));
 
-  const setResponse = await fetch(`http://127.0.0.1:${port}/slots/19`, {
+  const setResponse = await fetch(`http://127.0.0.1:${port}/slots/${keyCount - 1}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ state: 'running' }),
   });
   assert.equal(setResponse.status, 200);
 
+  const inactive = await fetch(`http://127.0.0.1:${port}/slots/${keyCount}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ state: 'running' }),
+  });
+  assert.equal(inactive.status, 400);
+
+  const bindings = await waitFor(async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/integrations/vscode/slots`);
+    const body = await response.json();
+    return body.slots.length === keyCount ? body.slots : false;
+  });
+  assert.deepEqual(bindings.map(({ slot }) => slot), state.slots.map(({ index }) => index));
+  const vscodeReset = await fetch(`http://127.0.0.1:${port}/integrations/vscode/slots/reset`, { method: 'POST' });
+  assert.equal(vscodeReset.status, 200);
+  assert.equal((await vscodeReset.json()).slots.length, keyCount);
+
   const resetResponse = await fetch(`http://127.0.0.1:${port}/reset`, { method: 'POST' });
   assert.equal(resetResponse.status, 200);
   const reset = await resetResponse.json();
-  assert.equal(reset.slots.length, 20);
+  assert.equal(reset.slots.length, keyCount);
   assert.ok(reset.slots.every((slot) => slot.state === 'idle'));
 });
+}
 
 test('daemon shutdown closes an incomplete HTTP request', async () => {
   const vscode = isolatedVSCodeEnvironment();
@@ -146,6 +173,7 @@ test('daemon shutdown closes an incomplete HTTP request', async () => {
 
 test('daemon restart restores AHP subscriptions and authoritative completion', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agentkeys-daemon-'));
+  configureKeys(directory, 20);
   const cwd = path.join(directory, 'project');
   const statePath = path.join(directory, 'state.json');
   fs.mkdirSync(cwd);
@@ -185,6 +213,7 @@ test('daemon restart restores AHP subscriptions and authoritative completion', a
       cwd: path.join(__dirname, '..'),
       env: {
         ...process.env,
+        HOME: directory,
         AGENTKEYS_NO_DEVICE: '1',
         AGENTKEYS_PORT: String(port),
         AGENTKEYS_VSCODE_STATE: statePath,

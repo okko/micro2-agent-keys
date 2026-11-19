@@ -12,7 +12,7 @@ const MAX_LABEL = 64;
 type VSCodeRoutes = Pick<VSCodeIntegration, 'publicSlots' | 'doctor' | 'open'>;
 
 /**
- * Everything the routes may touch. The daemon keeps the HID handle and the slot array to itself
+ * Everything the routes may touch. The daemon keeps the Input client and the slot array to itself
  * and exposes them only through this port, so routing stays testable without a device.
  */
 export interface DaemonApi {
@@ -128,6 +128,9 @@ async function handle(api: DaemonApi, req: http.IncomingMessage, res: http.Serve
     const index = Number(match[1]);
     if (!Number.isInteger(index) || index < 0 || index >= INTEGRATION_SLOT_COUNT) {
       return send(res, 400, { error: `slot must be 0..${INTEGRATION_SLOT_COUNT - 1}` });
+    }
+    if (index >= api.slots().length) {
+      return send(res, 400, { error: `slot ${index} is not activated; configured key count is ${api.slots().length}` });
     }
 
     let body: SlotBody;

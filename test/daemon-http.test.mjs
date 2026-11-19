@@ -105,12 +105,20 @@ test('GET /build and /state report the api view', async () => {
 });
 
 test('POST /slots/:index normalizes the state alias and truncates the label', async () => {
-  api = fakeApi();
+  api = fakeApi({ slots: () => Array.from({ length: 20 }, (_, index) => slot(index, 'idle')) });
 
   const response = await post('/slots/19', { state: ' BUSY ', label: 'x'.repeat(80) });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, slot: slot(19, 'running', 'x'.repeat(64)) });
   assert.deepEqual(api.calls, [['setSlot', 19, 'running', 'x'.repeat(64)]]);
+});
+
+test('POST /slots/:index rejects a slot beyond the configured key count', async () => {
+  api = fakeApi();
+  const response = await post('/slots/2', { state: 'running' });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'slot 2 is not activated; configured key count is 2' });
+  assert.deepEqual(api.calls, []);
 });
 
 test('POST /slots/:index drops a non-string label', async () => {

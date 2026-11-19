@@ -1,304 +1,196 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { randomUUID } from 'crypto';
-import { execFileSync } from 'child_process';
-import * as HID from 'node-hid';
+import {
+  InputClient,
+  InputApiError,
+  type DeviceSummary,
+} from '@worklouder/input-kit';
+import { keychainCredentials, type CredentialStore } from './input-credentials.js';
+import { slotForIdentifier, slotIdentifier, type SlotLighting } from './lighting.js';
 
-export const WL_VID = 0x303a;
-export const CM2_PID = 0x8298;
+const SUPPORTED_DEVICES = new Set(['creator_micro_v2_base', 'creator_micro_v2_pro', 'codex_micro']);
+let lastAuthorizationAttempt = -Infinity;
 
-// The RPC endpoint is exposed on a vendor-defined usage page, separate from the
-// keyboard interfaces the OS owns.
-export const VENDOR_USAGE_PAGE = 0xff00;
-
-const REPORT_ID = 0x06;
-const CHANNEL_DEBUG = 1;
-const CHANNEL_RPC = 2;
-const REPORT_SIZE = 64;
-const MAX_CHUNK = REPORT_SIZE - 3;
-
-const REQUEST_TIMEOUT_MS = 10000;
-const COOLDOWN_MS = 50;
-const INCOMPLETE_LOCK_STALE_MS = 30000;
-
-/** Ids outside [0, 999) are not accepted. */
-const MAX_RPC_ID = 999;
-
-const LOCK_PATH =
-  process.env.AGENTKEYS_DEVICE_LOCK ?? path.join(os.homedir(), '.local', 'state', 'agentkeys', 'device.lock');
-
-export class DeviceError extends Error {}
-
-/** Shape of any message the device sends: either an RPC reply (correlated by `id`)
- * or an unsolicited notification (`m`/`p`), never both. */
-export interface DeviceMessage {
-  id?: string | number;
-  result?: unknown;
-  error?: { message?: string };
-  m?: string;
-  p?: { k?: string; act?: number } & Record<string, unknown>;
-}
-
-export type NotifyHandler = (message: DeviceMessage) => void;
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
-
-function releaseLock(token: string): void {
-  try {
-    if (fs.readFileSync(LOCK_PATH, 'utf8').trim() === `${process.pid} ${token}`) {
-      fs.rmSync(LOCK_PATH, { force: true });
-    }
-  } catch {
-    // Already released, or never taken.
-  }
-}
-
-/**
- * A non-exclusive HID open lets several processes drive the device at once.
- * Concurrent use, in particular overlapping fs.write calls, has left the device
- * unresponsive and needing physical access to recover, so single access is
- * enforced here. See docs/hardware-safety.md.
- */
-function acquireLock(): string {
-  fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
-  const token = randomUUID();
-  for (let attempt = 0; attempt < 2; attempt++) {
-    let created = false;
-    try {
-      const fd = fs.openSync(LOCK_PATH, 'wx', 0o600);
-      created = true;
-      try {
-        fs.writeSync(fd, `${process.pid} ${token}`);
-      } finally {
-        fs.closeSync(fd);
-      }
-      return token;
-    } catch (err) {
-      if (created) {
-        fs.rmSync(LOCK_PATH, { force: true });
-        throw err;
-      }
-      const errno = err as NodeJS.ErrnoException;
-      if (errno.code !== 'EEXIST') throw err;
-      const ownerText = fs.readFileSync(LOCK_PATH, 'utf8').trim();
-      const owner = Number(ownerText.split(/\s+/, 1)[0]);
-      if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
-        throw new DeviceError(
-          `device is already in use by pid ${owner}. Concurrent access can leave the ` +
-            `keyboard unresponsive; stop that process first, or delete ${LOCK_PATH} if it is stale.`
-        );
-      }
-      if (
-        (!Number.isInteger(owner) || owner <= 0) &&
-        Date.now() - fs.statSync(LOCK_PATH).mtimeMs < INCOMPLETE_LOCK_STALE_MS
-      ) {
-        throw new DeviceError(`device lock is still being acquired at ${LOCK_PATH}`);
-      }
-      fs.rmSync(LOCK_PATH, { force: true });
-    }
-  }
-  throw new DeviceError('could not acquire the device lock');
-}
-
-function escapeUnicode(str: string): string {
-  return str.replace(/[\u0080-\uffff]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
-}
-
-export function listDevices(): HID.Device[] {
-  return HID.devices().filter(
-    (d) => d.vendorId === WL_VID && d.usagePage === VENDOR_USAGE_PAGE && d.path
-  );
-}
-
-const VENDOR_APP = '/Applications/input.app/';
-
-/**
- * The device lock only coordinates our own processes; the vendor app opens the
- * same interface and can write keymap.json at the same time, and concurrent
- * writes have left the device unresponsive. Matches on the executable path
- * rather than `pgrep -f`, which also matches any process merely mentioning the
- * path in its arguments.
- */
-export function assertNoVendorApp(): void {
-  const out = execFileSync('ps', ['-A', '-o', 'pid=,comm='], { encoding: 'utf8' });
-  const pids = out
-    .split('\n')
-    .map((line) => line.trim().match(/^(\d+)\s+(.+)$/))
-    .filter((m): m is RegExpMatchArray => m !== null && m[2].startsWith(VENDOR_APP))
-    .map((m) => m[1]);
-
-  if (pids.length) {
-    throw new DeviceError(
-      `input.app is running (pids ${pids.join(', ')}). Quit it before writing to the device.`
-    );
-  }
-}
-
-interface PendingRequest {
-  settle: (msg: DeviceMessage) => void;
-  fail: (err: Error) => void;
+interface DeviceOptions {
+  client?: InputClient;
+  credentials?: CredentialStore;
+  log: (...args: unknown[]) => void;
+  onKey: (slot: number) => void;
+  onFailure: (error: Error) => void;
 }
 
 export class Device {
-  #hid: HID.HIDAsync | null = null;
-  #lockToken: string | null = null;
-  #lockExitHandler: (() => void) | null = null;
-  #buffers: Record<number, string> = { [CHANNEL_DEBUG]: '', [CHANNEL_RPC]: '' };
-  #pending = new Map<string, PendingRequest>();
-  #nextId = 1;
-  #tail: Promise<unknown> = Promise.resolve();
+  readonly #client: InputClient;
+  readonly #options: DeviceOptions;
+  #selected: number | undefined;
+  #devicesRevision = 0;
+  #lightingRevision = 0;
+  #closed = false;
+  #ready = false;
+  #desired = new Map<number, SlotLighting>();
+  #pending = new Map<number, SlotLighting>();
+  #applied = new Map<number, string>();
+  #missing = new Set<number>();
+  #draining: Promise<void> | null = null;
 
-  /** Set to receive device-initiated messages, which carry no request id. */
-  onNotify: NotifyHandler | null = null;
-
-  info: HID.Device;
-
-  constructor(info: HID.Device) {
-    this.info = info;
+  private constructor(options: DeviceOptions) {
+    this.#options = options;
+    this.#client = options.client ?? new InputClient({ applicationName: 'AgentKeys' });
+    this.#client.on('devicesUpdated', ({ devices }) => {
+      this.#devicesRevision++;
+      this.#replaceDevices(devices);
+    });
+    this.#client.on('deviceInfoChanged', ({ deviceId }) => {
+      if (deviceId === this.#selected) this.refreshLighting();
+    });
+    this.#client.on('keyTriggered', ({ deviceId, identifier, action }) => {
+      if (!this.connected || deviceId !== this.#selected || action === 'release') return;
+      const slot = slotForIdentifier(identifier);
+      if (slot !== null) options.onKey(slot);
+    });
+    this.#client.on('disconnected', () => {
+      this.#selected = undefined;
+      if (!this.#closed) options.onFailure(new Error('Input disconnected; keep Input.app running'));
+    });
+    this.#client.on('transportError', (error) => options.log('Input transport error:', error.message));
+    this.#client.on('protocolError', (error) => options.log('Input protocol error:', error.message));
   }
 
-  static async open(info?: HID.Device): Promise<Device> {
-    const target = info ?? listDevices()[0];
-    if (!target) throw new DeviceError('no Work Louder device found');
-    if (!target.path) throw new DeviceError('device has no HID path');
+  get connected(): boolean {
+    return this.#ready && !this.#closed && this.#client.connected && this.#selected !== undefined;
+  }
 
-    const lockToken = acquireLock();
-    const device = new Device(target);
-    device.#lockToken = lockToken;
-    device.#lockExitHandler = () => releaseLock(lockToken);
-    process.once('exit', device.#lockExitHandler);
+  static async open(options: DeviceOptions): Promise<Device> {
+    const device = new Device(options);
+    const store = options.credentials ?? keychainCredentials;
     try {
-      // Non-exclusive keeps the OS's own claim intact so typing still works.
-      device.#hid =
-        process.platform === 'darwin'
-          ? await HID.HIDAsync.open(target.path, { nonExclusive: true })
-          : await HID.HIDAsync.open(target.path);
-    } catch (err) {
-      device.#lockToken = null;
-      process.off('exit', device.#lockExitHandler);
-      device.#lockExitHandler = null;
-      releaseLock(lockToken);
-      throw err;
-    }
-
-    device.#hid.on('data', (data: Buffer) => device.#onData(data));
-    device.#hid.on('error', (err: Error) => device.#failAll(err));
-    return device;
-  }
-
-  #onData(data: Buffer): void {
-    const channel = data[1];
-    const length = data[2];
-    const payload = data.slice(3, 3 + length).toString('utf8');
-    if (this.#buffers[channel] === undefined) this.#buffers[channel] = '';
-
-    this.#buffers[channel] += payload;
-    const lines = this.#buffers[channel].split(/\r?\n/);
-    this.#buffers[channel] = lines.pop() ?? '';
-
-    if (channel !== CHANNEL_RPC) return;
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      let msg: DeviceMessage;
-      try {
-        msg = JSON.parse(line) as DeviceMessage;
-      } catch {
-        continue;
+      // Load before connecting: Input allows only 30 seconds to authenticate.
+      let credentials = await store.load();
+      await device.#client.connect();
+      if (credentials) {
+        try {
+          await device.#client.authenticate(credentials);
+        } catch (error) {
+          if (!(error instanceof InputApiError) || error.code !== -32001) throw error;
+          await store.remove();
+          credentials = null;
+          options.log('Input authorization revoked; requesting approval again');
+        }
       }
-      const entry = this.#pending.get(String(msg.id));
-      if (entry) entry.settle(msg);
-      // A non-exclusive open also sees other processes' replies; skip those.
-      else if (msg.result === undefined && msg.error === undefined) this.onNotify?.(msg);
+      if (!credentials) {
+        if (Date.now() - lastAuthorizationAttempt < 60_000) {
+          throw new Error('Input approval pending or denied; retrying authorization after one minute');
+        }
+        lastAuthorizationAttempt = Date.now();
+        options.log('Approve AgentKeys in Input within 30 seconds; credentials are saved in macOS Keychain');
+        credentials = await device.#client.requestAuthorization();
+        await store.save(credentials);
+      }
+      const revision = device.#devicesRevision;
+      const devices = await device.#client.getDevices();
+      if (revision === device.#devicesRevision) device.#replaceDevices(devices);
+      if (!device.#client.connected) throw new Error('Input disconnected during setup');
+      device.#ready = true;
+      return device;
+    } catch (error) {
+      try {
+        await device.close();
+      } catch (closeError) {
+        options.log('Input close failed:', closeError instanceof Error ? closeError.message : String(closeError));
+      }
+      throw error;
     }
   }
 
-  #failAll(err: Error): void {
-    for (const entry of this.#pending.values()) entry.fail(err);
-    this.#pending.clear();
+  #replaceDevices(devices: DeviceSummary[]): void {
+    if (this.#closed) return;
+    const available = devices.filter(({ deviceType }) => SUPPORTED_DEVICES.has(deviceType));
+    const selected = available.find(({ id }) => id === this.#selected) ?? available[0];
+    this.#selected = selected?.id;
+    this.#options.log(selected
+      ? `Input device selected: ${selected.deviceType} (${selected.id})`
+      : 'No supported device ready in Input; connect the keyboard and wait for Input to load it');
+    this.refreshLighting();
   }
 
-  async #writeMessage(message: string): Promise<void> {
-    if (!this.#hid) throw new DeviceError('device is not open');
-    const buf = Buffer.from(message, 'utf8');
-    for (let offset = 0; offset < buf.length; offset += MAX_CHUNK) {
-      const size = Math.min(MAX_CHUNK, buf.length - offset);
-      const report = Buffer.alloc(REPORT_SIZE);
-      report[0] = REPORT_ID;
-      report[1] = CHANNEL_RPC;
-      report[2] = size;
-      buf.copy(report, 3, offset, offset + size);
-      await this.#hid.write(report);
-    }
-  }
-
-  /**
-   * Requests are serialized: the device handles one at a time and replies are
-   * correlated only by id.
-   */
-  call(method: string, params: unknown = null): Promise<unknown> {
-    const run = (): Promise<unknown> => this.#call(method, params);
-    const result = this.#tail.then(run, run);
-    this.#tail = result.then(
-      () => new Promise<void>((r) => setTimeout(r, COOLDOWN_MS)),
-      () => new Promise<void>((r) => setTimeout(r, COOLDOWN_MS))
-    );
-    return result;
-  }
-
-  #call(method: string, params: unknown): Promise<unknown> {
-    if (!this.#hid) throw new DeviceError('device is not open');
-
-    const id = this.#nextId;
-    this.#nextId = (this.#nextId % (MAX_RPC_ID - 1)) + 1;
-    const key = String(id);
-
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(key);
-        reject(new DeviceError(`${method} timed out`));
-      }, REQUEST_TIMEOUT_MS);
-
-      this.#pending.set(key, {
-        settle: (msg) => {
-          clearTimeout(timer);
-          this.#pending.delete(key);
-          if (msg.error) reject(new DeviceError(msg.error.message ?? 'rpc error'));
-          else resolve(msg.result);
-        },
-        fail: (err) => {
-          clearTimeout(timer);
-          this.#pending.delete(key);
-          reject(err);
-        },
-      });
-
-      this.#writeMessage(escapeUnicode(JSON.stringify({ method, params, id }))).catch((err: unknown) => {
-        this.#pending.get(key)?.fail(err instanceof Error ? err : new DeviceError(String(err)));
-      });
+  /** Repaint after a profile/layer change or an explicit reset, including newly mapped keys. */
+  refreshLighting(): void {
+    this.#lightingRevision++;
+    this.#applied.clear();
+    this.#missing.clear();
+    this.#pending = new Map(this.#desired);
+    void this.#flush().catch((error: unknown) => {
+      if (!this.#closed) this.#options.onFailure(error instanceof Error ? error : new Error(String(error)));
     });
   }
 
-  async close(): Promise<void> {
-    const hid = this.#hid;
-    const lockToken = this.#lockToken;
-    const lockExitHandler = this.#lockExitHandler;
-    this.#hid = null;
-    this.#lockToken = null;
-    this.#lockExitHandler = null;
-    if (lockExitHandler) process.off('exit', lockExitHandler);
-    this.#failAll(new DeviceError('device closed'));
-    try {
-      if (hid) await hid.close();
-    } finally {
-      if (lockToken) releaseLock(lockToken);
+  setLighting(slots: SlotLighting[]): Promise<void> {
+    for (const slot of slots) {
+      slotIdentifier(slot.id);
+      const snapshot = { ...slot };
+      this.#desired.set(slot.id, snapshot);
+      this.#pending.set(slot.id, snapshot);
     }
+    return this.#flush();
+  }
+
+  #flush(): Promise<void> {
+    if (!this.#draining) {
+      this.#draining = this.#render().finally(() => { this.#draining = null; });
+    }
+    return this.#draining.then(() => {
+      // Notifications can enqueue a repaint while the previous drain is settling.
+      if (this.connected && this.#pending.size) return this.#flush();
+      return undefined;
+    });
+  }
+
+  async #render(): Promise<void> {
+    while (this.connected && this.#pending.size) {
+      const [id, slot] = this.#pending.entries().next().value!;
+      this.#pending.delete(id);
+      const signature = JSON.stringify(slot);
+      if (this.#applied.get(id) === signature || this.#missing.has(id)) continue;
+      const revision = this.#lightingRevision;
+      const deviceId = this.#selected!;
+      for (let attempt = 0; ; attempt++) {
+        if (!this.connected || revision !== this.#lightingRevision) break;
+        try {
+          await this.#client.setKeyLighting({
+            deviceId,
+            identifier: slotIdentifier(id),
+            isRegex: false,
+            color: slot.color,
+            brightness: 1,
+            effect: slot.effect,
+            speed: slot.speed ?? 0.5,
+          });
+          if (revision === this.#lightingRevision) this.#applied.set(id, signature);
+          break;
+        } catch (error) {
+          if (revision !== this.#lightingRevision) break;
+          if (error instanceof InputApiError && error.code === -32009) {
+            this.#missing.add(id);
+            this.#options.log(`Input API Smart Action ${slotIdentifier(id)} is not mapped; skipping lighting until a layer change or slot reset`);
+            break;
+          }
+          if (error instanceof InputApiError && error.code === -32017 && attempt < 5) {
+            const delay = 250 * 2 ** attempt;
+            this.#options.log(`Input device rate limit; retrying lighting in ${delay}ms`);
+            await new Promise<void>((resolve) => setTimeout(resolve, delay));
+            // A newer state supersedes this retry.
+            if (this.#pending.has(id)) break;
+            continue;
+          }
+          throw error;
+        }
+      }
+    }
+  }
+
+  async close(): Promise<void> {
+    this.#closed = true;
+    this.#ready = false;
+    this.#selected = undefined;
+    this.#pending.clear();
+    await this.#client.close();
   }
 }

@@ -6,9 +6,9 @@ control surface for up to 20 coding-agent sessions. AgentKeys connects VS Code, 
 and a local HTTP API to physical keys, so each concurrent session has a dedicated, color-coded
 status indicator you can act on without hunting through editor tabs.
 
-No custom firmware. It coexists with Input.app at runtime and talks to the device over
-its existing USB HID interface, using the JSON-RPC messages the stock firmware already
-accepts. Keep Input.app running so its key macros continue to work.
+No custom firmware. AgentKeys uses the official `@worklouder/input-kit` client to
+connect to Input.app's local WebSocket API for key events and status lighting.
+**Keep Input.app running**: it owns the device connection and continues providing your macros.
 
 | State   | Colour       | Meaning                        |
 | ------- | ------------ | ------------------------------ |
@@ -47,7 +47,7 @@ accepts. Keep Input.app running so its key macros continue to work.
 | CLI | no | yes |
 | HTTP API | no | yes |
 | Shell / script integration | no | yes |
-| Agent key slots supported | 6 (AG00–AG05) | 20 (AG00–AG19) |
+| Agent key slots supported | 6 | 20 (`vscode00`–`vscode19`) |
 
 ## How it works
 
@@ -59,27 +59,29 @@ flowchart LR
     end
     scripts["your scripts\n(no perms)"]
     cli["agentkeys CLI\n(no perms)"]
-    daemon["AgentKeys daemon\n(holds System Input Monitoring grant)"]
+    daemon["AgentKeys daemon"]
+    input["Input.app"]
     keyboard["Creator Micro 2\n(keyboard)"]
 
     VS -->|authoritative state| AHP
     AHP -->|snapshot + sequenced actions| daemon
     scripts -->|shell| cli
     cli -->|HTTP| daemon
-    daemon <-->|USB HID JSON-RPC| keyboard
+    daemon <-->|InputKit WebSocket API| input
+    input <--> keyboard
 ```
 
-The daemon owns this project's single HID connection and the macOS permission. Input.app
-continues to run alongside it; everything else in this project is an unprivileged HTTP
-client, so scripts, shell aliases and editor tasks need no special entitlement.
+The daemon authenticates to `ws://127.0.0.1:19147/input`. Input asks you to approve
+**AgentKeys** on the first connection; its credentials are then stored in macOS Keychain.
+AgentKeys itself no longer needs Input Monitoring permission.
 
-Lighting uses the vendor RPC method `v.oai.thstatus`, which takes a bare array of
-per-thread descriptors. Sending one entry updates one key and leaves the rest alone.
+Lighting uses `setKeyLighting` with exact API Smart Action identifiers. Pending changes
+are coalesced, acknowledged writes are cached, and rate-limited writes retry with backoff.
+InputKit serializes requests and paces device writes. Input restarts and device reconnects
+restore the current states; profile/layer changes trigger a repaint.
 
-The daemon never touches your keymap. You bind the agent keycodes to a layer once, the
-way you want them, and from then on the daemon only sends colours. The lighting settings are
-independent of active layer: If you send a per-key state to a key in anothe layer, that key
-will reflect its current status as soon as you switch that layer to be the active one.
+The daemon never reads or writes your keymap or installs layers. Configure the API Smart
+Actions in Input once, wherever you want them.
 
 ## VS Code integration
 
@@ -88,12 +90,17 @@ sessions, assigns a free slot when real work starts, and keeps that
 key synchronized with the session's live state. Simply creating or browsing a session does not
 claim a key, so the hardware reflects active work rather than editor clutter.
 
-At each device connection, the daemon reads `keymap.json` from the keyboard and enables only the
-`KV_OAI_AG00` through `KV_OAI_AG19` numbers mapped in any profile layer.
+The installer asks how many keys you have activated (1–20) and saves that count.
+Only those slots receive sessions and lighting updates. For example, choosing **6**
+enables `vscode00` through `vscode05`; you do not need to map the remaining identifiers.
+Use consecutive identifiers starting at `vscode00`. Input's API cannot read the active
+layout's mappings, so this setting is user-configured rather than automatically detected.
 
-After changing agent-key mappings in Input.app you can run `agentkeys vscode reset`. It re-reads the live
-keyboard keymap, frees every VS Code binding, and explicitly publishes `idle` to all firmware slots
-from `AG00` through `AG19` to clear any lingering key state. No daemon restart is needed.
+After changing mappings in Input.app, run `agentkeys vscode reset`. It retries missing
+API keys, frees every VS Code binding and publishes `idle` to the configured slots.
+No daemon restart is needed for mapping changes within the configured count.
+Unmapped identifiers are reported in the daemon log and
+skipped until a profile/layer change, device reconnect, or explicit reset.
 
 When a session needs an answer or approval, its key turns amber; active work breathes blue;
 completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
@@ -107,75 +114,37 @@ be reused.
 from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
 `agentkeys doctor vscode` to check the detected VS Code integration.
 
-## The agent layer
+## Configure API Smart Action keys
 
-Agent keys are ordinary keymap bindings. The stock layer uses six, one per agent slot:
+The previous built-in agent bindings must be **replaced with API Smart Actions** in Input.
+AgentKeys does not migrate or overwrite your layers automatically.
 
-| Keycode | Purpose |
+1. Open Input's **Keymap** section.
+2. In the Key Mapping menu click "+ New Smart Action" and define an action name "vs00",
+   Select the "API" tab as its type and set Identifier to "vscode00". Then press Save.
+3. Once you have saved the Smart Action API mappings, assign them each to a key on your
+   chosen layer.
+4. Repeat for your chosen count, using consecutive identifiers from `vscode00`. Usually
+   4-6 keys is enough. Identifiers are supported from `vscode00` through `vscode19`.
+
+| API identifier | AgentKeys slot |
 | --- | --- |
-| `KV_OAI_AG00`..`AG05` | the six agent slots — slot `N` is `KV_OAI_AG<NN>` |
-| `KV_OAI_ACT06`..`ACT12` | action keys; they report presses over `v.oai.hid` too |
-| `KV_OAI_ENC_CW` / `_CC` / `_CLK` | encoder clockwise, counter-clockwise, click |
+| `vscode00` | 0 |
+| `vscode01` | 1 |
+| ... | ... |
+| `vscode19` | 19 |
 
-This application and the device firmware support 20 agent slots, `AG00`..`AG19`: both the
-keycode parser and `v.oai.thstatus` use 19 as their inclusive upper bound. The keyboard has 13 physical switches, so at most 13 distinct agent slots can be bound on one layer. The stock
-layer uses only `AG00`..`AG05`. `AG18` and `AG19` have also been verified on hardware for both
-independent lighting and press/release notifications.
+Identifiers are **case-sensitive and zero-padded**: `vscode0` and `VSCode00` are not valid
+AgentKeys identifiers. The number identifies the slot, not the physical key position.
+Other Smart Actions, ordinary keys, encoders and ambient lighting are left alone.
+Press and click events open the bound session; release events are ignored.
 
-### Default layout
-
-This is the stock agent layer embedded in the published firmware image and settable in Input.app.
-Use it as a starting point and change what you like.
-
-```json
-{
-  "id": 0,
-  "name": "Agent layer",
-  "color": 16711680,
-  "layout": {
-    "encoders": [["KV_OAI_ENC_CC", "KV_OAI_ENC_CW", "KV_OAI_ENC_CLK"]],
-    "buttons": [],
-    "keymap": [
-      ["KV_OAI_AG00", "KV_OAI_AG01"],
-      ["KV_OAI_AG02", "KV_OAI_AG03", "KV_OAI_AG04", "KV_OAI_AG05"],
-      ["KV_OAI_ACT06", "KV_OAI_ACT07", "KV_OAI_ACT08", "KV_OAI_ACT09"],
-      ["KV_OAI_ACT10", "KV_OAI_ACT11", "KV_OAI_ACT12"]
-    ],
-    "joystick": { "type": "VENDOR", "sectors": [] }
-  },
-  "os": 0
-}
-```
-
-The four `keymap` rows are the physical key rows, 2/4/4/3. Drop this in as one layer of
-`profiles[0].layers` in the device's `profile.json`, then import the JSON to Input.app
-to write it to the device. Writing that file triggers a live reload and does not
-change the active layer.
-
-Managing that file is deliberately out of scope here. Assume the ChatGPT app to gain
-the ability to set up and manage the agent-key layer for you in an upcoming version,
-at which point hand-editing your profile JSON becomes optional — a forward-looking
-statement about software that is not released yet.
-
-### Agent keys can share a layer with your own keys
-
-Nothing marks a layer as an agent layer — the device acts on each keycode individually.
-So a layer can carry the agent keys *and* your own keycodes side by side: the agent
-keys light up and report presses to the host, everything else types normally.
-
-The slot-to-key mapping follows the **number in the keycode**, not the position, so
-`KV_OAI_AG00`..`AG05` can sit anywhere in the layout, in any order. Slot 3 lights
-wherever `KV_OAI_AG03` is bound.
-
-**The layer's own key lighting is ignored once it holds agent keycodes.** The whole
-layer is then painted by agent colours alone, so keys without a live agent stay dark
-and the agent keys stand out against them. This is the intended look, and the other
-keys still type normally — they are simply unlit. Verified by A/B on hardware
-(`src/research/backlighttest.ts`): the same layer, written the same way, is solid white without
-the agent keycodes and fully dark with them, even with every agent colour switched off.
-
+See the [Work Louder WebSocket guide](https://docs.worklouder.cc/websocket/user-guide.md)
+for Input's API Smart Action UI and supported devices (Creator Micro V2 Base/Pro and Codex Micro).
 
 ## Setup
+
+Use **Node.js 22.4 or newer**, a current Input.app with the WebSocket API, and a supported device.
 
 ```sh
 npm install
@@ -184,8 +153,27 @@ scripts/make-app.sh        # builds AgentKeys.app
 scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
 ```
 
-Leave Input.app running when installing or restarting the daemon. The daemon opens the
-vendor interface non-exclusively so Input.app can continue providing key macros.
+The installer prompts for your activated key count and stores it in
+`~/.local/state/agentkeys/config.json`, for example:
+
+```json
+{ "keyCount": 6 }
+```
+
+Reinstalling prompts again, with your saved count as the default. At least one key is
+required; the maximum remains 20 (`vscode00`–`vscode19`). No count is assumed on a fresh
+installation. Missing or invalid configuration is reported instead of enabling every key.
+
+To change the count later, rerun the installer, or run `node dist/configure.js` from
+the repository and restart the daemon with `./scripts/restart-agent.sh` in your macOS
+Terminal. The new count applies on startup. The HTTP API and CLI reject disabled slots;
+`agentkeys status` and `agentkeys vscode slots` list only the configured slots.
+
+Leave Input.app running when installing or restarting the daemon. On the first run,
+approve **AgentKeys** in Input within **30 seconds**. Later connections authenticate
+automatically using the `eu.okko.agentkeys.input` / `AgentKeys` Keychain item.
+If access is revoked in Input, AgentKeys removes its saved credentials and requests approval
+again. Failed approval attempts are spaced at least one minute apart.
 
 `install-agent.sh` symlinks the `agentkeys` command into `~/.local/bin`, so that
 directory has to be on your `PATH`; the script says so if it is not. The CLI is only an
@@ -202,17 +190,13 @@ using `vscode://file/...?session=...`.
 See [integration details](docs/vscode-integration-details.md) for the current contract
 since VS Code 1.146.
 
-The tiny `AgentKeys.app` is just the `node` binary in a signed bundle so that it
-meets the macOS requirement to have **Input Monitoring** permissions.
-
-Approve it once when prompted, under System Settings → Privacy & Security → Input Monitoring.
-
-Re-running `make-app.sh` after a Node upgrade changes the code hash and you will have
-to approve it again; the script warns when that happens.
+The tiny `AgentKeys.app` packages the Node runtime for launchd. Re-run `make-app.sh`
+after a Node upgrade. Input authorization is separate from the bundle's signature;
+there is no AgentKeys Input Monitoring setup step.
 
 `install-agent.sh` verifies that launchd is serving the newly built daemon and that the
 daemon can connect to the keyboard. If keyboard access cannot be verified, installation
-fails, explains the reported device error, and opens the Input Monitoring settings pane.
+fails and explains the reported Input connection or authorization error.
 
 ## CLI Usage
 
@@ -273,7 +257,6 @@ if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT err
 - `AGENTKEYS_VSCODE_USER_DATA` overrides the VS Code user-data directory used to discover
   authenticated local Agent Host protocol endpoints.
 - `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
-- `AGENTKEYS_TEST_LAYER` picks which layer the agent keys replace (1-based, default `1`) in tests.
 
 ## Logs
 
@@ -288,8 +271,9 @@ agentkeys log
 
 ## Notes
 
-- The daemon reconnects on its own if the keyboard is unplugged.
-- Pressing `AG00` through `AG19` opens the corresponding bound VS Code session.
+- The daemon reconnects with backoff if Input exits; device-list events handle unplug/replug.
+- Pressing `vscode00` through `vscode19` opens the corresponding bound VS Code session.
+- With multiple supported devices, the first ready device is selected and retained while connected.
 
 ## Docs for development in this repository
 
@@ -297,12 +281,10 @@ agentkeys log
 - [How to verify a monthly VS Code update](docs/vscode-update.md)
 - [VS Code human-input evidence and coverage limits](docs/vscode-human-input-evidence.md)
 - [How the daemon deployment is verified](docs/daemon-deployment.md)
-- [docs/hardware-safety.md](docs/hardware-safety.md) — **read before writing to the
-  device.** How a two-process run once left it unresponsive, and the guardrails that now prevent that.
-- [docs/protocol.md](docs/protocol.md) — HID framing, JSON-RPC, lighting, keycodes.
-- [docs/development.md](docs/development.md) — macOS Input Monitoring, launching, tools.
-- [docs/findings.md](docs/findings.md) — observed results, corrected assumptions, open
-  questions.
+- [docs/hardware-safety.md](docs/hardware-safety.md) — Input ownership and configuration safety.
+- [docs/protocol.md](docs/protocol.md) — WebSocket events, authorization and lighting.
+- [docs/development.md](docs/development.md) — launching and testing.
+- [docs/findings.md](docs/findings.md) — integration constraints and hardware verification.
 
 ## Notice
 
@@ -314,9 +296,8 @@ respective owners.
 
 The repository contains original code only. Apart from the open-source npm packages it
 declares as dependencies, it ships no third-party firmware, SDK or application code and
-requires none to build or run. The notes in `docs/` record behaviour observed on one
-device while using its USB interface; they are not vendor documentation and may be
-incomplete or wrong.
+requires Input.app at runtime. The notes in `docs/` describe this integration; consult
+Work Louder's documentation for the supported API contract.
 
 Writing to a keyboard's on-device configuration can leave it unusable, and doing so may
 affect any warranty or support you have from its manufacturer. This software is
