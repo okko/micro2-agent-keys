@@ -1,6 +1,7 @@
 node_modules/
 dist/
 AgentKeys.app/
+*.vsix
 *.log
 keymap.live.json
 .DS_Store

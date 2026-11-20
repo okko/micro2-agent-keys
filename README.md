@@ -1,304 +1,167 @@
-# AgentKeys
+# Agent Keys for VS Code
 
-Turn a [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or a
-[Codex Micro](https://worklouder.cc/codex-micro) into an at-a-glance
-control surface for up to 20 coding-agent sessions. AgentKeys connects VS Code, the command line,
-and a local HTTP API to physical keys, so each concurrent session has a dedicated, color-coded
-status indicator you can act on without hunting through editor tabs.
+Show up to 20 VS Code agent sessions on a
+[Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or
+[Codex Micro](https://worklouder.cc/codex-micro).
+Simply press the physical key to open the exact conversation.
+Each concurrent Copilot Agent session has a dedicated, color-coded
+status indicator you can act on without hunting through editor windows and tabs.
 
-No custom firmware. AgentKeys uses the official `@worklouder/input-kit` client to
-connect to Input.app's local WebSocket API for key events and status lighting.
-**Keep Input.app running**: it owns the device connection and continues providing your macros.
+Agent Keys is a desktop VS Code extension. No custom firmware is
+required.
+**Just Keep Input.app running**: it handles keyboard communication and continues providing your normal macros.
 
-| State   | Colour       | Meaning                        |
-| ------- | ------------ | ------------------------------ |
-| `idle`  | dim white    | free, or completed session acknowledged |
-| `running` | blue, breathing | agent is thinking / executing |
-| `done`  | green        | finished, output unread        |
-| `input` | amber, breathing | paused, waiting on you     |
-| `error` | red          | run failed                     |
+## Quick start
 
-## Demo
+1. **Install the VS Code Extension.** It is easiest to install this Extension from the VS Code's Extensions menu. Simply search for **"okko.agent-keys"** and install.
+2. **Configure the keys in Input.app**
+    1. Open Input's **Keymap** section.
+    2. Select **+ New Smart Action**, choose the **API** tab, and set Identifier to `vscode00`.
+    3. Save and assign the action to a key on your chosen layer.
+    4. Repeat for your configured count: six keys use `vscode00` through `vscode05`.
+3. **Configure the amount of Agent Keys in VS Code**
+    1. Press cmd+shift+p and select **>Agent Keys: Configure keys**. Then enter the amount of Agent Keys you want to use, for example, **6**, and press enter.
 
-[<img src="https://img.youtube.com/vi/QpnkxvVaaSU/hqdefault.jpg" alt="Watch the demo" width="384">](https://youtu.be/QpnkxvVaaSU)
+## Key States
 
-## Why AgentKeys
-
-- **Stay focused in VS Code.** AgentKeys automatically tracks VS Code Agent Host Protocol
-  (AHP) sessions as they begin work, wait for input, finish, or fail. A physical
-  key opens the exact project and conversation for its bound session, putting you back in context
-  with one press.
-- **See what needs attention first.** Breathing blue keys show active work, amber keys show
-  sessions blocked on you, green keys show unread completion, and red keys surface failures.
-  Parallel agents become easy to scan from your desk instead of easy to lose in a crowded editor.
-- **Keep your current setup.** No custom firmware or keymap takeover is required. Input.app
-  keeps providing your normal macros, while AgentKeys only updates the colors of the agent keys.
-- **Fit it into any workflow.** Let VS Code assign and update slots automatically, or drive the
-  same clear states from scripts, the CLI, or the localhost HTTP API.
-
-| Feature | ChatGPT Codex | AgentKeys |
+| State | Colour | Meaning |
 | --- | --- | --- |
-| Works with stock firmware | yes | yes |
-| Requires custom firmware | no | no |
-| Open source | no | yes (MIT) |
-| Supports Codex tasks | yes | no |
-| Supports VS Code (Copilot / Agent Host) | no | yes |
-| Key press opens session | yes (Codex task) | yes (VS Code chat) |
-| CLI | no | yes |
-| HTTP API | no | yes |
-| Shell / script integration | no | yes |
-| Agent key slots supported | 6 | 20 (`vscode00`–`vscode19`) |
+| `idle` | dim white | Free key or acknowledged completion |
+| `running` | blue, breathing | Agent is working |
+| `input` | amber, breathing | Agent needs an answer or approval |
+| `done` | green | Finished, not yet acknowledged |
+| `error` | red | Failed or authoritative state unavailable |
 
-## How it works
+## Detailed instructions and documentation
 
-```mermaid
-flowchart LR
-    subgraph vsc["VS Code"]
-        VS["Agent Host"]
-        AHP["AHP root / chat channels"]
-    end
-    scripts["your scripts\n(no perms)"]
-    cli["agentkeys CLI\n(no perms)"]
-    daemon["AgentKeys daemon"]
-    input["Input.app"]
-    keyboard["Creator Micro 2\n(keyboard)"]
+### For developers
 
-    VS -->|authoritative state| AHP
-    AHP -->|snapshot + sequenced actions| daemon
-    scripts -->|shell| cli
-    cli -->|HTTP| daemon
-    daemon <-->|InputKit WebSocket API| input
-    input <--> keyboard
-```
+For debug purposes, you can also open the Agent Keys sidebar to see connection status, configure amount of keys and even click virtual sidebar keys.
 
-The daemon authenticates to `ws://127.0.0.1:19147/input`. Input asks you to approve
-**AgentKeys** on the first connection; its credentials are then stored in macOS Keychain.
-AgentKeys itself no longer needs Input Monitoring permission.
+The extension ID is `okko.agent-keys`. Internal commands, views, settings and service
+coordination use the `eu.okko.agentkeys` namespace. The Input credential key is
+`eu.okko.agentkeys.input.credentials` in VS Code SecretStorage.
 
-Lighting uses `setKeyLighting` with exact API Smart Action identifiers. Pending changes
-are coalesced, acknowledged writes are cached, and rate-limited writes retry with backoff.
-InputKit serializes requests and paces device writes. Input restarts and device reconnects
-restore the current states; profile/layer changes trigger a repaint.
+The Activity Bar container uses `eu-okko-agentkeys` because VS Code disallows dots there.
 
-The daemon never reads or writes your keymap or installs layers. Configure the API Smart
-Actions in Input once, wherever you want them.
+### Install and configure
 
-## VS Code integration
+Requires desktop VS Code **1.147 or newer**, Work Louder **Input.app v1.2.0 or newer**, and a supported keyboard. The current AHP integration is intended for macOS desktop; browser VS Code and remote-only agent hosts are not supported.
 
-VS Code is the automatic path: after installation, AgentKeys discovers local AHP
-sessions, assigns a free slot when real work starts, and keeps that
-key synchronized with the session's live state. Simply creating or browsing a session does not
-claim a key, so the hardware reflects active work rather than editor clutter.
+1. Install the AgentKeys VSIX using **Extensions: Install from VSIX**.
+2. Open **AgentKeys** from the Activity Bar.
+3. Click **Configure your keys to begin** and enter a count from 1 to 20.
+4. Approve **AgentKeys** in Input within 30 seconds when requested.
+5. Map that many consecutive API Smart Actions in Input, starting at `vscode00`.
 
-The installer asks how many keys you have activated (1–20) and saves that count.
-Only those slots receive sessions and lighting updates. For example, choosing **6**
-enables `vscode00` through `vscode05`; you do not need to map the remaining identifiers.
-Use consecutive identifiers starting at `vscode00`. Input's API cannot read the active
-layout's mappings, so this setting is user-configured rather than automatically detected.
+No count is assumed on a fresh install. Until configured, AgentKeys does not connect to Input or allocate keys. Credentials are stored in VS Code **SecretStorage**.
+After revocation, the extension requests approval again; unsuccessful approval attempts are spaced at least one minute apart.
 
-After changing mappings in Input.app, run `agentkeys vscode reset`. It retries missing
-API keys, frees every VS Code binding and publishes `idle` to the configured slots.
-No daemon restart is needed for mapping changes within the configured count.
-Unmapped identifiers are reported in the daemon log and
-skipped until a profile/layer change, device reconnect, or explicit reset.
-
-When a session needs an answer or approval, its key turns amber; active work breathes blue;
-completed work turns green; and failures turn red. Pressing a bound agent key focuses the relevant
-VS Code project window and opens that exact conversation. Opening a green key acknowledges the
-completion by returning it to white, while keeping the shortcut bound so you can reopen the same
-conversation. Opening a red key returns it to white and releases the failed binding so the slot can
-be reused.
-
-`scripts/install-agent.sh` installs the daemon, AHP-based VS Code integration, CLI and HTTP API. Use
-`agentkeys vscode slots` to see current bindings, `agentkeys vscode open <slot>` to jump to one
-from the terminal, `agentkeys-reset-vscode-slots` to free every binding, and
-`agentkeys doctor vscode` to check the detected VS Code integration.
-
-## Configure API Smart Action keys
-
-The previous built-in agent bindings must be **replaced with API Smart Actions** in Input.
-AgentKeys does not migrate or overwrite your layers automatically.
+#### Map API Smart Actions in Input
 
 1. Open Input's **Keymap** section.
-2. In the Key Mapping menu click "+ New Smart Action" and define an action name "vs00",
-   Select the "API" tab as its type and set Identifier to "vscode00". Then press Save.
-3. Once you have saved the Smart Action API mappings, assign them each to a key on your
-   chosen layer.
-4. Repeat for your chosen count, using consecutive identifiers from `vscode00`. Usually
-   4-6 keys is enough. Identifiers are supported from `vscode00` through `vscode19`.
+2. Select **+ New Smart Action**, choose the **API** tab, and set Identifier to `vscode00`.
+3. Save and assign the action to a key on your chosen layer.
+4. Repeat for your configured count: six keys use `vscode00` through `vscode05`.
 
-| API identifier | AgentKeys slot |
+Identifiers are case-sensitive and zero-padded. The number identifies the slot,
+not the physical key position. You can position the keys freely.
+AgentKeys never reads or writes layouts, profiles, firmware, or ordinary key mappings.
+
+Input cannot enumerate your API mappings, so you must configure the count yourself.
+Unmapped identifiers are reported in **AgentKeys: Show Logs** and retried after
+a layer/device change, reconnect, or reset. See the
+[vendor guide](https://docs.worklouder.cc/websocket/user-guide.md).
+
+### Sidebar and commands
+
+The sidebar shows Input connectivity, available AHP sessions, and each configured
+key's state and project. Hover a key for its full project path, session identity,
+last update, and error details. Click a bound key to open its conversation.
+
+| Command | Purpose |
 | --- | --- |
-| `vscode00` | 0 |
-| `vscode01` | 1 |
-| ... | ... |
-| `vscode19` | 19 |
+| **AgentKeys: Show Keys** | Open the live sidebar |
+| **AgentKeys: Configure Keys** | Change the enabled count; disabled keys are returned to idle |
+| **AgentKeys: Reset Keys** | Clear all bindings, repaint idle, and retry missing mappings |
+| **AgentKeys: Restart Connection** | Reconnect Input and AHP, retaining bindings |
+| **AgentKeys: Show Logs** | Open diagnostics, including Input approval instructions |
+| **AgentKeys: Forget Input Authorization** | Remove the owner's saved credentials and request approval again |
 
-Identifiers are **case-sensitive and zero-padded**: `vscode0` and `VSCode00` are not valid
-AgentKeys identifiers. The number identifies the slot, not the physical key position.
-Other Smart Actions, ordinary keys, encoders and ambient lighting are left alone.
-Press and click events open the bound session; release events are ignored.
+Reset and reconnect buttons are also in the sidebar toolbar.
+**Reset is not the same as restart**: reset remembers current turn identities so
+the same ongoing work does not immediately reclaim a key. New turns can bind again.
+Reloading VS Code preserves bindings and restores authoritative AHP state instead.
 
-See the [Work Louder WebSocket guide](https://docs.worklouder.cc/websocket/user-guide.md)
-for Input's API Smart Action UI and supported devices (Creator Micro V2 Base/Pro and Codex Micro).
+Opening a green key acknowledges completion to white while retaining its shortcut.
+Opening a red key releases the failed binding only after successful URL launch.
+Active, waiting, and failed bindings are never evicted to make room for another session.
 
-## Setup
+### Lifecycle and multiple windows
 
-Use **Node.js 22.4 or newer**, a current Input.app with the WebSocket API, and a supported device.
+The extension activates automatically after startup and runs while an enabled
+desktop VS Code window remains open, even when unfocused or with the sidebar hidden.
+One window owns the Input and AHP clients; other windows share the live status and
+forward commands. When the owner closes or reloads, a remaining window takes over.
 
-```sh
-npm install
-npm run build
-scripts/make-app.sh        # builds AgentKeys.app
-scripts/install-agent.sh   # runs it as a LaunchAgent, links the CLI
-```
+This is not a background OS service: monitoring pauses during sleep, extension-host
+restarts, and when all enabled windows close. Keys can retain their last colours
+while disconnected; the next owner restores their current state.
 
-The installer prompts for your activated key count and stores it in
-`~/.local/state/agentkeys/config.json`, for example:
+Coordination uses an authenticated, loopback-only connection on port **19148**.
+It is private extension IPC, not a supported scripting API. The OS socket bind
+ensures one owner; a hung owner is reported rather than bypassed by a second writer.
+Input itself uses port **19147**.
 
-```json
-{ "keyCount": 6 }
-```
+The key count, binding checkpoints, and private coordination token live in
+`~/.local/state/eu.okko.agentkeys/`. They are machine-local and shared across
+windows and profiles, not Settings Sync data. Input credentials use the owning
+window's SecretStorage; a different profile may require its own approval.
 
-Reinstalling prompts again, with your saved count as the default. At least one key is
-required; the maximum remains 20 (`vscode00`–`vscode19`). No count is assumed on a fresh
-installation. Missing or invalid configuration is reported instead of enabling every key.
+The owner discovers AHP in its VS Code user-data directory, including custom
+`--user-data-dir` installations and profiles. **AgentKeys: Agent Host Registry**
+can override the absolute endpoint-registry path. Reload all windows after changing
+it. If Stable and Insiders are both open, the owner's installation/registry and
+URI scheme determine which sessions are tracked and opened.
 
-To change the count later, rerun the installer, or run `node dist/configure.js` from
-the repository and restart the daemon with `./scripts/restart-agent.sh` in your macOS
-Terminal. The new count applies on startup. The HTTP API and CLI reject disabled slots;
-`agentkeys status` and `agentkeys vscode slots` list only the configured slots.
+Remote SSH/container windows run AgentKeys on the local UI side, but that does not
+make remote AHP sessions visible. Only sessions advertised in the selected local
+registry are supported. AHP discovery and exact `?session=` navigation remain
+version-sensitive contracts, not stable VS Code chat-observation APIs.
 
-Leave Input.app running when installing or restarting the daemon. On the first run,
-approve **AgentKeys** in Input within **30 seconds**. Later connections authenticate
-automatically using the `eu.okko.agentkeys.input` / `AgentKeys` Keychain item.
-If access is revoked in Input, AgentKeys removes its saved credentials and requests approval
-again. Failed approval attempts are spaced at least one minute apart.
+### Migrating from the daemon
 
-`install-agent.sh` symlinks the `agentkeys` command into `~/.local/bin`, so that
-directory has to be on your `PATH`; the script says so if it is not. The CLI is only an
-HTTP client — it needs no permissions, and the checkout has to stay where it is because
-the symlink and the LaunchAgent both point at it.
-
-The VS Code integration tracks Agent Host Protocol (AHP) sessions.
-`@microsoft/agent-host-protocol` provides discovery, snapshots, ordered state actions,
-and reconnect replay.
-Sessions must be exposed through AHP to be tracked.
-
-Chat buttons open the exact host-advertised session resource in its project window
-using `vscode://file/...?session=...`.
-See [integration details](docs/vscode-integration-details.md) for the current contract
-since VS Code 1.146.
-
-The tiny `AgentKeys.app` packages the Node runtime for launchd. Re-run `make-app.sh`
-after a Node upgrade. Input authorization is separate from the bundle's signature;
-there is no AgentKeys Input Monitoring setup step.
-
-`install-agent.sh` verifies that launchd is serving the newly built daemon and that the
-daemon can connect to the keyboard. If keyboard access cannot be verified, installation
-fails and explains the reported Input connection or authorization error.
-
-## CLI Usage
+Stop and uninstall the old LaunchAgent **before configuring the extension** so it
+does not compete for Input lighting. In a normal macOS Terminal:
 
 ```sh
-agentkeys set 0 running "refactor auth"
-agentkeys set 1 done
-agentkeys set 2 input
-agentkeys reset
-agentkeys status
-agentkeys log
-agentkeys list-states     # list names and aliases
-agentkeys vscode slots
-agentkeys vscode reset
-agentkeys vscode open 0
-agentkeys doctor vscode
+launchctl bootout "gui/$(id -u)/eu.okko.agentkeys"
 ```
 
-Aliases let scripts use their own vocabulary: `thinking`, `busy` and `working`
-all mean `running`; `waiting`, `paused` and `blocked` mean `input`.
+Remove its `~/Library/LaunchAgents/eu.okko.agentkeys.plist` if installed, and remove
+old CLI symlinks after checking their targets. The extension does not import old
+configuration, bindings, or Keychain credentials. Configure the count and approve
+Input again. Old deployment helpers are intentionally no longer included.
 
-## HTTP API
+### Build and develop
 
-Bound to `127.0.0.1` only, and requests must carry a loopback `Host` header so a web
-page cannot drive your keyboard.
-
-```
-GET  /build                 -> { buildId }
-GET  /state                 -> { connected, slots: [...] }
-POST /slots/:index          <- { "state": "running", "label": "optional" }
-POST /reset
-GET  /integrations/vscode/slots
-GET  /integrations/vscode/doctor
-POST /integrations/vscode/slots/reset
-POST /integrations/vscode/slots/:index/open
-```
+Use Node.js 22.4 or newer:
 
 ```sh
-curl -s localhost:8787/build
-curl -s localhost:8787/state
-curl -s -X POST localhost:8787/slots/3 -H 'content-type: application/json' -d '{"state":"error"}'
+npm ci
+npm run check
+npm test
+npm run package
 ```
 
-## Wiring an agent to report its status in a key color
+Install the generated `.vsix`, or press **F5** to launch the Extension Development
+Host. The build bundles the runtime dependencies and includes their licenses.
+There is no Node.js installation requirement for extension users.
 
-Give each session a slot number and call the CLI at the transitions you care about:
+See [development and acceptance checks](docs/development.md),
+[Input protocol](docs/protocol.md), [AHP integration](docs/vscode-integration-details.md),
+and [VS Code update verification](docs/vscode-update.md).
 
-```sh
-SLOT=0
-agentkeys set $SLOT running "$(basename "$PWD")"
-if my-agent-command; then agentkeys set $SLOT done; else agentkeys set $SLOT error; fi
-```
+### Demo
 
-## Environment variables
-
-- `AGENTKEYS_PORT` overrides the port for both daemon and CLI.
-- `AGENTKEYS_LOG` redirects daemon output to a file, needed when launched via
-  LaunchServices, which discards stdout.
-- `AGENTKEYS_VSCODE_USER_DATA` overrides the VS Code user-data directory used to discover
-  authenticated local Agent Host protocol endpoints.
-- `AGENTKEYS_VSCODE_STATE` overrides its persisted binding-state file.
-
-## Logs
-
-```sh
-agentkeys log
-```
-
-## Known issues
-
-- `~/.local/state/agentkeys/daemon.log` is not rotated automatically; log rotation is not yet
-  implemented.
-
-## Notes
-
-- The daemon reconnects with backoff if Input exits; device-list events handle unplug/replug.
-- Pressing `vscode00` through `vscode19` opens the corresponding bound VS Code session.
-- With multiple supported devices, the first ready device is selected and retained while connected.
-
-## Docs for development in this repository
-
-- [How the VS Code integration works](docs/vscode-integration-details.md)
-- [How to verify a monthly VS Code update](docs/vscode-update.md)
-- [VS Code human-input evidence and coverage limits](docs/vscode-human-input-evidence.md)
-- [How the daemon deployment is verified](docs/daemon-deployment.md)
-- [docs/hardware-safety.md](docs/hardware-safety.md) — Input ownership and configuration safety.
-- [docs/protocol.md](docs/protocol.md) — WebSocket events, authorization and lighting.
-- [docs/development.md](docs/development.md) — launching and testing.
-- [docs/findings.md](docs/findings.md) — integration constraints and hardware verification.
-
-## Notice
-
-This is an independent, unofficial personal project. It is not affiliated with,
-sponsored by, endorsed by, or supported by Work Louder, OpenAI, or any other company
-whose products it interoperates with. Product, company and interface names are used
-only to identify the hardware and software involved, and remain the property of their
-respective owners.
-
-The repository contains original code only. Apart from the open-source npm packages it
-declares as dependencies, it ships no third-party firmware, SDK or application code and
-requires Input.app at runtime. The notes in `docs/` describe this integration; consult
-Work Louder's documentation for the supported API contract.
-
-Writing to a keyboard's on-device configuration can leave it unusable, and doing so may
-affect any warranty or support you have from its manufacturer. This software is
-provided as-is, without warranty of any kind. Use it at your own risk.
+[<img src="https://img.youtube.com/vi/QpnkxvVaaSU/hqdefault.jpg" alt="Watch the demo" width="384">](https://youtu.be/QpnkxvVaaSU)

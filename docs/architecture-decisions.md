@@ -104,7 +104,7 @@ derives their relevant behavior from protocol state and fails closed as
 ### Outcome
 
 The chosen architecture is implemented in `src/agent-host.ts`, `src/vscode.ts`,
-`src/vscode-chat-state.ts`, and `src/vscode-app.ts`. Bound sessions remain observable
+`src/vscode-chat-state.ts`, and `src/session-url.ts`. Bound sessions remain observable
 when their widget is hidden, and protocol snapshots restore blockers after restart.
 Exact opening uses the advertised host identity in the project-window `session` URL.
 See [integration details](vscode-integration-details.md) for the contract and upstream
