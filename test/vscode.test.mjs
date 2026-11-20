@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { VSCodeIntegration } from '../dist/vscode.js';
-import { buildSessionUrl } from '../dist/vscode-app.js';
+import { buildSessionUrl } from '../dist/session-url.js';
 
 const IDS = Array.from({ length: 21 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
 
@@ -61,11 +61,11 @@ test('AHP alone discovers, tracks and opens the exact advertised host resource',
   await f.integration.open(0);
   assert.equal(f.launched.length, 2);
   assert.equal(new URL(f.launched[0]).searchParams.get('session'), descriptor.resource);
-  assert.equal(f.integration.doctor().observation, 'ahp');
-  assert.equal(f.integration.doctor().availableSessions, 1);
+  assert.equal(f.integration.status().observation, 'ahp');
+  assert.equal(f.integration.status().availableSessions, 1);
 });
 
-test('schema migration retains AHP identities and excludes unrecognized observation sources', async (t) => {
+test('unsupported saved state fails explicitly rather than migrating daemon data', async (t) => {
   const f = fixture(t);
   fs.writeFileSync(f.config.statePath, JSON.stringify({
     schemaVersion: 1,
@@ -78,15 +78,7 @@ test('schema migration retains AHP identities and excludes unrecognized observat
       { slot: 1, sessionId: IDS[1], state: 'input' },
     ],
   }));
-  await f.integration.start();
-  await f.integration.open(0);
-  assert.equal(new URL(f.launched[0]).searchParams.get('session'), f.descriptor().resource);
-  assert.equal(f.integration.slots[1], null);
-  const saved = JSON.parse(fs.readFileSync(f.config.statePath, 'utf8'));
-  assert.equal(saved.schemaVersion, 2);
-  assert.equal(saved.sessions.length, 1);
-  assert.equal('extraMetadata' in saved.sessions[0], false);
-  assert.match(f.logs[0], /Migrated VS Code binding state to schema 2; retained AHP sessions/);
+  await assert.rejects(f.integration.start(), /unsupported VS Code integration state schema 1/);
 });
 
 test('opening preserves advertised provider and chat fragments with encoded project paths', async (t) => {
@@ -96,6 +88,7 @@ test('opening preserves advertised provider and chat fragments with encoded proj
   assert.equal(url.pathname, '/tmp/Pr%C3%B8ject%20space');
   assert.equal(url.searchParams.get('session'), resource);
   assert.equal(url.hash, '');
+  assert.equal(new URL(buildSessionUrl('/tmp', IDS[0], resource, 'vscode-insiders')).protocol, 'vscode-insiders:');
   await f.integration.start();
   await f.source.emit(IDS[0], active(), f.descriptor(0, resource));
   await f.integration.open(0);
@@ -111,7 +104,7 @@ test('source loss fails active slots closed, preserves completed slots and recov
   await f.source.unavailable([IDS[0]]);
   assert.equal(f.integration.slots[0].state, 'error');
   assert.equal(f.integration.slots[0].runError, 'agent-host-state-unavailable');
-  assert.equal(f.integration.doctor().availableSessions, 0);
+  assert.equal(f.integration.status().availableSessions, 0);
   await f.source.emit(IDS[0], active('turn', [question]), f.descriptor());
   assert.equal(f.integration.slots[0].state, 'input');
   assert.equal(f.integration.slots[0].runError, null);
@@ -158,7 +151,7 @@ test('reset and error acknowledgement suppress the same run but allow a new requ
   assert.equal(f.integration.slots[0].state, 'running');
 });
 
-test('reset request checkpoints survive daemon restarts', async (t) => {
+test('reset request checkpoints survive extension restarts', async (t) => {
   const f = fixture(t);
   await f.integration.start();
   await f.source.emit(IDS[0], active(), f.descriptor());

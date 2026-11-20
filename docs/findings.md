@@ -7,7 +7,7 @@ Earlier low-level protocol observations are no longer part of this integration.
 - Input must be open and must finish loading a supported device before it appears.
 - Runtime device IDs change; reconnects and device-list notifications rediscover them.
 - Existing Smart Actions cannot be enumerated through the API. The user chooses an activated
-  key count during installation, saved in the local configuration. Only the first N slots
+  key count with Configure Keys, saved in the shared extension configuration. Only the first N slots
   (maximum 20) are enabled; missing mappings within that count are diagnosed on lighting writes.
 - Identifiers are case-sensitive. Slots follow identifiers, not physical key positions.
 - The API acknowledges lighting writes and reports invalid or unavailable targets.

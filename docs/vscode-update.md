@@ -16,7 +16,7 @@ npm run verify:vscode-update
 ```
 
 That command performs the complete routine check. It does not access the keyboard,
-restart the daemon, modify fixtures, create chat sessions, invoke a model, or require UI
+restart the extension, modify fixtures, create chat sessions, invoke a model, or require UI
 interaction.
 
 The verifier exits nonzero as soon as a structural check fails. A successful run ends
@@ -131,7 +131,7 @@ Treat this as a real compatibility investigation:
 2. Inspect the owning source anchors in [integration details](vscode-integration-details.md):
    project URL parsing, editor-resource registration, and Agent Host input/tool state.
 3. Determine whether the contract was renamed, moved, removed, or semantically changed.
-4. Update `src/vscode-chat-state.ts`, `src/vscode-app.ts`, `src/vscode.ts`, or
+4. Update `src/vscode-chat-state.ts`, `src/session-url.ts`, `src/vscode.ts`, or
    `src/agent-host.ts` only if the
    production contract changed.
 5. Add a focused synthetic unit test for the new shape while preserving fail-closed

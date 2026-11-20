@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import type { AgentHostSession, AgentHostStateSource } from './agent-host.js';
 import { INTEGRATION_SLOT_COUNT } from './states.js';
@@ -11,7 +10,7 @@ import {
   snapshotEvents,
   type RunState,
 } from './vscode-chat-state.js';
-import { SESSION_ID, buildSessionUrl, exactOpenCompatibility, launchUrl } from './vscode-app.js';
+import { SESSION_ID, buildSessionUrl } from './session-url.js';
 
 const SCHEMA_VERSION = 2;
 
@@ -72,27 +71,25 @@ interface PersistedState {
 }
 
 export interface VSCodeIntegrationOptions {
-  statePath?: string;
+  statePath: string;
+  uriScheme?: string;
   enabledSlots?: Iterable<number>;
   agentHostSource: AgentHostStateSource;
   onSlot?: (slot: VSCodeSlot) => void | Promise<void>;
   log?: (...args: unknown[]) => void;
-  launch?: (url: string) => Promise<void>;
+  launch: (url: string) => Promise<void>;
 }
 
-export interface DoctorInfo {
-  ready: boolean;
+export interface SessionStatus {
   observation: 'ahp';
   trackedSessions: number;
   availableSessions: number;
-  exactOpenAvailable: boolean;
-  protocolRegistered: boolean;
-  vscodeVersion: string | null;
   bindings: (VSCodeSlot & { projectExists: boolean | null; available: boolean })[];
 }
 
 export class VSCodeIntegration {
   readonly statePath: string;
+  readonly uriScheme: string;
   readonly agentHostSource: AgentHostStateSource;
   readonly onSlot: (slot: VSCodeSlot) => void | Promise<void>;
   readonly log: (...args: unknown[]) => void;
@@ -104,12 +101,12 @@ export class VSCodeIntegration {
   private lifecycleVersion = 0;
 
   constructor(options: VSCodeIntegrationOptions) {
-    this.statePath = options.statePath ?? process.env.AGENTKEYS_VSCODE_STATE ??
-      path.join(os.homedir(), 'Library', 'Application Support', 'AgentKeys', 'vscode-sessions.json');
+    this.statePath = options.statePath;
+    this.uriScheme = options.uriScheme ?? 'vscode';
     this.agentHostSource = options.agentHostSource;
     this.onSlot = options.onSlot ?? (() => {});
     this.log = options.log ?? (() => {});
-    this.launch = options.launch ?? launchUrl;
+    this.launch = options.launch;
     this.enabledSlots = new Set(options.enabledSlots ??
       Array.from({ length: INTEGRATION_SLOT_COUNT }, (_, index) => index));
   }
@@ -122,11 +119,10 @@ export class VSCodeIntegration {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
       throw new Error(`cannot read VS Code integration state: ${(error as Error).message}`);
     }
-    if (saved.schemaVersion !== 1 && saved.schemaVersion !== SCHEMA_VERSION) {
+    if (saved.schemaVersion !== SCHEMA_VERSION) {
       throw new Error(`unsupported VS Code integration state schema ${saved.schemaVersion}`);
     }
     for (const raw of saved.sessions ?? []) {
-      if (saved.schemaVersion === 1 && raw.observation !== 'ahp') continue;
       if (!SESSION_ID.test(raw.id) || !raw.cwd || !path.isAbsolute(raw.cwd) || !raw.resource) {
         throw new Error('invalid persisted AHP session');
       }
@@ -158,9 +154,6 @@ export class VSCodeIntegration {
         doneAt: raw.doneAt, lastEventAt: raw.lastEventAt,
         runError: unavailable ? session.run.error : null,
       };
-    }
-    if (saved.schemaVersion === 1) {
-      this.log('Migrated VS Code binding state to schema 2; retained AHP sessions');
     }
   }
 
@@ -363,7 +356,6 @@ export class VSCodeIntegration {
     if (!slot?.sessionId || !slot.resource) throw new Error(`VS Code slot ${index} is unbound`);
     const session = this.sessions.get(slot.sessionId);
     if (!session) throw new Error('bound AHP session is missing');
-    if (!exactOpenCompatibility().available) throw new Error('exact VS Code session opening is unavailable on this system');
     if (!slot.cwd || !fs.existsSync(slot.cwd)) {
       slot.state = 'error';
       slot.runError = 'project-path-missing';
@@ -372,7 +364,7 @@ export class VSCodeIntegration {
       this.save();
       throw new Error(`project path does not exist: ${slot.cwd}`);
     }
-    const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource);
+    const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource, this.uriScheme);
     await this.launch(url);
     const current = this.slots[index];
     if (current?.sessionId === session.id) {
@@ -391,14 +383,10 @@ export class VSCodeIntegration {
     return { slot: this.slots[index] ? { ...this.slots[index] } : { slot: index, state: 'idle' }, url };
   }
 
-  doctor(): DoctorInfo {
-    const exactOpen = exactOpenCompatibility();
+  status(): SessionStatus {
     const availableSessions = [...this.sessions.values()].filter((session) => session.available).length;
     return {
-      ready: this.started && availableSessions > 0 && exactOpen.available,
       observation: 'ahp', trackedSessions: this.sessions.size, availableSessions,
-      exactOpenAvailable: exactOpen.available, protocolRegistered: exactOpen.protocolRegistered,
-      vscodeVersion: exactOpen.version,
       bindings: this.publicSlots().map((slot) => ({
         ...slot, projectExists: slot.cwd ? fs.existsSync(slot.cwd) : null,
         available: slot.sessionId ? this.sessions.get(slot.sessionId)?.available === true : false,

@@ -1,15 +1,12 @@
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { INTEGRATION_SLOT_COUNT } from './states.js';
-
-export const CONFIG_PATH = path.join(os.homedir(), '.local', 'state', 'agentkeys', 'config.json');
 
 export interface Config {
   keyCount: number;
 }
 
-function validateConfig(value: unknown): Config {
+export function validateConfig(value: unknown): Config {
   if (
     typeof value !== 'object' || value === null ||
     !('keyCount' in value) || typeof value.keyCount !== 'number' ||
@@ -20,7 +17,7 @@ function validateConfig(value: unknown): Config {
   return { keyCount: value.keyCount };
 }
 
-export function readConfig(file = CONFIG_PATH): Config | null {
+export function readConfig(file: string): Config | null {
   let text: string;
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -35,7 +32,7 @@ export function readConfig(file = CONFIG_PATH): Config | null {
   }
 }
 
-export function writeConfig(config: Config, file = CONFIG_PATH): void {
+export function writeConfig(config: Config, file: string): void {
   const validated = validateConfig(config);
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.${process.pid}.tmp`;

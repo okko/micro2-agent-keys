@@ -6,17 +6,14 @@ The commit helper cannot include untracked files directly. If given an untracked
 it rejects the file and creates no commit. Stage new files first with `git add`, then
 invoke the commit helper.
 
-## AgentKeys Runtime
+## Agent Keys Runtime
 
-`scripts/restart-agent.sh` will not work in the sandbox. Run it with unsandboxed
-execution so `launchctl` can restart the LaunchAgent in the user's GUI domain.
-If the command tool offers an explicit unsandboxed execution mode, use it for
-`scripts/restart-agent.sh` from the repository root. Otherwise, ask the user to
-run `./scripts/restart-agent.sh` from the repository root in their normal macOS
-Terminal session (not the agent's sandboxed shell). Do not retry
-`launchctl` in the sandbox or use `sudo` to work around the restriction.
-The script only checks and kickstarts the `eu.okko.agentkeys` daemon; it does not
-stop input.app or write the keymap. Do not re-check the script before routine restarts.
+Agent Keys runs in the local VS Code extension host. Build/package with `npm run package`,
+then install the VSIX or use the Extension Development Host (F5).
+Use Agent Keys: Restart Connection to reconnect, or Agent Keys: Reset Keys to clear bindings.
+PNever use process.exit, process-wide signal handlers, or detached daemons in runtime code.
+Keep Input.app running; only the elected extension owner may connect to Input.
+Do not start the legacy LaunchAgent alongside the extension.
 
 ## Tests
 

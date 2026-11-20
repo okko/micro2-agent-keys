@@ -67,15 +67,21 @@ disconnect.
 - Schema 2 retains slot identities and request/outcome checkpoints, not chat content.
   Active restored bindings wait for authoritative AHP state in the error state.
 
-Use `agentkeys doctor vscode` for AHP availability, installed version, exact-opening
-availability, and per-binding project/host availability. `agentkeys vscode slots`,
-`agentkeys vscode open <slot>`, and `agentkeys vscode reset` remain supported.
+The AgentKeys sidebar shows Input connectivity, AHP session counts and per-key state.
+Click a key to open it via `vscode.env.openExternal`; Reset Keys clears bindings.
+Show Logs contains connection and compatibility failures. Restart Connection retains
+bindings and restores them from authoritative AHP snapshots.
+
+One extension window owns the runtime; other windows share state through authenticated
+local IPC and take over after the owner exits. Configuration and schema-2 checkpoints
+are stored in `~/.local/state/eu.okko.agentkeys/`, separate from the former daemon.
+No daemon-state migration is performed.
 
 ## Verification
 
 Run `npm run verify:vscode-update` after updates. It checks installed structural
-contracts and runs the full test suite, including AHP fixture replay, migration,
-reconnect, exact resource URLs, acknowledgement, reset, and daemon restart behavior.
+contracts and runs the full test suite, including AHP fixture replay,
+reconnect, exact resource URLs, acknowledgement, reset, and extension-owner handover.
 See [the update workflow](vscode-update.md).
 
 AHP production fixtures retain their original build provenance and captured records.

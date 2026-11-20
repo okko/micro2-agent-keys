@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
@@ -57,8 +56,7 @@ export interface AgentHostStateSource {
 }
 
 export interface LocalAgentHostStateSourceOptions {
-  userDataPath?: string;
-  registryPath?: string;
+  registryPath: string;
   retryMs?: number;
   requestTimeoutMs?: number;
   log?: (...args: unknown[]) => void;
@@ -228,7 +226,7 @@ class EndpointConnection {
   private readonly observations = new Map<string, ChatObservation>();
   private readonly pendingChannels = new Set<string>();
   private readonly nextAttempt = new Map<string, number>();
-  private readonly clientId = `agentkeys-${process.pid}-${randomUUID()}`;
+  private readonly clientId = `eu.okko.agentkeys-${process.pid}-${randomUUID()}`;
 
   constructor(
     readonly endpoint: LocalAgentHostEndpoint,
@@ -526,10 +524,8 @@ export class LocalAgentHostStateSource implements AgentHostStateSource {
   private timer: NodeJS.Timeout | null = null;
   private updates: Promise<void> = Promise.resolve();
 
-  constructor(options: LocalAgentHostStateSourceOptions = {}) {
-    const userDataPath = options.userDataPath ?? process.env.AGENTKEYS_VSCODE_USER_DATA ??
-      path.join(os.homedir(), 'Library', 'Application Support', 'Code');
-    this.registryPath = options.registryPath ?? path.join(userDataPath, 'agent-host', 'local-endpoint');
+  constructor(options: LocalAgentHostStateSourceOptions) {
+    this.registryPath = options.registryPath;
     this.retryMs = options.retryMs ?? DEFAULT_RETRY_MS;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.log = options.log ?? (() => {});

@@ -1,0 +1,131 @@
+# Agent Keys for VS Code
+
+Show up to 20 VS Code agent sessions on a
+[Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or
+[Codex Micro](https://worklouder.cc/codex-micro).
+Simply press the physical key to open the exact conversation.
+Each concurrent Copilot Agent session has a dedicated, color-coded
+status indicator you can act on without hunting through editor windows and tabs.
+
+Agent Keys is a desktop VS Code extension. No custom firmware is
+required.
+**Just Keep Input.app running**: it handles keyboard communication and continues providing your normal macros.
+
+## Quick start
+
+1. **Install the VS Code Extension.** It is easiest to install this Extension from the VS Code's Extensions menu. Simply search for **"okko.agent-keys"** and install.
+2. **Configure the keys in Input.app**
+    1. Open Input's **Keymap** section.
+    2. Select **+ New Smart Action**, choose the **API** tab, and set Identifier to `vscode00`.
+    3. Save and assign the action to a key on your chosen layer.
+    4. Repeat for your configured count: six keys use `vscode00` through `vscode05`.
+3. **Configure the amount of Agent Keys in VS Code**
+    1. Press cmd+shift+p and select **>Agent Keys: Configure keys**. Then enter the amount of Agent Keys you want to use, for example, **6**, and press enter.
+
+## Key States
+
+| State | Colour | Meaning |
+| --- | --- | --- |
+| `idle` | dim white | Free key or acknowledged completion |
+| `running` | blue, breathing | Agent is working |
+| `input` | amber, breathing | Agent needs an answer or approval |
+| `done` | green | Finished, not yet acknowledged |
+| `error` | red | Failed or authoritative state unavailable |
+
+## Detailed instructions and documentation
+
+### Install and configure
+
+Requires desktop VS Code **1.147 or newer**, Work Louder **Input.app v1.2.0 or newer**, and a supported keyboard. The current AHP integration is intended for macOS desktop; browser VS Code and remote-only agent hosts are not supported.
+
+1. Install the AgentKeys Extension from the Marketplace.
+2. Open **AgentKeys** from the Activity Bar (on the left).
+3. Click **Configure your keys to begin** and enter a count from 1 to 20. I recommend 4 or 6 keys.
+4. Approve **AgentKeys** in Input within 30 seconds when requested.
+5. Map that many consecutive API Smart Actions in Input, starting at `vscode00`.
+
+No count is assumed on a fresh install. Until configured, AgentKeys does not connect to Input or allocate keys. Credentials are stored in VS Code **SecretStorage**.
+After revocation, the extension requests approval again; unsuccessful approval attempts are spaced at least one minute apart.
+
+#### Map API Smart Actions in Input
+
+1. Open Input's **Keymap** section.
+2. Select **+ New Smart Action**, choose the **API** tab, and set Identifier to `vscode00`.
+3. Save and assign the action to a key on your chosen layer.
+4. Repeat for your configured count: six keys use `vscode00` through `vscode05`.
+
+Identifiers are case-sensitive and zero-padded. The number identifies the slot,
+not the physical key position. You can position the keys freely.
+AgentKeys never reads or writes layouts, profiles, firmware, or ordinary key mappings.
+
+Input cannot enumerate your API mappings, so you must configure the count yourself.
+
+### Sidebar and commands
+
+The sidebar shows Input connectivity, available AHP sessions, and each configured
+key's state and project. Hover a key for its full project path, session identity,
+last update, and error details. Click a bound key to open its conversation.
+
+| Command | Purpose |
+| --- | --- |
+| **AgentKeys: Show Keys** | Open the live sidebar |
+| **AgentKeys: Configure Keys** | Change the enabled count; disabled keys are returned to idle |
+| **AgentKeys: Reset Keys** | Clear all bindings, repaint idle, and retry missing mappings |
+| **AgentKeys: Restart Connection** | Reconnect Input and AHP, retaining bindings |
+| **AgentKeys: Show Logs** | Open diagnostics, including Input approval instructions |
+| **AgentKeys: Forget Input Authorization** | Remove the owner's saved credentials and request approval again |
+
+Reset and reconnect buttons are also in the sidebar toolbar.
+**Reset is not the same as restart**: reset remembers current turn identities so
+the same ongoing work does not immediately reclaim a key. New turns can bind again.
+Reloading VS Code preserves bindings and restores authoritative AHP state instead.
+
+Opening a green key acknowledges completion to white while retaining its shortcut.
+Opening a red key releases the failed binding only after successful URL launch.
+Active, waiting, and failed bindings are never evicted to make room for another session.
+
+### Lifecycle and multiple windows
+
+The extension activates automatically after startup and runs while an enabled
+desktop VS Code window remains open, even when unfocused or with the sidebar hidden.
+One window owns the Input and AHP clients; other windows share the live status and
+forward commands. When the owner closes or reloads, a remaining window takes over.
+
+This is not a background OS service: monitoring pauses during sleep, extension-host
+restarts, and when all enabled windows close. Keys can retain their last colours
+while disconnected; the next owner restores their current state.
+
+Coordination uses an authenticated, loopback-only connection on port **19148**.
+It is private extension IPC, not a supported scripting API. The OS socket bind
+ensures one owner; a hung owner is reported rather than bypassed by a second writer.
+Input itself uses port **19147**.
+
+The key count, binding checkpoints, and private coordination token live in
+`~/.local/state/eu.okko.agentkeys/`. They are machine-local and shared across
+windows and profiles, not Settings Sync data. Input credentials use the owning
+window's SecretStorage; a different profile may require its own approval.
+
+The owner discovers AHP in its VS Code user-data directory, including custom
+`--user-data-dir` installations and profiles. **AgentKeys: Agent Host Registry**
+can override the absolute endpoint-registry path. Reload all windows after changing
+it. If Stable and Insiders are both open, the owner's installation/registry and
+URI scheme determine which sessions are tracked and opened.
+
+Remote SSH/container windows run AgentKeys on the local UI side, but that does not
+make remote AHP sessions visible. Only sessions advertised in the selected local
+registry are supported. AHP discovery and exact `?session=` navigation remain
+version-sensitive contracts, not stable VS Code chat-observation APIs.
+
+### Migrating from the daemon
+
+Stop and uninstall the old LaunchAgent **before configuring the extension** so it
+does not compete for Input lighting. In a normal macOS Terminal:
+
+```sh
+launchctl bootout "gui/$(id -u)/eu.okko.agentkeys"
+```
+
+Remove its `~/Library/LaunchAgents/eu.okko.agentkeys.plist` if installed, and remove
+old CLI symlinks after checking their targets. The extension does not import old
+configuration, bindings, or Keychain credentials. Configure the count and approve
+Input again. Old deployment helpers are intentionally no longer included.

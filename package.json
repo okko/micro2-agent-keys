@@ -1,26 +1,151 @@
 {
-  "name": "micro2-agentkeys",
-  "version": "0.1.0",
-  "private": true,
+  "name": "agent-keys",
+  "displayName": "Agent Keys",
+  "publisher": "okko",
+  "version": "2.0.0",
   "license": "MIT",
-  "description": "Show agent session status on a Work Louder Creator Micro 2 via CLI, HTTP API, and VS Code. Up to 20 agent slots, instead of the usual 6.",
+  "icon": "media/agentkeys.png",
+  "description": "Show local agent session status on Work Louder keyboards and open conversations with configured keys.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/okko/micro2-agent-keys.git"
+  },
+  "homepage": "https://github.com/okko/micro2-agent-keys#readme",
+  "bugs": {
+    "url": "https://github.com/okko/micro2-agent-keys/issues"
+  },
   "type": "module",
-  "bin": {
-    "agentkeys": "dist/cli.js"
+  "main": "./dist/extension.cjs",
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Agent Keys requires a desktop extension host and local AHP sessions."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "eu-okko-agentkeys",
+          "title": "Agent Keys",
+          "icon": "media/agentkeys.png"
+        }
+      ]
+    },
+    "views": {
+      "eu-okko-agentkeys": [
+        {
+          "id": "eu.okko.agentkeys.keys",
+          "name": "Keys"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "eu.okko.agentkeys.showStatus",
+        "title": "Show Keys",
+        "category": "Agent Keys"
+      },
+      {
+        "command": "eu.okko.agentkeys.configureKeys",
+        "title": "Configure Keys",
+        "category": "Agent Keys",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "eu.okko.agentkeys.reset",
+        "title": "Reset Keys",
+        "category": "Agent Keys",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "eu.okko.agentkeys.restart",
+        "title": "Restart Connection",
+        "category": "Agent Keys",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "eu.okko.agentkeys.showLogs",
+        "title": "Show Logs",
+        "category": "Agent Keys",
+        "icon": "$(output)"
+      },
+      {
+        "command": "eu.okko.agentkeys.forgetAuthorization",
+        "title": "Forget Input Authorization",
+        "category": "Agent Keys"
+      },
+      {
+        "command": "eu.okko.agentkeys.openKey",
+        "title": "Open Session",
+        "category": "Agent Keys"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "eu.okko.agentkeys.openKey",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "eu.okko.agentkeys.reset",
+          "when": "view == eu.okko.agentkeys.keys",
+          "group": "navigation@1"
+        },
+        {
+          "command": "eu.okko.agentkeys.restart",
+          "when": "view == eu.okko.agentkeys.keys",
+          "group": "navigation@2"
+        },
+        {
+          "command": "eu.okko.agentkeys.configureKeys",
+          "when": "view == eu.okko.agentkeys.keys",
+          "group": "settings@1"
+        },
+        {
+          "command": "eu.okko.agentkeys.showLogs",
+          "when": "view == eu.okko.agentkeys.keys",
+          "group": "settings@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agent Keys",
+      "properties": {
+        "eu.okko.agentkeys.agentHostRegistry": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "Absolute AHP local-endpoint directory. Empty uses this VS Code installation's user data. Reload all windows after changing."
+        }
+      }
+    }
   },
   "scripts": {
-    "build": "tsc",
-    "postbuild": "node scripts/write-build-id.mjs && chmod 755 dist/cli.js",
+    "build": "tsc && node scripts/build-extension.mjs",
     "check": "tsc --noEmit",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies --readme-path docs/extension-details.md",
     "dev:capture:vscode-fixture": "node scripts/dev/capture-vscode-fixture.mjs",
     "dev:capture:vscode-ahp-lifecycle": "npm run build --silent && node scripts/dev/capture-agent-host-question.mjs",
     "dev:mcp-auth-evidence-server": "node scripts/dev/mcp-auth-evidence-server.mjs",
     "dev:mcp-evidence-server": "node scripts/dev/mcp-evidence-server.mjs",
     "verify:vscode-update": "node scripts/dev/verify-vscode-update.mjs",
-    "predaemon": "npm run build",
-    "daemon": "node dist/daemon.js",
-    "setup": "npm install && scripts/make-app.sh && scripts/install-agent.sh",
-    "test": "npm run build --silent && node --test test/*.test.mjs test/*.test.js"
+    "test": "npm run build --silent && node --test test/*.test.mjs"
   },
   "dependencies": {
     "@microsoft/agent-host-protocol": "^1.0.0",
@@ -28,11 +153,19 @@
     "ws": "^8.21.3"
   },
   "engines": {
-    "node": ">=22.4"
+    "node": ">=22.4",
+    "vscode": "^1.147.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
+    "@types/vscode": "^1.147.0",
     "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.25.0",
     "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign@2.1.1": true,
+    "esbuild@0.25.12": true
   }
 }

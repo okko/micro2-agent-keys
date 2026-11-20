@@ -3,15 +3,16 @@ import {
   InputApiError,
   type DeviceSummary,
 } from '@worklouder/input-kit';
-import { keychainCredentials, type CredentialStore } from './input-credentials.js';
+import type { CredentialStore } from './input-credentials.js';
 import { slotForIdentifier, slotIdentifier, type SlotLighting } from './lighting.js';
 
 const SUPPORTED_DEVICES = new Set(['creator_micro_v2_base', 'creator_micro_v2_pro', 'codex_micro']);
 let lastAuthorizationAttempt = -Infinity;
 
-interface DeviceOptions {
+export interface DeviceOptions {
   client?: InputClient;
-  credentials?: CredentialStore;
+  credentials: CredentialStore;
+  signal?: AbortSignal;
   log: (...args: unknown[]) => void;
   onKey: (slot: number) => void;
   onFailure: (error: Error) => void;
@@ -30,6 +31,9 @@ export class Device {
   #applied = new Map<number, string>();
   #missing = new Set<number>();
   #draining: Promise<void> | null = null;
+  readonly #onAbort = (): void => {
+    void this.close().catch((error: unknown) => this.#options.log('Input close failed:', String(error)));
+  };
 
   private constructor(options: DeviceOptions) {
     this.#options = options;
@@ -60,11 +64,15 @@ export class Device {
 
   static async open(options: DeviceOptions): Promise<Device> {
     const device = new Device(options);
-    const store = options.credentials ?? keychainCredentials;
+    const store = options.credentials;
     try {
+      options.signal?.throwIfAborted();
+      options.signal?.addEventListener('abort', device.#onAbort, { once: true });
       // Load before connecting: Input allows only 30 seconds to authenticate.
       let credentials = await store.load();
+      options.signal?.throwIfAborted();
       await device.#client.connect();
+      options.signal?.throwIfAborted();
       if (credentials) {
         try {
           await device.#client.authenticate(credentials);
@@ -80,14 +88,15 @@ export class Device {
           throw new Error('Input approval pending or denied; retrying authorization after one minute');
         }
         lastAuthorizationAttempt = Date.now();
-        options.log('Approve AgentKeys in Input within 30 seconds; credentials are saved in macOS Keychain');
+        options.log('Approve AgentKeys in Input within 30 seconds; credentials are saved in VS Code SecretStorage');
         credentials = await device.#client.requestAuthorization();
         await store.save(credentials);
       }
       const revision = device.#devicesRevision;
+      options.signal?.throwIfAborted();
       const devices = await device.#client.getDevices();
       if (revision === device.#devicesRevision) device.#replaceDevices(devices);
-      if (!device.#client.connected) throw new Error('Input disconnected during setup');
+      if (device.#closed || !device.#client.connected) throw new Error('Input disconnected during setup');
       device.#ready = true;
       return device;
     } catch (error) {
@@ -187,6 +196,7 @@ export class Device {
   }
 
   async close(): Promise<void> {
+    this.#options.signal?.removeEventListener('abort', this.#onAbort);
     this.#closed = true;
     this.#ready = false;
     this.#selected = undefined;
