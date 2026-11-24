@@ -5,6 +5,8 @@ import { Coordinator } from './coordinator.js';
 import { AgentKeysRuntime, errorMessage } from './runtime.js';
 import { secretCredentials } from './input-credentials.js';
 import { StatusView } from './status-view.js';
+import { LAYER_KEY_COUNT } from './layer.js';
+import { slotIdentifier } from './lighting.js';
 
 let coordinator: Coordinator | undefined;
 
@@ -82,6 +84,37 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     if (count === undefined) return;
     await current.execute({ type: 'configure', keyCount: Number(count) });
+  });
+  command('eu.okko.agentkeys.addLayer', async () => {
+    const snapshot = provider.state.snapshot;
+    const keyCount = snapshot?.keyCount ?? null;
+    if (keyCount === null) throw new Error('Choose AgentKeys: Configure Keys first');
+    const target = snapshot?.layerTarget ?? null;
+    if (!target) throw new Error('Connect the keyboard and wait for Input to report its current profile');
+    const mapped = Math.min(keyCount, LAYER_KEY_COUNT);
+    const keys = mapped === 1 ? slotIdentifier(0) : `${slotIdentifier(0)}–${slotIdentifier(mapped - 1)}`;
+    const detail = [
+      `Device: ${target.deviceType}${target.serial ? ` (${target.serial})` : ''}`,
+      `Profile: ${target.profileIndex + 1}`,
+      `Keys: ${keys}, row by row from the top left; all other controls do nothing.`,
+      keyCount > mapped
+        ? `The layer has ${LAYER_KEY_COUNT} keys. Map ${slotIdentifier(mapped)}–${slotIdentifier(keyCount - 1)} manually as API Smart Actions.`
+        : undefined,
+      'Existing layers are not changed. Input refuses if the profile already has six layers.',
+      'The layer is not updated if you change the key count later. Fewer keys is harmless; for more, add another layer or map them manually.',
+    ].filter(Boolean).join('\n');
+    const result = await vscode.window.showWarningMessage(
+      `Add a new Agent Keys layer with ${mapped} ${mapped === 1 ? 'key' : 'keys'} to the keyboard?`,
+      { modal: true, detail }, 'Add Layer',
+    );
+    if (result !== 'Add Layer') return;
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'AgentKeys: Adding layer in Input...' },
+      () => current.execute({ type: 'addLayer', keyCount, ...target }),
+    );
+    void vscode.window.showInformationMessage(
+      'AgentKeys: Layer added. Switch to it on the keyboard or in Input. If Input\'s window is open, it saves after its usual countdown.',
+    );
   });
   command('eu.okko.agentkeys.reset', async () => {
     const result = await vscode.window.showWarningMessage(

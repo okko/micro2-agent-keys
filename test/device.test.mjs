@@ -21,6 +21,10 @@ class Client extends EventEmitter {
   async requestAuthorization() { this.authorizations++; return credentials; }
   async getDevices() { return this.devices; }
   async setKeyLighting(value) { this.writes.push(value); return { applied: true }; }
+  info = { deviceType: summary.deviceType, serialNumber: 'SN1', deviceStatus: { selectedProfileIndex: 1 } };
+  layers = [];
+  async getDeviceInfo() { return this.info; }
+  async addLayer(value) { this.layers.push(value); return { added: true }; }
 }
 
 function setup(client = new Client(), saved = credentials) {
@@ -188,6 +192,37 @@ test('device notifications rediscover runtime IDs and repaint on layer changes',
   await device.close();
 });
 
+test('add layer targets the reported profile, refuses changed targets, and never retries', async () => {
+  const state = setup();
+  const device = await Device.open(state.options);
+  await waitFor(() => device.target !== null);
+  const target = { deviceType: summary.deviceType, serial: 'SN1', profileIndex: 1 };
+  assert.deepEqual(device.target, target);
+  const definition = { name: 'test' };
+  await device.addLayer(definition, target);
+  assert.deepEqual(state.client.layers, [{ deviceId: 1, profileIndex: 1, definition }]);
+
+  state.client.emit('deviceInfoChanged', { deviceId: 1, deviceInfo: { ...state.client.info, deviceStatus: { selectedProfileIndex: 2 } } });
+  assert.equal(device.target.profileIndex, 2);
+  state.client.info = { ...state.client.info, deviceStatus: { selectedProfileIndex: 2 } };
+  await assert.rejects(device.addLayer(definition, target), /profile changed\. No layer was sent/);
+  await assert.rejects(device.addLayer(definition, { ...target, profileIndex: 2, serial: 'other' }), /No layer was sent/);
+  assert.equal(state.client.layers.length, 1);
+
+  const next = { ...target, profileIndex: 2 };
+  let calls = 0;
+  state.client.addLayer = async () => { calls++; throw new InputApiError(-32602, 'profile has six layers'); };
+  await assert.rejects(device.addLayer(definition, next), /Input refused the layer: profile has six layers/);
+  state.client.addLayer = async () => { calls++; throw new Error('Request timed out'); };
+  await assert.rejects(device.addLayer(definition, next), /may have been added; check Input before trying again/);
+  state.client.addLayer = async () => { calls++; return {}; };
+  await assert.rejects(device.addLayer(definition, next), /did not confirm/);
+  assert.equal(calls, 3);
+  await device.close();
+  assert.equal(device.target, null);
+  await assert.rejects(device.addLayer(definition, next), /No layer was sent/);
+});
+
 test('real InputKit uses WebSocket authentication, notifications and setKeyLighting after reconnect', async (t) => {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0, path: '/input' });
   await new Promise((resolve) => server.once('listening', resolve));
@@ -201,6 +236,10 @@ test('real InputKit uses WebSocket authentication, notifications and setKeyLight
       requests.push(request);
       const result = request.method === 'authenticate' ? { authenticated: true }
         : request.method === 'getDevices' ? [{ ...summary, id: deviceId }]
+          : request.method === 'getDeviceInfo' ? {
+            portPath: 'test', devicePid: 'test', connectionType: 0, deviceType: summary.deviceType,
+            layoutType: 'universal', isUsbConnection: true, deviceStatus: { selectedProfileIndex: 0 },
+          }
           : { applied: true };
       current.send(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }));
     });

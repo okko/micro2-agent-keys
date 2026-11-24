@@ -14,6 +14,7 @@ test('bundled extension activates, renders live key rows, and disposes without s
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const registered = new Map();
   const errors = [];
+  const warnings = [];
   let provider;
   const vscode = {
     EventEmitter: class { event = () => ({ dispose() {} }); fire() {} dispose() {} },
@@ -24,6 +25,7 @@ test('bundled extension activates, renders live key rows, and disposes without s
       createOutputChannel: () => ({ appendLine() {}, show() {}, dispose() {} }),
       createTreeView(_id, options) { provider = options.treeDataProvider; return { dispose() {} }; },
       async showErrorMessage(message) { errors.push(message); },
+      async showWarningMessage(message, options) { warnings.push({ message, options }); return undefined; },
     },
     commands: {
       registerCommand(id, handler) { registered.set(id, handler); return { dispose() {} }; },
@@ -74,6 +76,9 @@ test('bundled extension activates, renders live key rows, and disposes without s
   assert.ok(registered.has('eu.okko.agentkeys.restart'));
   await registered.get('eu.okko.agentkeys.openKey')('invalid');
   assert.match(errors[0], /Select a bound key/);
+  assert.ok(registered.has('eu.okko.agentkeys.addLayer'));
+  await registered.get('eu.okko.agentkeys.addLayer')();
+  assert.match(errors[1], /Configure Keys first/);
   provider.update({
     role: 'follower', error: null,
     snapshot: {
@@ -93,4 +98,17 @@ test('bundled extension activates, renders live key rows, and disposes without s
   assert.equal(keys[0].iconPath.color.id, 'charts.orange');
   assert.equal(keys[1].command, undefined);
   assert.match(keys[0].tooltip, /\/tmp\/project/);
+  await registered.get('eu.okko.agentkeys.addLayer')();
+  assert.match(errors[2], /report its current profile/);
+  provider.update({
+    ...provider.state,
+    snapshot: { ...provider.state.snapshot, keyCount: 15, layerTarget: { deviceType: 'codex_micro', serial: 'SN1', profileIndex: 1 } },
+  });
+  await registered.get('eu.okko.agentkeys.addLayer')();
+  assert.equal(warnings.length, 1, 'cancelling the confirmation sends nothing');
+  assert.match(warnings[0].message, /Add a new Agent Keys layer with 13 keys/);
+  assert.equal(warnings[0].options.modal, true);
+  assert.match(warnings[0].options.detail, /Device: codex_micro \(SN1\)\nProfile: 2\nKeys: vscode00–vscode12/);
+  assert.match(warnings[0].options.detail, /Map vscode13–vscode14 manually/);
+  assert.match(warnings[0].options.detail, /Existing layers are not changed/);
 });

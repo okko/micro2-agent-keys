@@ -8,6 +8,8 @@ import { errorMessage, type RuntimeCommand, type RuntimeService, type RuntimeSna
 const HOST = '127.0.0.1';
 export const COORDINATOR_PORT = 19148;
 const PROTOCOL = 1;
+// InputKit waits up to 120 seconds for Input to confirm a new layer.
+const ADD_LAYER_TIMEOUT_MS = 130_000;
 
 export interface CoordinatorState {
   role: 'connecting' | 'owner' | 'follower';
@@ -28,8 +30,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isLayerTarget(value: unknown): boolean {
+  return isRecord(value) && typeof value.deviceType === 'string' &&
+    (value.serial === null || typeof value.serial === 'string') &&
+    Number.isSafeInteger(value.profileIndex) && Number(value.profileIndex) >= 0;
+}
+
 function isCommand(value: unknown): value is RuntimeCommand {
   if (!isRecord(value)) return false;
+  if (value.type === 'addLayer') {
+    return Number.isInteger(value.keyCount) && Number(value.keyCount) >= 1 && Number(value.keyCount) <= 20 && isLayerTarget(value);
+  }
   if (value.type === 'configure') return Number.isInteger(value.keyCount) && Number(value.keyCount) >= 1 && Number(value.keyCount) <= 20;
   if (value.type === 'open') return Number.isInteger(value.slot) && Number(value.slot) >= 0 && Number(value.slot) < 20;
   return value.type === 'reset' || value.type === 'restart' || value.type === 'forgetAuthorization';
@@ -41,7 +52,9 @@ function isSnapshot(value: unknown): value is RuntimeSnapshot {
     typeof value.connected === 'boolean' && typeof value.connecting === 'boolean' &&
     (value.inputError === null || typeof value.inputError === 'string') &&
     typeof value.registryPath === 'string' && typeof value.availableSessions === 'number' &&
-    typeof value.trackedSessions === 'number' && Array.isArray(value.logs) && value.logs.every((line) => typeof line === 'string') &&
+    typeof value.trackedSessions === 'number' &&
+    (value.layerTarget === undefined || value.layerTarget === null || isLayerTarget(value.layerTarget)) &&
+    Array.isArray(value.logs) && value.logs.every((line) => typeof line === 'string') &&
     Array.isArray(value.slots) && value.slots.length <= 20 && value.slots.every((slot: unknown) =>
       isRecord(slot) && Number.isInteger(slot.slot) && Number(slot.slot) >= 0 && Number(slot.slot) < 20 &&
       ['idle', 'running', 'input', 'done', 'error'].includes(String(slot.state)) &&
@@ -215,7 +228,7 @@ export class Coordinator {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('AgentKeys command timed out; check status before retrying'));
-      }, 15_000);
+      }, command.type === 'addLayer' ? ADD_LAYER_TIMEOUT_MS : 15_000);
       this.pending.set(id, { resolve, reject, timer });
       this.send(this.client!, { protocol: PROTOCOL, id, command });
     });

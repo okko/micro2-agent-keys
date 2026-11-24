@@ -139,3 +139,42 @@ test('shutdown cancels an Input connection in progress without terminating the e
   assert.equal(f.runtime.snapshot().connecting, false);
   await assert.rejects(f.runtime.execute({ type: 'reset' }), /stopping/);
 });
+
+test('add layer writes the configured keys once, keeps keys working, and blocks reconfiguration meanwhile', async (t) => {
+  const target = { deviceType: 'codex_micro', serial: 'SN1', profileIndex: 0 };
+  let finish;
+  const f = fixture(t);
+  await f.runtime.start();
+  await assert.rejects(f.runtime.execute({ type: 'addLayer', keyCount: 3, ...target }), /Configure Keys first/);
+  await f.runtime.execute({ type: 'configure', keyCount: 3 });
+  await waitFor(() => f.runtime.snapshot().connected);
+  const device = f.devices.at(-1);
+  device.target = target;
+  device.layers = [];
+  device.addLayer = (definition, expected) => {
+    device.layers.push({ definition, expected });
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  assert.deepEqual(f.runtime.snapshot().layerTarget, target);
+  await assert.rejects(f.runtime.execute({ type: 'addLayer', keyCount: 2, ...target }), /key count changed\. No layer was sent/);
+
+  const adding = f.runtime.execute({ type: 'addLayer', keyCount: 3, ...target });
+  await waitFor(() => finish);
+  assert.deepEqual(device.layers[0].expected, target);
+  assert.deepEqual(device.layers[0].definition.smartActions.map(({ payload }) => payload.id), ['vscode00', 'vscode01', 'vscode02']);
+  await assert.rejects(f.runtime.execute({ type: 'addLayer', keyCount: 3, ...target }), /already being added/);
+  await assert.rejects(f.runtime.execute({ type: 'configure', keyCount: 4 }), /wait for it to finish/);
+  await f.sources[0].emit(active());
+  await f.sources[0].emit({ turns: [{ id: 'turn', state: 'complete', responseParts: [] }] });
+  await f.runtime.execute({ type: 'open', slot: 0 });
+  assert.equal(f.opened.length, 1, 'keys open sessions while the layer is being added');
+  const refreshed = device.refreshed;
+  finish();
+  await adding;
+  assert.equal(device.layers.length, 1);
+  assert.equal(device.refreshed, refreshed + 1, 'newly mapped keys are repainted');
+
+  device.addLayer = async () => { throw new Error('Input refused the layer: full'); };
+  await assert.rejects(f.runtime.execute({ type: 'addLayer', keyCount: 3, ...target }), /full/);
+  await f.runtime.execute({ type: 'configure', keyCount: 4 });
+});

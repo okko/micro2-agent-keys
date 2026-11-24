@@ -30,6 +30,8 @@ required.
 3. **Configure the amount of Agent Keys in VS Code**
     1. Press cmd+shift+p and select **>Agent Keys: Configure keys**. Then enter the amount of Agent Keys you want to use, for example, **6**, and press enter.
 
+**Or let Input add a layer:** after step 3, run **>Agent Keys: Add Layer** instead of mapping the keys by hand. After you confirm, Input adds one new layer to the keyboard's current profile; your existing layers are not changed. See [Add a layer](#add-a-layer).
+
 ## Key States
 
 | State | Colour | Meaning |
@@ -74,12 +76,31 @@ After revocation, the extension requests approval again; unsuccessful approval a
 
 Identifiers are case-sensitive and zero-padded. The number identifies the slot,
 not the physical key position. You can position the keys freely.
-AgentKeys never reads or writes layouts, profiles, firmware, or ordinary key mappings.
+AgentKeys never changes or removes existing layouts, profiles, layers, firmware, or key
+mappings. It can add one new layer on request; see [Add a layer](#add-a-layer).
 
 Input cannot enumerate your API mappings, so you must configure the count yourself.
 Unmapped identifiers are reported in **AgentKeys: Show Logs** and retried after
 a layer/device change, reconnect, or reset. See the
 [vendor guide](https://docs.worklouder.cc/websocket/user-guide.md).
+
+#### Add a layer
+
+**AgentKeys: Add Layer** is an optional shortcut for the manual mapping above. It runs
+only when you invoke it and confirm the dialog, which names the device, profile and
+key count. Input then appends one new layer named **Agent Keys** to the keyboard's
+current profile. Existing layers, keys and settings are never changed or removed.
+
+- Keys are placed row by row from the top left: with 3 keys, `vscode00` and `vscode01`
+  fill the first row and `vscode02` takes the left key of the second row.
+- The layer holds up to 13 keys. With a higher count, map `vscode13` onward manually.
+- All other keys, the dial and the stick do nothing on that layer. Its lighting is
+  copied from the profile's last layer.
+- Input refuses if the profile already has six layers. Switch to the new layer on the
+  keyboard or in Input. If Input's window is open, it saves after its usual countdown.
+- A failed or timed-out request is never retried. Check Input before trying again.
+- The layer is not updated when you change the key count later. Lowering it is
+  harmless; for more keys, add another layer or map the extra ones manually.
 
 ### Sidebar and commands
 
@@ -91,6 +112,7 @@ last update, and error details. Click a bound key to open its conversation.
 | --- | --- |
 | **AgentKeys: Show Keys** | Open the live sidebar |
 | **AgentKeys: Configure Keys** | Change the enabled count; disabled keys are returned to idle |
+| **AgentKeys: Add Layer** | After confirmation, ask Input to add a new layer mapping the configured keys |
 | **AgentKeys: Reset Keys** | Clear all bindings, repaint idle, and retry missing mappings |
 | **AgentKeys: Restart Connection** | Reconnect Input and AHP, retaining bindings |
 | **AgentKeys: Show Logs** | Open diagnostics, including Input approval instructions |

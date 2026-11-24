@@ -65,6 +65,12 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "eu.okko.agentkeys.addLayer",
+        "title": "Add Layer",
+        "category": "Agent Keys",
+        "icon": "$(add)"
+      },
+      {
         "command": "eu.okko.agentkeys.reset",
         "title": "Reset Keys",
         "category": "Agent Keys",
@@ -117,9 +123,14 @@
           "group": "settings@1"
         },
         {
-          "command": "eu.okko.agentkeys.showLogs",
+          "command": "eu.okko.agentkeys.addLayer",
           "when": "view == eu.okko.agentkeys.keys",
           "group": "settings@2"
+        },
+        {
+          "command": "eu.okko.agentkeys.showLogs",
+          "when": "view == eu.okko.agentkeys.keys",
+          "group": "settings@3"
         }
       ]
     },
@@ -149,7 +160,7 @@
   },
   "dependencies": {
     "@microsoft/agent-host-protocol": "^1.0.0",
-    "@worklouder/input-kit": "^0.3.0",
+    "@worklouder/input-kit": "^0.4.0",
     "ws": "^8.21.3"
   },
   "engines": {
