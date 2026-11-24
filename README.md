@@ -1,11 +1,19 @@
-# Agent Keys for VS Code
+# Agent Keys for Work Louder keyboards
 
 Show up to 20 VS Code agent sessions on a
 [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or
-[Codex Micro](https://worklouder.cc/codex-micro).
+[Codex Micro](https://worklouder.cc/codex-micro) keyboard.
 Simply press the physical key to open the exact conversation.
 Each concurrent Copilot Agent session has a dedicated, color-coded
 status indicator you can act on without hunting through editor windows and tabs.
+
+**Independent project and trademark notice:** This extension is independently
+developed and maintained. It is not an official Work Louder product and is not
+created, sponsored, endorsed, or supported by Work Louder. Neither Agent Keys
+nor its author is affiliated with Work Louder.
+All third-party product names and trademarks belong to their respective owners
+and are used solely to identify compatible devices and software. Their use does
+not imply any affiliation with or endorsement by their owners.
 
 Agent Keys is a desktop VS Code extension. No custom firmware is
 required.

@@ -1,8 +1,8 @@
 {
   "name": "agent-keys",
-  "displayName": "Agent Keys",
+  "displayName": "Agent Keys for Work Louder keyboards",
   "publisher": "okko",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "license": "MIT",
   "icon": "media/agentkeys.png",
   "description": "Show local agent session status on Work Louder keyboards and open conversations with configured keys.",
