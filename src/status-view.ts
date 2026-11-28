@@ -47,9 +47,9 @@ export class StatusView implements vscode.TreeDataProvider<vscode.TreeItem>, vsc
       item.command = { command: 'eu.okko.agentkeys.showLogs', title: 'Show Logs' };
       rows.push(item);
     }
-    const sessions = new vscode.TreeItem(`AHP: ${snapshot.availableSessions} available sessions`);
+    const sessions = new vscode.TreeItem(`Agents: ${snapshot.availableSessions} available sessions`);
     sessions.description = `${snapshot.trackedSessions} tracked`;
-    sessions.tooltip = `Endpoint registry: ${snapshot.registryPath}\nOnly host-advertised local sessions are supported.`;
+    sessions.tooltip = `AHP endpoint registry: ${snapshot.registryPath}\nLocal AHP sessions and opt-in Claude Code hooks. Hook availability means last observed, not a live health check.`;
     rows.push(sessions);
     const configure = new vscode.TreeItem(snapshot.keyCount === null ? 'Configure your keys to begin' : `${snapshot.keyCount} configured keys`);
     configure.iconPath = new vscode.ThemeIcon('settings-gear');
@@ -63,6 +63,7 @@ export class StatusView implements vscode.TreeDataProvider<vscode.TreeItem>, vsc
         `${slotIdentifier(slot.slot)}: ${slot.state}`,
         slot.cwd,
         slot.sessionId ? `Session: ${slot.sessionId}` : 'No session bound',
+        slot.observation === 'claude-hooks' ? 'Claude Code hooks (opens project folder, not conversation)' : undefined,
         slot.stateChangedAt ? `Updated: ${slot.stateChangedAt}` : undefined,
         slot.runError,
       ].filter(Boolean).join('\n');

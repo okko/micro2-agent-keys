@@ -36,6 +36,7 @@ test('bundled extension activates, renders live key rows, and disposes without s
     env: { uriScheme: 'vscode-insiders' },
   };
   const context = {
+    asAbsolutePath: (relative) => path.resolve(relative),
     subscriptions: [],
     globalStorageUri: { fsPath: path.join(directory, 'Code', 'User', 'globalStorage', 'okko.agent-keys') },
     secrets: { async get() { assert.fail('unconfigured extension must not read credentials'); } },

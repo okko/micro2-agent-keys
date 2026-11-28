@@ -138,3 +138,64 @@ Remove its `~/Library/LaunchAgents/eu.okko.agentkeys.plist` if installed, and re
 old CLI symlinks after checking their targets. The extension does not import old
 configuration, bindings, or Keychain credentials. Configure the count and approve
 Input again. Old deployment helpers are intentionally no longer included.
+
+### Claude Code (optional)
+
+Claude Code runs independently of AHP. Agent Keys can track its local sessions,
+both in the Claude Code VS Code extension and in the terminal:
+
+1. Configure your keys, then run **Agent Keys: Configure Claude Code Hooks**.
+2. Merge the displayed `hooks` entries into `~/.claude/settings.json` (all local
+   projects) or a project's `.claude/settings.local.json` (that project only).
+   Append to existing event arrays; do not overwrite other settings or hooks.
+3. Ensure Node.js 22 or newer is available as `node` on Claude's PATH, restart
+   Claude Code, and submit a new prompt. Opening Claude alone does not allocate a key.
+
+Remove the added hook entries to disable tracking.
+
+#### How it works
+
+The helper and settings snippet are generated in `~/.local/state/eu.okko.agentkeys/`.
+Only the elected Agent Keys owner runs the dedicated authenticated loopback receiver.
+Its random port and token are stored in a mode-0600 descriptor, separate from the
+private coordination IPC. The helper reads the descriptor on every invocation, so
+owner changes and **Restart Connection** do not require editing Claude settings.
+
+The helper forwards only session/project identity and lifecycle metadata, never
+prompts, tool inputs/results, answers, or transcripts. It never outputs permission
+decisions and cannot approve tools. Delivery failures are reported as non-blocking
+hook errors.
+
+#### Key states
+
+Claude sessions share the configured keys with AHP sessions without identity collisions.
+
+- `UserPromptSubmit` turns a key blue.
+- Permission requests, `AskUserQuestion`, and MCP elicitations turn it amber.
+  `PermissionRequest` signals amber immediately, even if another hook then answers
+  automatically. The delayed `permission_prompt` notification remains a fallback,
+  including for sandbox network prompts.
+- Tool results and input-resolution hooks resume blue.
+- `Stop` turns it green; `StopFailure` (API failure) turns it red.
+- `SessionEnd` releases the key.
+
+Subagent events carrying `agent_id` are ignored. Prompt IDs, when supplied, correlate
+updates with the current turn. **Reset Keys** suppresses the current turn until a new
+prompt binds again. **Restart Connection** retains bindings, but active Claude keys
+turn red until new hook evidence arrives.
+
+#### Limitations
+
+- **Claude keys open the project folder, not the exact conversation.** Green-key
+  acknowledgement works as usual.
+- Hooks are best-effort lifecycle observations, not authoritative snapshots. Missed
+  events, Escape/cancellation without an end hook, or a Claude crash can leave a
+  stale key; use **Reset Keys** to clear it.
+- There is no heartbeat, retroactive discovery of existing work, or guaranteed
+  immediate approval-resolution signal.
+- Parallel permissions and elicitations without unique IDs can be ambiguous, and
+  other hooks may answer requests or continue work after `Stop`.
+- The sidebar's available count for Claude means last observed, not verified alive.
+- Remote/cloud Claude processes cannot reach the local receiver.
+
+See the [Claude hooks reference](https://code.claude.com/docs/en/hooks).

@@ -41,6 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
       registryPath: registryPath(context),
       uriScheme: vscode.env.uriScheme,
       credentials,
+      claudeHookScript: context.asAbsolutePath('dist/claude-hook.cjs'),
       log,
       launch: async (url) => {
         if (!await vscode.env.openExternal(vscode.Uri.parse(url))) {
@@ -73,6 +74,16 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   command('eu.okko.agentkeys.showStatus', () => vscode.commands.executeCommand('eu.okko.agentkeys.keys.focus'));
   command('eu.okko.agentkeys.showLogs', () => output.show());
+  command('eu.okko.agentkeys.configureClaudeHooks', async () => {
+    if (!provider.state.snapshot?.keyCount) throw new Error('Choose AgentKeys: Configure Keys first');
+    const document = await vscode.workspace.openTextDocument(
+      vscode.Uri.file(path.join(directory, 'claude-hooks-settings.json')),
+    );
+    await vscode.window.showTextDocument(document);
+    await vscode.window.showInformationMessage(
+      'AgentKeys: Merge these hooks into ~/.claude/settings.json without replacing existing hooks, then restart Claude Code. Requires Node.js on PATH. Claude keys open the project folder, not the exact conversation.',
+    );
+  });
   command('eu.okko.agentkeys.configureKeys', async () => {
     const count = await vscode.window.showInputBox({
       title: 'AgentKeys: Configure Keys',

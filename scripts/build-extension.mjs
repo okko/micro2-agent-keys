@@ -11,6 +11,7 @@ await build({
   outfile: 'dist/extension.cjs',
 });
 await mkdir('dist/licenses', { recursive: true });
+await copyFile('scripts/claude-hook.cjs', 'dist/claude-hook.cjs');
 for (const [source, target] of [
   ['node_modules/ws/LICENSE', 'ws-LICENSE'],
   ['node_modules/@worklouder/input-kit/LICENSE', 'input-kit-LICENSE'],
