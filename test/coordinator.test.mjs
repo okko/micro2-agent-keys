@@ -35,6 +35,7 @@ function fixture(t) {
             return {
               keyCount: this.count, connected: true, connecting: false, inputError: null,
               registryPath: directory, availableSessions: 0, trackedSessions: 0, logs: [],
+              layerTarget: { deviceType: 'codex_micro', serial: null, profileIndex: 2 },
               slots: Array.from({ length: this.count }, (_, slot) => ({ slot, state: 'idle' })),
             };
           },
@@ -72,6 +73,11 @@ test('windows share one runtime, forward commands and errors, and transfer owner
   await assert.rejects(follower.execute({ type: 'open', slot: 0 }), /test opening failed/);
   await follower.execute({ type: 'reset' });
   assert.equal(f.runtimes[0].commands.at(-1).type, 'reset');
+  assert.deepEqual(f.states[1].snapshot.layerTarget, { deviceType: 'codex_micro', serial: null, profileIndex: 2 });
+  const addLayer = { type: 'addLayer', keyCount: 6, ...f.states[1].snapshot.layerTarget };
+  await follower.execute(addLayer);
+  assert.deepEqual(f.runtimes[0].commands.at(-1), addLayer);
+  await assert.rejects(follower.execute({ ...addLayer, profileIndex: -1 }), /Invalid AgentKeys command|owner disconnected/);
   await owner.stop();
   await waitFor(() => f.states[1].role === 'owner');
   assert.equal(f.runtimes.length, 2);

@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { readConfig, validateConfig, writeConfig } from './config.js';
-import { Device, type DeviceOptions } from './device.js';
+import { Device, type DeviceOptions, type LayerTarget } from './device.js';
+import { agentKeysLayer } from './layer.js';
 import type { CredentialStore } from './input-credentials.js';
 import { LocalAgentHostStateSource, type AgentHostStateSource } from './agent-host.js';
 import { STATES } from './states.js';
@@ -16,11 +17,14 @@ export interface RuntimeSnapshot {
   trackedSessions: number;
   slots: VSCodeSlot[];
   logs: string[];
+  /** Device and profile Add Layer would write to; null until Input reports them. */
+  layerTarget: LayerTarget | null;
 }
 
 export type RuntimeCommand =
   | { type: 'configure'; keyCount: number }
   | { type: 'open'; slot: number }
+  | ({ type: 'addLayer'; keyCount: number } & LayerTarget)
   | { type: 'reset' | 'restart' | 'forgetAuthorization' };
 
 export interface RuntimeService {
@@ -32,6 +36,8 @@ export interface RuntimeService {
 
 interface InputConnection {
   readonly connected: boolean;
+  readonly target?: LayerTarget | null;
+  addLayer?: Device['addLayer'];
   setLighting: Device['setLighting'];
   refreshLighting(): void;
   close(): Promise<void>;
@@ -65,6 +71,7 @@ export class AgentKeysRuntime implements RuntimeService {
   private readonly logs: string[] = [];
   private readonly configPath: string;
   private operations: Promise<void> = Promise.resolve();
+  private layerWriting = false;
 
   constructor(private readonly options: RuntimeOptions) {
     this.configPath = path.join(options.directory, 'config.json');
@@ -117,12 +124,18 @@ export class AgentKeysRuntime implements RuntimeService {
       trackedSessions: status?.trackedSessions ?? 0,
       slots: status?.bindings ?? [],
       logs: [...this.logs],
+      layerTarget: this.device?.target ?? null,
     };
   }
 
   execute(command: RuntimeCommand): Promise<void> {
+    // Adding a layer can take up to two minutes; keys keep opening sessions meanwhile.
+    if (command.type === 'addLayer') return this.addLayer(command);
     const operation = this.operations.then(async () => {
       if (this.stopped) throw new Error('AgentKeys is stopping; retry in another VS Code window');
+      if (this.layerWriting && command.type !== 'open' && command.type !== 'reset') {
+        throw new Error('A layer is being added to the keyboard; wait for it to finish');
+      }
       if (command.type === 'configure') {
         const config = validateConfig({ keyCount: command.keyCount });
         writeConfig(config, this.configPath);
@@ -165,6 +178,32 @@ export class AgentKeysRuntime implements RuntimeService {
     });
     this.operations = operation.catch((error: unknown) => this.log('Command failed:', errorMessage(error)));
     return operation;
+  }
+
+  private async addLayer(command: Extract<RuntimeCommand, { type: 'addLayer' }>): Promise<void> {
+    if (this.stopped) throw new Error('AgentKeys is stopping; retry in another VS Code window');
+    if (this.layerWriting) throw new Error('A layer is already being added to the keyboard');
+    if (!this.integration) throw new Error('Choose AgentKeys: Configure Keys first');
+    if (command.keyCount !== this.integration.enabledSlots.size) {
+      throw new Error('The configured key count changed. No layer was sent.');
+    }
+    const device = this.device;
+    if (!device?.connected || !device.addLayer) throw new Error('Input is not connected. No layer was sent.');
+    const { definition, mapped } = agentKeysLayer(command.keyCount);
+    const target: LayerTarget = { deviceType: command.deviceType, serial: command.serial, profileIndex: command.profileIndex };
+    this.layerWriting = true;
+    try {
+      this.log(`Adding an Agent Keys layer (${mapped} keys) to ${target.deviceType} profile ${target.profileIndex + 1}`);
+      await device.addLayer(definition, target);
+      this.log('Input added the Agent Keys layer; existing layers were not changed');
+    } catch (error) {
+      this.log('Add Layer failed:', errorMessage(error));
+      throw error;
+    } finally {
+      this.layerWriting = false;
+    }
+    // Newly mapped keys are no longer skipped as unmapped.
+    if (this.device === device) device.refreshLighting();
   }
 
   private beginConnect(): void {

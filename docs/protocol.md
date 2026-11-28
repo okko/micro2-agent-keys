@@ -32,14 +32,33 @@ starting at `vscode00`, for session allocation and lighting. At least one key is
 Missing configuration leaves the sidebar ready for setup without contacting Input.
 Invalid configuration is reported explicitly.
 The API cannot enumerate existing Smart Actions or read your layers; the count is not
-automatic layout discovery. No device configuration is installed or modified by AgentKeys.
+automatic layout discovery. AgentKeys never modifies existing device configuration.
+
+## Add Layer
+
+**AgentKeys: Add Layer** is the only command that writes device configuration, and only
+after confirmation. The confirmation shows the selected device and the profile reported by
+`getDeviceInfo` / `deviceInfoChanged`. The owning window re-reads `getDeviceInfo` and sends
+nothing if the device, serial number, profile or configured count changed.
+
+`addLayer` targets that profile with a layer named **Agent Keys** for the supported
+devices' 2/4/4/3 key layout. The first `min(keyCount, 13)` keys, in reading order, are
+`SA_1`… referencing API Smart Actions `vscode00`…; every other key, encoder and joystick
+sector is `KC_NONE`. The definition has no ordinary actions or Multiactions and omits
+`lights`, so Input copies the lighting of the profile's last layer.
+
+Input appends the layer and never edits existing ones. InputKit waits up to 120 seconds
+for the reply; commands forwarded from another window wait up to 130 seconds. Errors are
+reported and never retried, since a timed-out write may still have been applied. Sessions
+keep opening from keys during the write; configure, restart and forget-authorization are refused until it finishes.
+Afterwards the lighting cache is invalidated so newly mapped identifiers are painted.
 
 ## Lighting
 
 `setKeyLighting` targets an exact identifier (`isRegex: false`) and sends `color`
 as `0xRRGGBB`, `brightness: 1`, numeric `effect`, and normalized `speed`.
 Existing idle/running/done/input/error colors are retained. The extension does not modify
-ambient lighting, base lighting, profiles or layers.
+ambient lighting, base lighting, profiles or existing layers.
 
 InputKit queues requests and spaces device writes at least 250 ms apart. AgentKeys
 coalesces unsent changes per slot and caches acknowledged states. Shared device-budget
