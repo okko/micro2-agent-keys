@@ -6,6 +6,7 @@ import test from 'node:test';
 import { AgentKeysRuntime } from '../dist/runtime.js';
 import { readConfig } from '../dist/config.js';
 import { STATES } from '../dist/states.js';
+import { execFile } from 'node:child_process';
 
 const ID = '00000000-0000-4000-8000-000000000001';
 const active = (id = 'turn') => ({ turns: [], activeTurn: { id, responseParts: [] } });
@@ -85,6 +86,31 @@ test('configure, live states, key opening and reset replace the CLI and persist 
   await f.sources.at(-1).emit(active('third'));
   assert.equal(restored.snapshot().slots[0].sessionId, ID);
   await restored.stop();
+});
+
+test('Claude helper drives runtime lighting and survives receiver restart', async (t) => {
+  const f = fixture(t, { claudeHookScript: path.resolve('scripts/claude-hook.cjs') });
+  await f.runtime.start();
+  await f.runtime.execute({ type: 'configure', keyCount: 1 });
+  await waitFor(() => f.runtime.snapshot().connected);
+  const emit = (name) => new Promise((resolve, reject) => {
+    const child = execFile(process.execPath, [path.join(f.directory, 'claude-hook.cjs')], (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+    child.stdin.end(JSON.stringify({ session_id: ID, cwd: f.directory, hook_event_name: name }));
+  });
+  await emit('UserPromptSubmit');
+  assert.equal(f.runtime.snapshot().slots[0].state, 'running');
+  assert.equal(f.devices.at(-1).writes.at(-1)[0].color, STATES.running.color);
+  await f.runtime.execute({ type: 'restart' });
+  assert.equal(f.runtime.snapshot().slots[0].state, 'error');
+  await waitFor(() => f.runtime.snapshot().connected);
+  await emit('Stop');
+  assert.equal(f.runtime.snapshot().slots[0].state, 'done');
+  assert.equal(f.devices.at(-1).writes.at(-1)[0].color, STATES.done.color);
+  await f.runtime.stop();
+  assert.equal(fs.existsSync(path.join(f.directory, 'claude-hooks-endpoint.json')), false);
 });
 
 test('changing key count clears disabled lights and rejects disabled key commands', async (t) => {

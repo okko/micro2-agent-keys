@@ -5,6 +5,7 @@ import type { CredentialStore } from './input-credentials.js';
 import { LocalAgentHostStateSource, type AgentHostStateSource } from './agent-host.js';
 import { STATES } from './states.js';
 import { VSCodeIntegration, type VSCodeSlot } from './vscode.js';
+import { ClaudeHooksReceiver } from './claude-hooks.js';
 
 export interface RuntimeSnapshot {
   keyCount: number | null;
@@ -47,6 +48,7 @@ interface RuntimeOptions {
   createDevice?: (options: DeviceOptions) => Promise<InputConnection>;
   createSource?: () => AgentHostStateSource;
   retryMs?: number;
+  claudeHookScript?: string;
 }
 
 export function errorMessage(error: unknown): string {
@@ -65,6 +67,7 @@ export class AgentKeysRuntime implements RuntimeService {
   private readonly logs: string[] = [];
   private readonly configPath: string;
   private operations: Promise<void> = Promise.resolve();
+  private claudeHooks: ClaudeHooksReceiver | null = null;
 
   constructor(private readonly options: RuntimeOptions) {
     this.configPath = path.join(options.directory, 'config.json');
@@ -100,6 +103,13 @@ export class AgentKeysRuntime implements RuntimeService {
     });
     this.integration = integration;
     await integration.start();
+    if (this.options.claudeHookScript) {
+      const receiver = new ClaudeHooksReceiver(
+        this.options.directory, (event) => integration.applyClaudeHook(event), this.log,
+      );
+      await receiver.start(this.options.claudeHookScript);
+      this.claudeHooks = receiver;
+    }
     this.beginConnect();
   }
 
@@ -149,6 +159,8 @@ export class AgentKeysRuntime implements RuntimeService {
         await this.disconnect();
         if (command.type === 'forgetAuthorization') await this.options.credentials.remove();
         if (this.integration) {
+          await this.claudeHooks?.stop();
+          this.claudeHooks = null;
           this.integration.stop();
           await this.startIntegration(this.integration.enabledSlots.size);
         }
@@ -256,6 +268,8 @@ export class AgentKeysRuntime implements RuntimeService {
   async stop(): Promise<void> {
     this.stopped = true;
     await this.operations;
+    await this.claudeHooks?.stop();
+    this.claudeHooks = null;
     try { this.integration?.stop(); }
     finally { await this.disconnect(); }
   }

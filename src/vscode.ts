@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'node:crypto';
+import { CLAUDE_SESSION_ID, type ClaudeHookEvent } from './claude-hooks.js';
 import type { AgentHostSession, AgentHostStateSource } from './agent-host.js';
 import { INTEGRATION_SLOT_COUNT } from './states.js';
 import {
@@ -13,6 +15,9 @@ import {
 import { SESSION_ID, buildSessionUrl } from './session-url.js';
 
 const SCHEMA_VERSION = 2;
+const isClaude = (id: string): boolean => id.startsWith('claude:');
+const validSessionId = (id: string): boolean => isClaude(id) ? CLAUDE_SESSION_ID.test(id.slice(7)) : SESSION_ID.test(id);
+const observation = (id: string): 'ahp' | 'claude-hooks' => isClaude(id) ? 'claude-hooks' : 'ahp';
 
 /** One physical integration slot, either unbound or bound to an AHP session. */
 export interface VSCodeSlot {
@@ -39,7 +44,7 @@ export interface VSCodeSlot {
   /** Machine-readable error code, such as `incompatible:*` or `agent-host-state-unavailable`. */
   runError?: string | null;
   /** Authoritative observation source for bound slots; omitted for unbound public slots. */
-  observation?: 'ahp';
+  observation?: 'ahp' | 'claude-hooks';
 }
 
 interface Session {
@@ -123,7 +128,7 @@ export class VSCodeIntegration {
       throw new Error(`unsupported VS Code integration state schema ${saved.schemaVersion}`);
     }
     for (const raw of saved.sessions ?? []) {
-      if (!SESSION_ID.test(raw.id) || !raw.cwd || !path.isAbsolute(raw.cwd) || !raw.resource) {
+      if (!validSessionId(raw.id) || !raw.cwd || !path.isAbsolute(raw.cwd) || !raw.resource) {
         throw new Error('invalid persisted AHP session');
       }
       const run = emptyRun();
@@ -144,11 +149,11 @@ export class VSCodeIntegration {
       const unavailable = raw.state === 'running' || raw.state === 'input' || raw.state === 'error';
       if (unavailable) {
         session.run.active = true;
-        session.run.error = 'agent-host-state-unavailable';
+        session.run.error = isClaude(session.id) ? 'claude-hook-state-unavailable' : 'agent-host-state-unavailable';
       }
       this.slots[index] = {
         slot: index, sessionId: session.id, cwd: session.cwd, resource: session.resource,
-        observation: 'ahp', label: path.basename(session.cwd), boundAt: raw.boundAt,
+        observation: observation(session.id), label: path.basename(session.cwd), boundAt: raw.boundAt,
         state: unavailable ? 'error' : raw.state,
         stateChangedAt: unavailable ? new Date().toISOString() : raw.stateChangedAt,
         doneAt: raw.doneAt, lastEventAt: raw.lastEventAt,
@@ -162,7 +167,7 @@ export class VSCodeIntegration {
       schemaVersion: SCHEMA_VERSION,
       slots: this.slots,
       sessions: [...this.sessions.values()].map(({ id, cwd, resource, run }) => ({
-        id, cwd, resource, observation: 'ahp', requestId: run.requestId, terminal: run.terminal,
+        id, cwd, resource, observation: observation(id), requestId: run.requestId, terminal: run.terminal,
       })),
     };
     fs.mkdirSync(path.dirname(this.statePath), { recursive: true, mode: 0o700 });
@@ -203,7 +208,102 @@ export class VSCodeIntegration {
 
   private updateTargets(): void {
     this.agentHostSource.setSessions([...this.sessions.values()]
-      .filter((session) => session.boundSlot !== null).map((session) => session.id));
+      .filter((session) => session.boundSlot !== null && !isClaude(session.id)).map((session) => session.id));
+  }
+
+  async applyClaudeHook(event: ClaudeHookEvent): Promise<void> {
+    if (event.agent_id) return;
+    const id = `claude:${event.session_id}`;
+    let session = this.sessions.get(id);
+    if (event.hook_event_name === 'SessionEnd') {
+      if (!session) return;
+      if (session.boundSlot !== null) {
+        const index = session.boundSlot;
+        this.slots[index] = null;
+        await this.onSlot({ slot: index, state: 'idle' });
+      }
+      this.sessions.delete(id);
+      this.save();
+      return;
+    }
+    if (!session) {
+      session = {
+        id, cwd: event.cwd, resource: `claude-code:/${event.session_id}`,
+        run: emptyRun(), boundSlot: null, available: true,
+      };
+      this.sessions.set(id, session);
+    }
+    session.cwd = event.cwd;
+    session.available = true;
+    const run = session.run;
+    const name = event.hook_event_name;
+    if (event.prompt_id && run.requestId && name !== 'UserPromptSubmit' && name !== 'SessionStart' &&
+        event.prompt_id !== run.requestId) return;
+    const elicitation = `elicitation:${event.elicitation_id ?? event.mcp_server_name ?? 'unknown'}`;
+    if (name === 'UserPromptSubmit') {
+      if (event.prompt_id && event.prompt_id === run.requestId) return;
+      session.run = emptyRun();
+      reduceNormalizedEvent(session.run, { type: 'request.started', requestId: event.prompt_id || randomUUID() });
+      if (session.boundSlot === null) this.allocate(session);
+    } else if (name === 'SessionStart') {
+      // A resumed session is not evidence that its previous turn is still running.
+      session.run = emptyRun();
+    } else if (run.requestId) {
+      // Another Stop hook can continue the turn; subsequent tool activity is evidence of that.
+      if (name === 'PreToolUse' && run.terminal === 'complete') {
+        reduceNormalizedEvent(run, { type: 'request.started', requestId: run.requestId });
+      }
+      if (!run.active) return;
+      const requestId = run.requestId;
+      if (name !== 'Notification') run.error = null;
+      if (name === 'Stop' || name === 'StopFailure') {
+        reduceNormalizedEvent(run, {
+          type: 'request.finished', requestId, outcome: name === 'Stop' ? 'complete' : 'failed',
+        });
+      } else if (name === 'PermissionRequest' ||
+          (name === 'Notification' && event.notification_type === 'permission_prompt')) {
+        reduceNormalizedEvent(run, { type: 'human-input.opened', requestId, blockerId: 'permission', kind: 'tool-confirmation' });
+      } else if (name === 'Elicitation') {
+        reduceNormalizedEvent(run, {
+          type: 'human-input.opened', requestId, blockerId: elicitation, kind: 'elicitation',
+          sourceId: event.mcp_server_name,
+        });
+      } else if (name === 'ElicitationResult') {
+        run.blockers.delete(elicitation);
+      } else if (name === 'PreToolUse' && event.tool_name === 'AskUserQuestion') {
+        reduceNormalizedEvent(run, {
+          type: 'human-input.opened', requestId, blockerId: event.tool_use_id ?? 'question', kind: 'question',
+        });
+      } else if (name === 'PostToolUse' || name === 'PostToolUseFailure') {
+        run.blockers.delete('permission');
+        run.blockers.delete(event.tool_use_id ?? 'question');
+        // Hook-answered elicitations skip ElicitationResult; the enclosing tool still finishes.
+        if (event.tool_name?.startsWith('mcp__')) {
+          const server = event.tool_name.split('__')[1];
+          for (const blocker of run.blockers.values()) {
+            if (blocker.kind === 'elicitation' && blocker.sourceId === server) run.blockers.delete(blocker.id);
+          }
+        }
+      }
+    }
+    const slot = session.boundSlot === null ? null : this.slots[session.boundSlot];
+    if (slot) {
+      const next = runState(session.run);
+      const timestamp = new Date().toISOString();
+      // Completion acknowledgement survives repeated terminal hooks.
+      if (!(slot.state === 'idle' && session.run.terminal && name !== 'UserPromptSubmit')) {
+        if (slot.state !== next) slot.stateChangedAt = timestamp;
+        if (next === 'done' && slot.state !== 'done') slot.doneAt = timestamp;
+        slot.state = next;
+      }
+      if (name === 'UserPromptSubmit') slot.doneAt = null;
+      slot.cwd = session.cwd;
+      slot.label = path.basename(session.cwd);
+      slot.runError = session.run.error;
+      slot.lastEventAt = timestamp;
+      await this.onSlot({ ...slot });
+    }
+    this.save();
   }
 
   async applyAgentHostChatState(id: string, state: unknown, descriptor?: AgentHostSession): Promise<boolean> {
@@ -308,7 +408,7 @@ export class VSCodeIntegration {
     session.boundSlot = index;
     this.slots[index] = {
       slot: index, sessionId: session.id, cwd: session.cwd, resource: session.resource,
-      observation: 'ahp', label: path.basename(session.cwd), boundAt: timestamp,
+      observation: observation(session.id), label: path.basename(session.cwd), boundAt: timestamp,
       state: 'running', stateChangedAt: timestamp, doneAt: null, lastEventAt: timestamp, runError: null,
     };
     return index;
@@ -364,7 +464,15 @@ export class VSCodeIntegration {
       this.save();
       throw new Error(`project path does not exist: ${slot.cwd}`);
     }
-    const url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource, this.uriScheme);
+    let url: string;
+    if (isClaude(session.id)) {
+      const project = new URL(`${this.uriScheme}://file`);
+      project.pathname = slot.cwd;
+      url = project.toString();
+      this.log('Claude Code hooks do not provide conversation navigation; opening the project folder.');
+    } else {
+      url = buildSessionUrl(slot.cwd, slot.sessionId, slot.resource, this.uriScheme);
+    }
     await this.launch(url);
     const current = this.slots[index];
     if (current?.sessionId === session.id) {

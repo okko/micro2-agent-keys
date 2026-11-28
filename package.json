@@ -54,6 +54,11 @@
     },
     "commands": [
       {
+        "command": "eu.okko.agentkeys.configureClaudeHooks",
+        "title": "Configure Claude Code Hooks",
+        "category": "Agent Keys"
+      },
+      {
         "command": "eu.okko.agentkeys.showStatus",
         "title": "Show Keys",
         "category": "Agent Keys"
