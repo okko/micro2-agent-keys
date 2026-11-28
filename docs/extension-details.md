@@ -4,6 +4,7 @@ Show up to 20 VS Code agent sessions on a
 [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or
 [Codex Micro](https://worklouder.cc/codex-micro) keyboard.
 Simply press the physical key to open the exact conversation.
+Optional Claude Code hook tracking opens the project folder instead.
 Each concurrent Copilot Agent session has a dedicated, color-coded
 status indicator you can act on without hunting through editor windows and tabs.
 
