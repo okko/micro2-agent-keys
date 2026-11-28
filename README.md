@@ -4,6 +4,7 @@ Show up to 20 VS Code agent sessions on a
 [Work Louder Creator Micro 2](https://worklouder.cc/creator-micro-2) or
 [Codex Micro](https://worklouder.cc/codex-micro) keyboard.
 Simply press the physical key to open the exact conversation.
+Optional Claude Code hook tracking opens the project folder instead.
 Each concurrent Copilot Agent session has a dedicated, color-coded
 status indicator you can act on without hunting through editor windows and tabs.
 
@@ -42,23 +43,13 @@ required.
 
 ## Detailed instructions and documentation
 
-### For developers
-
-For debug purposes, you can also open the Agent Keys sidebar to see connection status, configure amount of keys and even click virtual sidebar keys.
-
-The extension ID is `okko.agent-keys`. Internal commands, views, settings and service
-coordination use the `eu.okko.agentkeys` namespace. The Input credential key is
-`eu.okko.agentkeys.input.credentials` in VS Code SecretStorage.
-
-The Activity Bar container uses `eu-okko-agentkeys` because VS Code disallows dots there.
-
 ### Install and configure
 
 Requires desktop VS Code **1.147 or newer**, Work Louder **Input.app v1.2.0 or newer**, and a supported keyboard. The current AHP integration is intended for macOS desktop; browser VS Code and remote-only agent hosts are not supported.
 
-1. Install the AgentKeys VSIX using **Extensions: Install from VSIX**.
-2. Open **AgentKeys** from the Activity Bar.
-3. Click **Configure your keys to begin** and enter a count from 1 to 20.
+1. Install the AgentKeys Extension from the Marketplace.
+2. Open **AgentKeys** from the Activity Bar (on the left).
+3. Click **Configure your keys to begin** and enter a count from 1 to 20. I recommend 4 or 6 keys.
 4. Approve **AgentKeys** in Input within 30 seconds when requested.
 5. Map that many consecutive API Smart Actions in Input, starting at `vscode00`.
 
@@ -77,9 +68,6 @@ not the physical key position. You can position the keys freely.
 AgentKeys never reads or writes layouts, profiles, firmware, or ordinary key mappings.
 
 Input cannot enumerate your API mappings, so you must configure the count yourself.
-Unmapped identifiers are reported in **AgentKeys: Show Logs** and retried after
-a layer/device change, reconnect, or reset. See the
-[vendor guide](https://docs.worklouder.cc/websocket/user-guide.md).
 
 ### Sidebar and commands
 
@@ -150,6 +138,24 @@ Remove its `~/Library/LaunchAgents/eu.okko.agentkeys.plist` if installed, and re
 old CLI symlinks after checking their targets. The extension does not import old
 configuration, bindings, or Keychain credentials. Configure the count and approve
 Input again. Old deployment helpers are intentionally no longer included.
+
+<!-- end common part with extension-details.md here, the rest is only for readme -->
+
+### For developers
+
+When developing, you can install the AgentKeys VSIX using **Extensions: Install from VSIX**.
+
+For debug purposes, you can also open the Agent Keys sidebar to see connection status, configure amount of keys and even click virtual sidebar keys.
+
+The extension ID is `okko.agent-keys`. Internal commands, views, settings and service
+coordination use the `eu.okko.agentkeys` namespace. The Input credential key is
+`eu.okko.agentkeys.input.credentials` in VS Code SecretStorage.
+
+The Activity Bar container uses `eu-okko-agentkeys` because VS Code disallows dots there.
+
+Unmapped identifiers are reported in **AgentKeys: Show Logs** and retried after
+a layer/device change, reconnect, or reset. See the
+[vendor guide](https://docs.worklouder.cc/websocket/user-guide.md).
 
 ### Build and develop
 
